@@ -430,8 +430,8 @@ def test_one_unsaved_file_of_theirs_no_longer_stops_the_days_update(repos, tmp_p
     log = sh(me, "git", "log", "--format=%s", "-3")
     assert sync_app.SAVED_FIRST in log
     assert sh(me, "git", "status", "--porcelain", "--untracked-files=no") == ""
-    # On a computer, where another chat may be writing them, and for a file of the app's,
-    # it still stops and changes nothing.
+    # On a computer, where another chat may be writing them, it still stops and changes
+    # nothing.
     write(me, "profile/person.json", '{"changed": "again"}\n')
     write(me, ".git/ljs-last-sync", "2000-01-01\n")
     computer = {k: v for k, v in ENV.items() if k != "CLAUDE_CODE_REMOTE"}
@@ -439,11 +439,16 @@ def test_one_unsaved_file_of_theirs_no_longer_stops_the_days_update(repos, tmp_p
                        cwd=me, env=dict(computer, LJS_APP_URL=app), text=True,
                        encoding="utf-8", capture_output=True)
     assert r.returncode == 1 and "Commit or stash" in r.stdout
+    # A file of the app's edited here too no longer stops it (the review of 2026-11-18): the
+    # update puts it back, the edit kept aside first, and their own file is saved as before.
     write(me, "README.md", "edited here\n")
     r = subprocess.run([sys.executable, os.path.join(me, "tools", "sync_app.py"), "--if-stale"],
                        cwd=me, env=env, text=True, encoding="utf-8", capture_output=True)
-    assert r.returncode == 1 and "Commit or stash" in r.stdout
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert read(me, "README.md") == "v2\n"
+    assert read(me, ".set-aside/README.md.mine") == "edited here\n"
     assert "again" in read(me, "profile/person.json")
+    assert sh(me, "git", "status", "--porcelain") == ""
 
 
 def test_a_check_already_run_today_still_says_the_page_and_says_it_first(repos, tmp_path):  # noqa: F811

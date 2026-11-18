@@ -26,9 +26,10 @@ throwaway copies, with nothing sent anywhere and nothing in either repository ch
 
     python3 tools/rehearse_sync.py --fresh v4.14.0 [--app HEAD] [--no-ci] [--keep]
 
-`--fresh <tag>` needs no one's repo: it makes a new person's copy as the template makes one,
-from the app at that release, set up as the example person (profile.example, with one check
-of their own) and their page published on that version, offline. A cloud chat and a chat on
+`--fresh <tag>` needs no one's repo: it makes a person's copy that took that release (the
+release's own history, so the update takes the newest release as theirs will), set up as the
+example person (profile.example, with one check of their own) and their page published on
+that version, offline. A cloud chat and a chat on
 their computer then each start as every chat does (`app.py start`), do the update check it
 prints, and must go round the start once; they build the page as the steps then printed say
 (`app.py page --out-dir`, and its plan of publishes, never sent), and record it; then the upgrades
@@ -396,28 +397,29 @@ def page_steps(text: str) -> list[tuple[str, str]]:
 
 
 def _seed_fresh(tag: str, tmp: str, env: dict) -> str:
-    """A person's copy made from the app at `tag` as the template makes one (its tree, one
-    commit), set up as the example person with one check of their own and their page
-    published on that version. "" when made, else why not."""
+    """A person's copy that took the app's release `tag`, as their copy holds it once an update
+    has taken that release: the release's own history, with no tags, no remote and no other
+    branch, set up as the example person with one check of their own and their page published
+    on that version. "" when made, else why not.
+
+    Made with a history of its own (the release's tree in one commit, as the template makes a
+    copy), its first update always took the app's master ("this first sync") and never a
+    release, so the rehearsal never played out the update a stranger on releases takes (the
+    review of 2026-11-18). With the release's history, the update takes the newest release."""
     seed = os.path.join(tmp, "seed")
     os.makedirs(seed)
-    tar = subprocess.run(["git", "-C", HERE, "archive", "--format=tar", tag],
-                         capture_output=True)
-    if tar.returncode:
-        return f"git archive {tag}: {tar.stderr.decode('utf-8', 'replace').strip()[:300]}"
-    import io
-    import tarfile
-    with tarfile.open(fileobj=io.BytesIO(tar.stdout)) as t:
-        t.extractall(seed, filter="data") if sys.version_info >= (3, 12) else t.extractall(seed)
+    for cmd in (["init", "-q", "-b", "master"],
+                ["fetch", "-q", "--no-tags", HERE, f"refs/tags/{tag}"]):
+        r = _git(*cmd, cwd=seed, env=env)
+        if r.returncode:
+            return f"git {cmd[0]} {tag}: {(r.stderr or r.stdout).strip()[:300]}"
+    sha = _git("rev-parse", "--verify", "-q", "FETCH_HEAD^{commit}", cwd=seed).stdout.strip()
+    r = _git("checkout", "-q", "-B", "master", sha, cwd=seed, env=env) if sha else None
+    if r is None or r.returncode:
+        return f"git checkout {tag}: {((r.stderr or r.stdout) if r else 'no commit').strip()[:300]}"
     example = os.path.join(seed, "profile.example")
     if not os.path.isdir(example):
         return f"{tag} has no example person to set up"
-    for cmd in (["init", "-q", "-b", "master"], ["add", "-A"],
-                ["commit", "-q", "-m", "Initial commit"]):
-        # The rehearsal's own name on the commit: a machine with no git identity (CI) refused it.
-        r = _git(*cmd, cwd=seed, env=env)
-        if r.returncode:
-            return f"git {cmd[0]}: {(r.stderr or r.stdout).strip()[:300]}"
     shutil.copytree(example, os.path.join(seed, "profile"),
                     ignore=shutil.ignore_patterns("state"))
     state = os.path.join(example, "state")

@@ -2823,6 +2823,29 @@ def update_stops(before: str) -> list[str]:
     return out
 
 
+# The listener (SKILL.md, step 0) holds CLAUDE.md and the app skill as it read them when it
+# started, and the day's check runs in its subagent, whose own "read again" never reached it: a
+# helper kept open for days followed the old copy after an update (the review of 2026-11-18).
+# So the subagent's answer carries this one line back to it.
+REREAD = ("reread: the day's update changed this chat's instructions: read {files} again now, "
+          "whole, before anything else.")
+REREAD_PASS = ("answer: end your one-line answer with this line, exactly as printed, for the "
+               "chat that rang you: ")
+# What the listener holds, and the file it reads again for each.
+HELD_BY_THE_LISTENER = (("CLAUDE.md", "CLAUDE.md"),
+                        (".claude/skills/app", ".claude/skills/app/SKILL.md"))
+
+
+def reread_line(before: str) -> str:
+    """REREAD naming what an update taken since `before` changed of what the listener holds,
+    or "" when it changed none of it."""
+    if not before:
+        return ""
+    files = [f for path, f in HELD_BY_THE_LISTENER
+             if _git("diff", "--quiet", before, "HEAD", "--", path)[0] == 1]
+    return REREAD.format(files=" and ".join(files)) if files else ""
+
+
 WAKE_READ_AGAIN = ("wake: {why}, and work may have started, finished or been asked for since, so "
                    "nothing is taken from it, and nothing it holds is said to the person about "
                    "any job. Read the page again into a new folder (python3 tools/app.py reads "
@@ -2955,6 +2978,8 @@ def cmd_wake(a) -> int:
         if check.get("ran"):
             said = check["said"].rstrip("\n").splitlines()
             stops = update_stops(check["before"]) if check.get("landed") else []
+            reread = reread_line(check["before"]) if check.get("landed") else ""
+            passed = [REREAD_PASS + reread] if reread else []
             # Worded as start words the same check, for the same steps.
             sync_line = (f"python3 tools/sync_app.py --if-stale --on \"{a.on or '<your model>'}\""
                          f"   ({app_setup.SYNC_DO}{app_setup.SYNC_PAGE}): this command ran it; "
@@ -2976,10 +3001,11 @@ def cmd_wake(a) -> int:
                            "tools/app.py reads --in <your scratchpad>, which makes and names it, "
                            "and its queries) and wake once more with it: "
                            + _again(a, chat).replace(f"\"{a.dump}\"", "\"<the new folder>\""))
+                out += passed
                 out.append("What the day's update check printed:")
                 print("\n".join(out + said))
                 return 0
-            head = [sync_line] + said + ["(end of what the update check printed)"]
+            head = [sync_line] + said + ["(end of what the update check printed)"] + passed
         reads = {}
         try:
             import page_reads

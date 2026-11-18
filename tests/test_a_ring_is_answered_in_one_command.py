@@ -531,6 +531,54 @@ def test_an_update_that_changes_this_skill_stops_the_wake(monkeypatch):
     assert app.update_stops("abc") == []
 
 
+def test_what_the_listener_holds_changed_is_said_in_the_line_that_reaches_it(monkeypatch):
+    """The review of 2026-11-18: the day's check runs in the listener's subagent, so its "read
+    SKILL.md / CLAUDE.md again" reached only the subagent, and a helper kept open for days
+    followed the old copy after an update. One fixed line, for what changed of what the
+    listener holds, goes back to it in the subagent's answer."""
+    monkeypatch.setattr(app, "_git", lambda *a: (1, "") if a[-1] == "CLAUDE.md" else (0, ""))
+    assert app.reread_line("abc") == app.REREAD.format(files="CLAUDE.md")
+    monkeypatch.setattr(app, "_git", lambda *a: (1, "") if a[0] == "diff" else (0, ""))
+    both = app.reread_line("abc")
+    assert both.startswith("reread: ") and "CLAUDE.md" in both
+    assert ".claude/skills/app/SKILL.md" in both
+    monkeypatch.setattr(app, "_git", lambda *a: (0, ""))
+    assert app.reread_line("abc") == "" and app.reread_line("") == ""
+
+
+def test_an_update_that_changed_this_skill_hands_the_listener_its_read_again_line(ring):
+    last = subprocess.run(["git", "-C", ROOT, "log", "-1", "--format=%H", "--",
+                           ".claude/skills/app/SKILL.md"], capture_output=True, text=True,
+                          encoding="utf-8").stdout.strip()
+    ring.page(current=True)
+    said_file = os.path.join(ring.root, "sync.txt")
+    with open(said_file, "w", encoding="utf-8") as fh:
+        fh.write("sync_app: updated to the newest version.\n")
+    said = ring.run("wake", ring.read("wake1"), "--chat", CHAT, "--now", NOW,
+                    **{app.WAKE_UPDATED: last + "^", app.WAKE_SAID: said_file})
+    assert "this wake stops here" in said
+    line = [ln for ln in said.splitlines() if app.REREAD_PASS in ln]
+    assert len(line) == 1, said
+    assert line[0].split(app.REREAD_PASS, 1)[1].startswith("reread: ")
+    assert ".claude/skills/app/SKILL.md" in line[0]
+    # Nothing it holds changed: no such line.
+    head = subprocess.run(["git", "-C", ROOT, "rev-parse", "HEAD"], capture_output=True,
+                          text=True, encoding="utf-8").stdout.strip()
+    said = ring.run("wake", ring.read("wake2"), "--chat", CHAT, "--now", NOW,
+                    **{app.WAKE_UPDATED: head, app.WAKE_SAID: said_file})
+    assert app.REREAD_PASS not in said and "reread:" not in said
+
+
+def test_the_listener_acts_on_its_read_again_line_and_the_subagent_passes_it_on():
+    """The listener's card says what to do with the line; the subagent is told by the line
+    `wake` prints for it (REREAD_PASS), which comes from the code the update brought in."""
+    import app_skill
+    skill = " ".join(app_skill.text().split())
+    zero = skill[skill.index("## 0."):skill.index("**In the subagent**")]
+    assert "A `reread:` line is done first: read the files it names again, whole." in zero
+    assert "exactly as printed" in app.REREAD_PASS and "one-line answer" in app.REREAD_PASS
+
+
 def test_a_wake_takes_the_days_check_only_when_it_is_due(monkeypatch):
     import sync_app
     monkeypatch.setattr(sync_app, "stale", lambda: False)
