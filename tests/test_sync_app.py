@@ -778,29 +778,30 @@ def test_the_setting_is_the_persons_never_the_apps():
             assert "app_updates" not in read(ROOT, rel), rel
 
 
-def test_a_merge_git_refuses_stops_and_keeps_their_unsaved_file(repos):
+def test_a_merge_git_refuses_keeps_their_unsaved_file_aside_and_takes_the_update(repos):
     """The app adds a file where the person has one not saved yet (a portal built and not
     committed, under a name the app later ships). Git refuses the merge; the sync used to
     carry on regardless, put the app's file over theirs and commit a one-parent commit that
-    recorded no merge, so the next sync brought the same commit again."""
+    recorded no merge, so the next sync brought the same commit again. Then it stopped, and
+    on a computer, where nothing saves that file, it stopped every day for good (the review
+    of 2026-11-18). Now their file is kept aside, nothing of it lost, and the update is a
+    real merge."""
     app, me = repos
     assert run(me, app)[0] == 0
     write(app, "tools/newthing.py", 'print("the app version")\n')
     commit(app, "app adds newthing")
     write(me, "tools/newthing.py", "MY OWN UNSAVED WORK\n")
     before = head(me)
-    rc, out = run(me, app)
-    assert rc == 1, out
-    assert "stopped, nothing changed" in out
-    assert "tools/newthing.py" in out
-    assert read(me, "tools/newthing.py") == "MY OWN UNSAVED WORK\n"
-    assert head(me) == before
-    assert sh(me, "git", "status", "--porcelain") == "?? tools/newthing.py\n"
-    # Once it is moved out of the way, the update is a real merge.
-    os.remove(os.path.join(me, "tools", "newthing.py"))
-    rc, out = run(me, app)
+    rc, out = on_a_computer(me, app)
     assert rc == 0, out
+    assert read(me, sync_app_kept("tools/newthing.py")) == "MY OWN UNSAVED WORK\n"
+    assert read(me, "tools/newthing.py") == 'print("the app version")\n'
+    assert head(me) != before
     assert len(sh(me, "git", "log", "-1", "--format=%P").split()) == 2
+    assert sh(me, "git", "status", "--porcelain") == ""
+    said = [ln for ln in out.splitlines() if sync_app_kept("tools/newthing.py") in ln]
+    assert len(said) == 1, out
+    _plain_enough(out)
 
 
 def test_the_days_check_is_kept_by_one_clock_whoever_writes_it():

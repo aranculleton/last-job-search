@@ -647,13 +647,43 @@ def _abort(why: str, paths: list[str]) -> int:
     return 1
 
 
+def _named(r: subprocess.CompletedProcess) -> list[str]:
+    """The files git named, one a line after a tab, in why it would not start the merge."""
+    said = (r.stderr or "") + "\n" + (r.stdout or "")
+    return [ln.strip() for ln in said.splitlines() if ln.startswith("\t") and ln.strip()]
+
+
+def _out_of_the_way(r: subprocess.CompletedProcess) -> bool:
+    """Git would not start the merge because files here not saved yet sit where the update
+    brings files of the same names: each is kept aside (KEPT_DIR) and taken out of the way,
+    so the update can come in. On a computer nothing ever saves or moves such a file, and the
+    update stopped on it every day for good (the review of 2026-11-18). Only when every file
+    git named is one of the app's paths, on disk and not saved here; True when they were."""
+    paths = _named(r)
+    if not paths or any(is_personal(p) for p in paths):
+        return False
+    held = set(git("ls-files", "--", *paths, check=False).stdout.splitlines())
+    if held or not all(os.path.isfile(os.path.join(ROOT, p)) for p in paths):
+        return False
+    kept = _keep_aside(paths)
+    if not kept or len(kept) != len(paths):
+        return False
+    for p in paths:
+        try:
+            os.remove(os.path.join(ROOT, p))
+        except OSError:
+            return False
+    _say_kept(kept, f"{len(kept)} file(s) here, not saved yet, had the name of a file the "
+                    "update brings, and the app's own file takes that name.")
+    return True
+
+
 def _refused(r: subprocess.CompletedProcess) -> int:
     """Git would not start the merge at all (no MERGE_HEAD): most often a file here that is
     not saved yet sits where the update brings one. Carrying on put the app's file over
     theirs and committed a plain commit that recorded no merge (2026-10-25). Nothing has
     changed at this point, so the stop names their files and git's own reason."""
-    said = (r.stderr or "") + "\n" + (r.stdout or "")
-    paths = [ln.strip() for ln in said.splitlines() if ln.startswith("\t") and ln.strip()]
+    paths = _named(r)
     if paths:
         print("sync_app: stopped, nothing changed. These files here are not saved yet, and "
               "the update brings a file of the same name: rename them or move them out of "
@@ -769,6 +799,9 @@ def _sync() -> int:
         if base is None:
             args.append("--allow-unrelated-histories")
         r = git(*args, APP, check=False)
+        if r.returncode and git("rev-parse", "-q", "--verify", "MERGE_HEAD",
+                                check=False).returncode and _out_of_the_way(r):
+            r = git(*args, APP, check=False)
         if r.returncode and git("rev-parse", "-q", "--verify", "MERGE_HEAD",
                                 check=False).returncode:
             return _refused(r)
