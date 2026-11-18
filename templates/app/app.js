@@ -4597,19 +4597,39 @@
     const p = cid ? personById(cid) : null;
     const what = i.hideTitle || title;
     const hide = () => hideTodo(i.hideKey || i.key, what);
-    // Putting off is not putting away: with no person to choose about, the corner says
-    // "Later" with a clock, and the trash means only that something goes (the review,
-    // 2026-11-10: one trash meant "later", "hide for a week" and "not this person").
-    const x = h("button", {type: "button", class: "btn quiet icon-only small hide-x" + (p ? "" : " later-x"), "data-k": "hide:" + i.key, "data-bin": "1",
-      "aria-label": p ? "Not " + txt(p.first_name) + "? Or later" : i.d ? "Later: " + what : "Hide for a week: " + what, title: p ? "Not " + txt(p.first_name) + "?" : i.d ? "Later" : "Hide for a week",
+    // Putting off is not putting away: the corner says "Later" with a clock, and the trash
+    // means only that something goes (the review, 2026-11-10: one trash meant "later", "hide
+    // for a week" and "not this person"). A card about a person says Later too, its choices
+    // about the person under its More: "Send Tamsin your CV" had the trash where every other
+    // card has Later, and it opened "Not <name>?" about who referred them (the screen review,
+    // 2026-11-18).
+    const x = h("button", {type: "button", class: "btn quiet icon-only small hide-x later-x", "data-k": "hide:" + i.key, "data-bin": "1",
+      "aria-label": i.d ? "Later: " + what : "Hide for a week: " + what, title: i.d ? "Later" : "Hide for a week",
       onclick: () => {
         const later = i.d ? laterChoices(i.ds || i.d) : null;
-        if (p) return askRemovePerson(txt(p.id), txt(p.first_name), txt(p.employer), p.rev, later ? {hide, later} : {hide});
         if (later) return sheet({title: "Later?", intro: "It comes back on To do that day.", choices: later});
         return hide();
-      }}, icon(p ? "bin" : "clock"), p ? null : h("span", {class: "later-word", "aria-hidden": "true"}, "Later"));
+      }}, icon("clock"), h("span", {class: "later-word", "aria-hidden": "true"}, "Later"));
     if (top) top.appendChild(x); else node.insertBefore(x, node.firstChild);
+    if (p) personUnderMore(node, i, p, what);
     return node;
+  }
+  // A To do card's choices about its person ("Not Tamsin?"), the last of its More: in its More
+  // where it has one, else a More of its own at the end of its actions.
+  function personUnderMore(node, i, p, what) {
+    const rm = btn("Not " + txt(p.first_name) + "?", () => askRemovePerson(txt(p.id), txt(p.first_name), txt(p.employer), p.rev, {}),
+      {kind: "quiet", small: true, key: "notwho:" + i.key, aria: "Not " + txt(p.first_name) + "? " + what});
+    const panel = node.querySelector(".more-panel");
+    if (panel) {
+      const row = panel.querySelector(":scope > .more-acts");
+      if (row) row.appendChild(rm); else panel.appendChild(h("div", {class: "more-acts"}, rm));
+      return;
+    }
+    const acts = node.querySelector(".card-actions");
+    const lifted = acts ? acts.querySelector(":scope > [data-more]") : null;
+    if (lifted) lifted.removeAttribute("data-more");
+    const m = more("who:" + i.key, what, [h("div", {class: "more-acts"}, lifted, rm)], true);
+    if (acts) acts.appendChild(m); else node.appendChild(h("div", {class: "card-actions"}, m));
   }
   function renderTodo() {
     const doneN = doneToday().length;

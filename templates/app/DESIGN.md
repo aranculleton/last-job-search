@@ -760,11 +760,14 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   its help. (the maintainer, 2026-11-05; the no-bin words test)
 
 - One icon puts anything away: the trash, top right of every live card. Never an x.
-- Putting off is not putting away: a To do card whose only choices are later (a dated
-  reminder's Tomorrow or Next week, a week off) says "Later" with a clock in the trash's
-  corner, the word shown; the trash stays where something goes (a person's card, with their
-  choices). Why: one trash meant "later", "hide for a week" and "not this person" (the review,
-  2026-11-10). (room test)
+- Putting off is not putting away: every To do card that is put off (a dated reminder's
+  Tomorrow or Next week, a week off) says "Later" with a clock in its corner, the word shown, a
+  card about a person ("Send Tamsin your CV") too, whose choices about the person ("Not
+  Tamsin?") are under its More; the trash stays where something goes (an interview not going
+  ahead, a person's own card in Contacts). Why: one trash meant "later", "hide for a week" and
+  "not this person" (the review, 2026-11-10), and a Send-CV card's trash in the corner where
+  every other To do card has Later opened "Not <name>?" about the person who referred them (the
+  screen review, 2026-11-18). (room test)
 - One possible answer: done at once, with Undo. Several: a short sheet of buttons, one a
   choice, the one tapped done at once (never a choice and then a second button), and Undo
   putting every part back. (trash tests, design test)
