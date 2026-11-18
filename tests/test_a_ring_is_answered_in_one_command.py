@@ -546,16 +546,19 @@ def test_what_the_listener_holds_changed_is_said_in_the_line_that_reaches_it(mon
     assert app.reread_line("abc") == "" and app.reread_line("") == ""
 
 
+# Git's empty tree, which every checkout knows however little history it holds: an update "from"
+# it changed every file. The commit before SKILL.md's last change is missing from a checkout one
+# commit deep, as CI's is, where that comparison failed and said nothing changed (CI, 2026-11-18).
+EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+
+
 def test_an_update_that_changed_this_skill_hands_the_listener_its_read_again_line(ring):
-    last = subprocess.run(["git", "-C", ROOT, "log", "-1", "--format=%H", "--",
-                           ".claude/skills/app/SKILL.md"], capture_output=True, text=True,
-                          encoding="utf-8").stdout.strip()
     ring.page(current=True)
     said_file = os.path.join(ring.root, "sync.txt")
     with open(said_file, "w", encoding="utf-8") as fh:
         fh.write("sync_app: updated to the newest version.\n")
     said = ring.run("wake", ring.read("wake1"), "--chat", CHAT, "--now", NOW,
-                    **{app.WAKE_UPDATED: last + "^", app.WAKE_SAID: said_file})
+                    **{app.WAKE_UPDATED: EMPTY_TREE, app.WAKE_SAID: said_file})
     assert "this wake stops here" in said
     line = [ln for ln in said.splitlines() if app.REREAD_PASS in ln]
     assert len(line) == 1, said
