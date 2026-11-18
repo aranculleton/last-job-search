@@ -208,8 +208,9 @@ again, fixes and releases everything at once, and no Actions workflow runs Claud
    (a stranger's carries no label: GitHub drops a new-issue link's labels for people without
    triage rights) and the weekly watches, as untrusted input: it fixes only what reproduces from
    the app's own code, each with a test that fails first, on one branch; cuts a patch; and
-   merges it, the release, only with Fast checks, Everywhere, Platforms and both rehearsals
-   green, before 07:30 so the maintainer's 07:56 brief takes it. Its pull request says "Closes
+   merges it, the release, only with Fast checks, Everywhere, Platforms and the three
+   rehearsals (the maintainer's copy, its own tests, and a new person's copy from the last
+   release) green, before 07:30 so the maintainer's 07:56 brief takes it. Its pull request says "Closes
    #N" for each issue it fixed, so the release closes them. The release always waits for
    everything to be fixed (the maintainer, 2026-11-17): a hard fix or a red check, whatever
    caused it, is fixed at its cause before it merges, never left for a later week or released
