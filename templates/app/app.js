@@ -4275,11 +4275,20 @@
     const gone = sendList(true).filter((m) => !msgLive(m)).length;
     const late = ds.filter((d) => (Number(d.overdue_days) > 0 || (dayDiff(d.due) !== null && dayDiff(d.due) < 0)) && !selfSetDue(d)).length;
     const notes = left.filter((m) => txt(m.kind) === "first_note").length;
+    // One name for one employer (employerKey), its shortest: "Larkspur Retail" and "Larkspur
+    // Retail Ltd" stood two rows apart as if two employers (the screen review, 2026-11-18).
+    const coName = new Map();
+    for (const m of left) {
+      const p0 = isPerson(txt(m.contact)) ? personById(txt(m.contact)) : null;
+      const e = txt(p0 ? p0.employer : m.employer), k = employerKey(e);
+      if (k && (!coName.has(k) || e.length < coName.get(k).length)) coName.set(k, e);
+    }
+    const coOf = (e) => coName.get(employerKey(e)) || e;
     const row = (m) => {
       const d = ds.find((x) => dueMessage(x) === m) || null;
       const cid = isPerson(txt(m.contact)) ? txt(m.contact) : "";
       const p = cid ? personById(cid) : null;
-      const name = whoAt(p ? p.first_name : m.first_name, p ? p.employer : m.employer);
+      const name = whoAt(p ? p.first_name : m.first_name, coOf(p ? p.employer : m.employer));
       const fs = fixState(m);
       const flag = alertsOf(m).find((a) => todoAlert(a, m));
       const why = fs === "going" ? "Claude is fixing it: " + lc1(txt(arr(obj(m.fix).reasons)[0])) : flag ? txt(plainDates(flag.text)).replace(/\.$/, "") : d ? cap1(dueWho(d)) : SEND_KIND[txt(m.kind)] || "Your message";

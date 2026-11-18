@@ -693,3 +693,15 @@ def test_why_keeps_to_the_last_facts_words_at_any_width(run, tmp_path):
     # and Why did not fit together. Any width, from 140px to 300px, keeps them together.
     got = _eval(run, tmp_path, "jobs", NARROW_WHY, PHONE)
     assert got and all(d <= 4 for d in got), got
+
+
+# One employer, one name, in Messages to send: "Larkspur Retail" and "Larkspur Retail Ltd" stood
+# two rows apart as if two employers (the screen review, 2026-11-18).
+SEND_NAMES = r"""(() => [...document.querySelectorAll('#main .send-card .g-row .g-name')].filter((n) => n.getClientRects().length).map((n) => n.textContent.replace(/\s+/g, ' ').trim()))()"""
+
+
+def test_messages_to_send_say_one_name_for_one_employer(run, tmp_path, vp):
+    names = _eval(run, tmp_path, "todo", SEND_NAMES, vp)
+    lark = [n for n in names if "Larkspur" in n]
+    assert len(lark) >= 2, names
+    assert not any("Larkspur Retail Ltd" in n for n in lark), names
