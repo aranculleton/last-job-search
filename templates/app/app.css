@@ -805,6 +805,15 @@ details.send { border-top: 1px solid var(--line); }
    "slightly separate each one ... slight separators like bubbles"). */
 .stack.jobs, ul.people, .stack.list-panel { gap: 8px; background: transparent; border: 0; box-shadow: none; }
 .stack.jobs > .card.job, ul.people > li.person, .stack.list-panel > .card { border: 1px solid var(--line); border-radius: var(--r); box-shadow: none; background: var(--surface); padding: 16px; }
+/* Contacts' cards stand side by side where the list holds two of 620px, as many as fit, row by
+   row in the list's order, each its own height; a phone and a narrower window keep one column.
+   One card across a 1970px window kept its draft to its measure and its pills under it, so the
+   right half of every card was empty (the maintainer, 2026-11-18: "is everything meant to be
+   cropped far to the left of this screen?"). The held list is a ul.people too. */
+@media (min-width: 1280px) {
+  ul.people { grid-template-columns: repeat(auto-fill, minmax(min(100%, 620px), 1fr)); align-items: start; }
+  ul.people > li { min-width: 0; }
+}
 
 .stack.list-panel > .card.is-marked { background: var(--sunk); }
 .stack.list-panel > .card.quiet-card { background: var(--seg-track); }

@@ -110,7 +110,8 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   keeps its own measure. Settings and Your profile are the whole width too, their groups in two
   columns where the screen holds two of 400px and one under the other where it does not, so a
   value never sits far from its name (the redesign's second round, 2026-11-17: both were a
-  720px column of their own; layout test: whole width). The side menu opens on "Icons only", its own section above the
+  720px column of their own; layout test: whole width). Contacts' cards stand side by side the
+  same way where the list holds two of 620px (Contacts, below). The side menu opens on "Icons only", its own section above the
   screens under one rule, as Settings is below them. (layout and menu tests)
 - Claude's work has one button on every screen, the pill in the header. On a wide screen it
   opens and closes the panel on the right, as the menu's "Icons only" folds, remembered on the
@@ -629,6 +630,14 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
 - People with a message drafted come first, then who needs you, in the engine's order
   (`app_model._people`). A message with nobody on the list (an application's follow-up) is a
   card of its own among them. Why: what is already written is the quickest thing to finish.
+- The cards use the whole width: where the list holds two cards of 620px or more they stand
+  side by side, as many as fit, in the list's own order row by row (first and second along
+  the top), so reading and the keyboard go the same way; each card is its own height, and the
+  On hold group's cards stand the same way. A phone and a narrower window keep one card under
+  the other. The draft keeps its reading measure inside its card. Why: on a 1970px window one
+  card ran the whole width with its draft at the measure and its pills under it, so the right
+  half of every card was empty and the screen looked cropped far to the left (the maintainer,
+  2026-11-18). (contacts width test, `tests/test_contacts_uses_the_whole_width.py`)
 - Someone you have written to has one main button, "They replied". It opens a labelled box
   right under them, "Paste what Juno sent", with one filled "Draft my reply" (the screen's one
   filled button while it is open). A reply already kept opens the same box, asking only what
