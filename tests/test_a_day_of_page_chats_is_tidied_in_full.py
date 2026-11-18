@@ -7,7 +7,8 @@ name), the brief's old chat beside the fresh one it moved into that morning, and
 computer's two chats under the names from before #289. Played through `tidy.plan` as the
 day's tidy-up runs it in the chat that answers the page: the three old chats go, each with
 its work on master; the live page chat, the brief's chat and the computer's two chats stay;
-and the computer's two take their new names. Every chat, task and branch here is invented.
+and the starter takes its new name, the computer's own chat renaming itself on the computer.
+Every chat, task and branch here is invented.
 """
 from __future__ import annotations
 
@@ -110,8 +111,10 @@ def test_the_old_page_chats_and_the_briefs_old_chat_go_and_the_rest_stay(monkeyp
     assert got["brief"] == [], got["brief"]
 
 
-def test_the_computers_two_chats_take_their_new_names(monkeypatch):
+def test_the_starter_takes_its_new_name_and_the_computers_own_chat_is_left_to_itself(monkeypatch):
+    # The computer's own chat runs on the computer, where its name lives: renamed from here it
+    # kept its old name in the Mac's list (the maintainer, 2026-11-18), so it renames itself
+    # there (computer.py, the listener's steps).
     got = _plan(monkeypatch)
     names = {r["id"]: r["to"] for r in got["rename"]}
-    assert names == {COMPUTER: computer.LISTENER_TITLE, STARTER: computer.STARTER_TITLE}, \
-        got["rename"]
+    assert names == {STARTER: computer.STARTER_TITLE}, got["rename"]

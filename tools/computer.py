@@ -1158,6 +1158,14 @@ def listener_woke(db: dict, chat: str, now: dt.datetime, out_dir: str, path: str
     filing = idle_line(now)
     if filing:
         said += " First, " + filing + "."
+    # Made before it was named (no name on record) or under the name before #289: its name lives
+    # in the Claude app on this computer, where a rename from the cloud never showed (the
+    # maintainer, 2026-11-18), so this chat renames itself, asked once.
+    if str(rec.get("title") or "").strip() != LISTENER_TITLE and not rec.get("named_at"):
+        fields["named_at"] = at
+        said += (" First, once: rename this chat to \u201c" + LISTENER_TITLE + "\u201d where you "
+                 "can, by asking the Claude app's own session tools in plain words (claude_surfaces: "
+                 "computer-chat-archive), never the person; where you cannot, leave it.")
     return {"batches": _starter_set(db, fields, out_dir, dump_dir, "listener-woke",
                                     LISTENER_DOC), "next": said}
 

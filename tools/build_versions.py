@@ -995,8 +995,9 @@ METHODS: dict[str, dict] = {
             (94, "2026-11-18", False, "the chat that starts chats on your computer is named \"Last Job Search \u00b7 Starts chats on your computer\" like the app's other chats; the daily tidy-up renames one made under its old name, once, a refusal named back with done --refused, and the page names it as it is called; nothing made before needs making again"),
             (95, "2026-11-18", False, "the day's tidy-up runs first on a day the page's chat took the page over, judging the chat it took over from too, and the hand-over's own step only once it has run that day, so the chats left over since are put away and renamed at the page's next check-in; nothing made before needs making again"),
             (96, "2026-11-18", False, "the chat that starts chats on your computer is named \"Last Job Search \u00b7 Computer link\", short enough to read whole in the list of chats; the daily tidy-up renames one under either older name, and the computer side never puts it away under any of them; nothing made before needs making again"),
+            (97, "2026-11-18", False, "the daily tidy-up never puts away a chat of the person's own titled like a page chat (the page chat's names are matched exactly), keeps the brief's own chat while the brief is off, keeps an older page chat used well after its last save until that is saved or it has been quiet a day, judges again a chat recorded as put away whose archive never took, puts away the 3.x ops chat once no task of the search is bound to it, names the starter on the page by the last name a rename made, and never renames the computer's own chat from the cloud: that chat renames itself on the computer, once; nothing made before needs making again"),
         ),
-        "fingerprint": "50b0642c85c15df8",
+        "fingerprint": "e2f529e37e88adf1",
     },
     "expand": {
         "by": "upgrade", "priority": 4, "time": "~15 min",
