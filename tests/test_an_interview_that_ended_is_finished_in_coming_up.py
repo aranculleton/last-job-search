@@ -29,13 +29,13 @@ from test_a_tick_on_the_page_is_applied_once import Search  # noqa: E402
 
 CLOCK = "2026-10-26T09:00:00Z"
 # The ended ones copied from the engine's own withdrawn interview: (status, employer, its day,
-# what its pill says). Tidewater's round was later today: withdrawn the morning of it.
+# what its pill says). Quillfeather's round was later today: withdrawn the morning of it.
 ENDED = [("rejected", "Fernhollow Insurance", "2026-10-20", "They said no"),
          ("no_response", "Quillmark Analytics", "2026-10-12", "No reply"),
          ("hired", "Saltmarsh Foods", "2026-10-19", "Hired"),
          ("offer_declined", "Bramblegate Lending", "2026-10-21", "Offer declined"),
-         ("declined", "Oakhaven Freight", "2026-10-18", "Closed"),
-         ("withdrawn", "Tidewater Health", "2026-10-26T15:00:00Z", "You withdrew")]
+         ("declined", "Brindlemoor Freight", "2026-10-18", "Closed"),
+         ("withdrawn", "Quillfeather Health", "2026-10-26T15:00:00Z", "You withdrew")]
 
 
 def _withdrawn(root):
@@ -128,8 +128,8 @@ def test_an_ended_interview_is_in_the_fold_with_nothing_left_to_do(tmp_path):
             assert got["after"][2]["eval"] == "Show 7 earlier, finished", got["after"][2]["eval"]
             opened = got["after"][3]["eval"]
             below = [c for c in opened if not c["above"]]
-            assert [c["title"].split(" with ")[-1] for c in below] == ["Tidewater Health", "Bramblegate Lending", "Fernhollow Insurance",
-                                                                        "Saltmarsh Foods", "Oakhaven Freight", "Thornbury Bank", "Quillmark Analytics"], below
+            assert [c["title"].split(" with ")[-1] for c in below] == ["Quillfeather Health", "Bramblegate Lending", "Fernhollow Insurance",
+                                                                        "Saltmarsh Foods", "Brindlemoor Freight", "Thornbury Bank", "Quillmark Analytics"], below
             words = {c: w for _s, c, _w, w in ENDED}
             words["Thornbury Bank"] = "You withdrew"
             for c in below:
@@ -141,7 +141,7 @@ def test_an_ended_interview_is_in_the_fold_with_nothing_left_to_do(tmp_path):
             assert [c["title"] for c in opened if c["above"]] == titles
             # To do never offers the interview withdrawn from this morning as one to come.
             todo = got["after"][4]["text"]
-            assert "Tidewater Health" not in todo, todo[:800]
+            assert "Quillfeather Health" not in todo, todo[:800]
     finally:
         try:
             next(gen)
