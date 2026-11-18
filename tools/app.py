@@ -2615,9 +2615,20 @@ READ_FIRST = ("listen: this page was made by an older version of the app, and it
               "person.")
 PRUNE_SAID = ("upkeep: old finished records the page no longer shows are deleted: send "
               "these batches after this wake's work, asking nobody:")
+
+
+def _load_first(*names: str) -> str:
+    """The clause that loads the tools a step calls where the chat has not: in a chat made with
+    create_session they are deferred, named but not callable until ToolSearch loads them."""
+    return ("(ToolSearch select:%s first, where they are not loaded)"
+            % ",".join("mcp__claude-code-remote__" + n for n in names))
+
+
 # How the listings reach the tidy-up: in one heredoc, as the tools returned them, never typed
 # into files first (the maintainer's copy, 2026-11-05).
-TIDY_GIVE = ("list_sessions (mine: true) and list_triggers, every page; then python3 "
+TIDY_GIVE = ("list_sessions (mine: true) and list_triggers, every page "
+             + _load_first("list_sessions", "list_triggers", "get_session", "archive_session",
+                           "set_session_title") + "; then python3 "
              "tools/tidy.py plan --dump \"$D\" --stdin with one JSON object on standard input "
              "(a quoted heredoc): {\"sessions\": <what list_sessions returned>, \"triggers\": "
              "<what list_triggers returned>}, each page as it came (a list of them for several), "
@@ -2633,7 +2644,8 @@ TIDY_SAID = ("tidy: once today, after this wake's work and asking nobody: the ap
 # whole listing typed back by hand was slow, costly and cut short (H-4; second audit A6, R3).
 TIDY_NOW = ("tidy: now, once the batches above are sent, asking nobody: the app's chat this one "
             "took the page over from, {old}, is put away as soon as its work is saved "
-            "(tools/tidy.py). get_session (session_id {old}); then python3 tools/tidy.py retire "
+            "(tools/tidy.py). get_session (session_id {old}) "
+            + _load_first("get_session", "archive_session") + "; then python3 tools/tidy.py retire "
             "--dump \"$D\" --stdin with {{\"details\": <what get_session returned>}} in a quoted "
             "heredoc; do what it prints, and archive nothing by hand.")
 
