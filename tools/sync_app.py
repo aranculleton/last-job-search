@@ -520,32 +520,120 @@ def _dirty() -> list[str]:
 
 SAVED_FIRST = "Saved before the day's update"
 
+# Where a file of the person's goes that stood in the update's way: an unsaved edit to one of
+# the app's own files, which the update puts back anyway, or a file not saved yet under a name
+# the update brings. One folder at the top of the copy, holding a rule of its own that nothing
+# in it is ever saved, so it is never taken for the app's code or the person's files, and never
+# cleared: what is kept here is theirs to look at or throw away.
+KEPT_DIR = ".set-aside"
 
-def _unsaved() -> list[str]:
-    """What still stops the update once the person's own files left unsaved in a cloud chat
-    are saved. One unsaved file of theirs (a chat that never landed its work) stopped every
-    morning's update and every retry after it, and the copy stayed on an old version for days
-    (the chat-only review, 2026-11-03). Saving their files is always yes (CLAUDE.md,
-    "Saving"), so it is done here, in one commit of those files alone, and the turn's landing
-    takes it to master. Only in a cloud chat, where each chat has a computer of its own and
-    what is unsaved is its own; on a computer another chat may be writing them. Only when
-    every file is the person's and none is mid-merge: an app file changed here still stops
-    the update, as before."""
+
+def _keep_aside(paths: list[str]) -> list[tuple[str, str]]:
+    """A copy of each file in KEPT_DIR, at its own path with ".mine" on the end (".2.mine" and
+    on where one is there already, so nothing kept before is written over). [(path, where it
+    was kept)], for the files there were to keep; None where one could not be kept."""
+    base = os.path.join(ROOT, KEPT_DIR)
+    import shutil
+    try:
+        os.makedirs(base, exist_ok=True)
+        rule = os.path.join(base, ".gitignore")
+        if not os.path.exists(rule):
+            with open(rule, "w", encoding="utf-8", newline="\n") as fh:
+                fh.write("# Kept by tools/sync_app.py: never saved.\n*\n")
+        out = []
+        for p in paths:
+            src = os.path.join(ROOT, p)
+            if not os.path.lexists(src) or os.path.isdir(src):
+                continue
+            rel, n = f"{KEPT_DIR}/{p}.mine", 2
+            while os.path.lexists(os.path.join(ROOT, rel)):
+                rel, n = f"{KEPT_DIR}/{p}.{n}.mine", n + 1
+            dst = os.path.join(ROOT, rel)
+            os.makedirs(os.path.dirname(dst), exist_ok=True)
+            shutil.copy2(src, dst, follow_symlinks=False)
+            out.append((p, rel))
+        return out
+    except OSError:
+        return None
+
+
+def _say_kept(kept: list[tuple[str, str]], why: str) -> None:
+    print(f"sync_app: {why} Each was kept in {KEPT_DIR}/ first, so nothing of it is lost:")
+    for p, rel in kept[:30]:
+        print(f"  {p}: kept as {rel}")
+    if len(kept) > 30:
+        print(f"  ... and {len(kept) - 30} more, in {KEPT_DIR}/")
+
+
+def _dirty_paths(line: str) -> list[str]:
+    """The path, or both paths of a move, that one line of `git status --porcelain` names."""
+    return [p.strip().strip('"') for p in line[3:].split(" -> ") if p.strip()]
+
+
+def _put_app_files_back(paths: list[str]) -> bool:
+    """Unsaved edits to the app's own files, kept aside and the files put back as they are
+    saved here; a file the app's history does not hold is taken out once kept. The update
+    puts the app's version back in any case, so only the edit could be lost, and it is kept.
+    False where anything could not be done."""
+    kept = _keep_aside(paths)
+    if kept is None:
+        return False
+    held = set(git("ls-tree", "-r", "--name-only", "--full-tree", "HEAD", "--", *paths,
+                   check=False).stdout.splitlines())
+    back = [p for p in paths if p in held]
+    out = [p for p in paths if p not in held]
+    if back and git("checkout", "HEAD", "--", *back, check=False).returncode:
+        return False
+    if out:
+        git("rm", "-q", "--cached", "--ignore-unmatch", "--", *out, check=False)
+        for p in out:
+            try:
+                os.remove(os.path.join(ROOT, p))
+            except OSError:
+                pass
+    if kept:
+        _say_kept(kept, "the update puts the app's own files back, and a change made here to "
+                        f"{len(kept)} of them was not saved yet.")
+    return True
+
+
+def _unsaved(update: bool = False) -> list[str]:
+    """What still stops the update once what can be moved out of its way has been.
+
+    `update`: this run takes the app's update. An unsaved edit to one of the app's own files
+    is then kept aside (KEPT_DIR), the file put back, and the update carries on, since the
+    update puts that file back in any case. On a computer it stopped every day's check for
+    good, since nothing there saves it (the review of 2026-11-18). Taking master alone, which
+    puts no app file back, still stops on it.
+
+    The person's own files left unsaved in a cloud chat are saved. One unsaved file of theirs
+    (a chat that never landed its work) stopped every morning's update and every retry after
+    it, and the copy stayed on an old version for days (the chat-only review, 2026-11-03).
+    Saving their files is always yes (CLAUDE.md, "Saving"), so it is done here, in one commit
+    of those files alone, and the turn's landing takes it to master. Only in a cloud chat,
+    where each chat has a computer of its own and what is unsaved is its own; on a computer
+    another chat may be writing them, so they stop the update there, before anything is
+    moved. Nothing is done mid-merge."""
     dirty = _dirty()
-    if not CLOUD or not dirty or any(ln[:2] in ("UU", "AA", "DD", "AU", "UA", "DU", "UD")
-                                     for ln in dirty) or \
-            git("rev-parse", "-q", "--verify", "MERGE_HEAD", check=False).returncode == 0:
+    if not dirty or any(ln[:2] in ("UU", "AA", "DD", "AU", "UA", "DU", "UD") for ln in dirty) \
+            or git("rev-parse", "-q", "--verify", "MERGE_HEAD", check=False).returncode == 0:
         return dirty
-    mine = []
-    for ln in dirty:
-        path = ln[3:].split(" -> ", 1)[-1].strip().strip('"')
-        if not path or not is_personal(path):
-            return dirty
-        mine.append(path)
-    if git("commit", "-q", "-m", SAVED_FIRST, "--", *mine, check=False).returncode != 0:
+    paths = [p for ln in dirty for p in _dirty_paths(ln)]
+    if not paths:
         return dirty
-    print(f"sync_app: saved {len(mine)} of the person's own changed file(s) first, in a commit "
-          "of their own; nothing in them changed.")
+    mine = [p for p in paths if is_personal(p)]
+    apps = [p for p in paths if not is_personal(p)]
+    if mine and not CLOUD:
+        return dirty
+    if apps and not update:
+        return dirty
+    if apps and not _put_app_files_back(apps):
+        return _dirty()
+    if mine:
+        if git("commit", "-q", "-m", SAVED_FIRST, "--", *mine, check=False).returncode != 0:
+            return _dirty()
+        print(f"sync_app: saved {len(mine)} of the person's own changed file(s) first, in a "
+              "commit of their own; nothing in them changed.")
     return _dirty()
 
 
@@ -661,7 +749,7 @@ def sync() -> int:
 
 
 def _sync() -> int:
-    dirty = _unsaved()
+    dirty = _unsaved(update=True)
     if dirty:
         return _stop_dirty(dirty)
     base = merge_base()
@@ -1650,7 +1738,8 @@ def _main(argv: list[str]) -> int:
             network_check()
             place_check(a.tools)
             return 0
-        dirty = _unsaved()
+        # The update follows: an edit to an app file is kept aside now, as it would be then.
+        dirty = _unsaved(update=updates() == "auto")
         if dirty:
             return _stop_dirty(dirty)  # changing nothing
         rc = pull_master()
