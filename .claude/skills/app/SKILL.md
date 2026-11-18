@@ -46,12 +46,12 @@ Its answer is one line. One that starts `agent:` is an Agent call to make as it 
 `then:` are a hand-back, a step for the person's computer the subagent had no tool for: make
 each `call:` in order, exactly as printed (the tool it names, the JSON after it as its
 arguments; a tool listed by name only is loaded first with ToolSearch), then do the `then:`
-line, and what that prints, here, never in another subagent. Anything else is said to nobody.
+line, and what that prints, here, never in another subagent. A `reread:` line is done first:
+read the files it names again, whole. Anything else is said to nobody.
 Then end the turn, with no text. Held at that end because work the pass named is still
 waiting, make the same call once more for it, as the hold says. **Why the line falls there** (measured on an invented page
-with two months of use): a wake done in the listener printed about 30,000 characters into it
-(the read's list of some 590 records, the wake's batches, the page update), every one read
-again at every later step of its day; the same wake in a subagent leaves about 300 in the
+with two months of use): a wake done in the listener printed about 30,000 characters into it,
+every one read again at every later step of its day; the same wake in a subagent leaves about 300 in the
 listener, one call and one line. A subagent starts from the same instructions the listener
 has, so its start costs about one listener step, which a single read in the listener already
 costs again within a few taps: only what needs no read at all (the one Agent call a

@@ -162,10 +162,12 @@ def _plan(copy, tmp_path, monkeypatch, chats, renamed_before=None):
 
 
 def test_an_existing_installs_chats_take_the_new_names_once(copy, tmp_path, monkeypatch):
-    """The brief's chat, the computer's own chat and the scheduled runs' chat an install made
-    before this version keep their old names unless the app renames them: the daily tidy-up
-    does, once each, asking nobody and saying nothing. The page's helper renames itself at
-    its next check-in (below). A chat of the person's own is never touched."""
+    """The brief's chat and the scheduled runs' chat an install made before this version keep
+    their old names unless the app renames them: the daily tidy-up does, once each, asking
+    nobody and saying nothing. The page's helper renames itself at its next check-in (below).
+    The computer's own chat is never renamed from here: its name lives in the Claude app on the
+    computer, where a rename from the cloud never showed (the maintainer, 2026-11-18), so it
+    renames itself there. A chat of the person's own is never touched."""
     chats = [_chat(LIVE, "Job search page"),
              _chat(BRIEF_CHAT, "Job search: morning brief"),
              _chat(COMPUTER_CHAT, "Job search: on your computer"),
@@ -174,11 +176,9 @@ def test_an_existing_installs_chats_take_the_new_names_once(copy, tmp_path, monk
     out = _plan(copy, tmp_path, monkeypatch, chats)
     renames = {ln.split(":", 1)[0].split()[1]: ln for ln in out.splitlines()
                if ln.startswith("rename ")}
-    assert set(renames) == {BRIEF_CHAT, COMPUTER_CHAT, RUNS_CHAT}, out
+    assert set(renames) == {BRIEF_CHAT, RUNS_CHAT}, out
     assert json.dumps({"session_id": BRIEF_CHAT, "title": APP + "Brief"},
                       ensure_ascii=False) in renames[BRIEF_CHAT]
-    assert json.dumps({"session_id": COMPUTER_CHAT, "title": APP + "Your computer"},
-                      ensure_ascii=False) in renames[COMPUTER_CHAT]
     assert json.dumps({"session_id": RUNS_CHAT, "title": APP + "Scheduled runs"},
                       ensure_ascii=False) in renames[RUNS_CHAT]
     assert all("set_session_title" in ln for ln in renames.values())
@@ -188,7 +188,7 @@ def test_an_existing_installs_chats_take_the_new_names_once(copy, tmp_path, monk
     # again, and a chat under its new name is left alone.
     with contextlib.redirect_stdout(io.StringIO()):
         assert tidy.main(["done", "--today", "2026-11-16"]) == 0
-    assert set(tidy.renamed()) == {BRIEF_CHAT, COMPUTER_CHAT, RUNS_CHAT}
+    assert set(tidy.renamed()) == {BRIEF_CHAT, RUNS_CHAT}
     out = _plan(copy, tmp_path, monkeypatch, chats)
     assert not [ln for ln in out.splitlines() if ln.startswith("rename ")], out
     chats = [_chat(LIVE, APP + "Page"), _chat(BRIEF_CHAT, APP + "Brief"),

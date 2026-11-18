@@ -75,7 +75,7 @@ and nothing is lost: the app starts it again when it's needed.
 |---|---|---|
 | **Last Job Search · Page** | Answers your page and its **Chat** | Replaced often: each day you use your page, or sooner once it grows long, a fresh one takes over; the old one is called "Last Job Search · Page (finishing up)" for a little while, then is put away by itself. An old one is safe to delete |
 | **Last Job Search · Brief** | Writes your brief on its days, in a chat of its own so your page still answers at once | Stays for good. When it grows long, a fresh one takes over and the old one is put away by itself |
-| **Last Job Search · Starts chats on your computer** | Only if you use your computer for LinkedIn: starts the chats there | Stays for good, so you allow it only once (below). One made by an older version may still be called "Job search: starts chats on your computer" |
+| **Last Job Search · Computer link** | Only if you use your computer for LinkedIn: starts the chats there | Stays for good, so you allow it only once (below). One made by an older version takes this name at the next daily tidy-up |
 | **Last Job Search · *the work*, *its day*** (for example "Last Job Search · Finding jobs, 16 Nov") | One big job: finding jobs, drafting, finding people, an interview prep, or a question in **Chat** while the page is busy ("Chat questions") | Put away by itself when the work is done |
 | **Last Job Search · *the work*** | A job that reads LinkedIn on your computer | Put away by itself when the work is done, except the first one, which stays as the one below |
 | **Last Job Search · Your computer** | Only if you use your computer for LinkedIn: takes every later LinkedIn job there by itself, so nothing new needs your OK | Stays open on your computer |
@@ -85,8 +85,7 @@ computer and one for each job while it runs. Chats an older version made are put
 themselves too, and each can be brought back; the ones that stay take these names by
 themselves.
 
-**The first time Claude uses your computer**, "Last Job Search · Starts chats on your
-computer" asks "Let Claude use your computers and other sessions from here?". Choose Allow, once. A
+**The first time Claude uses your computer**, "Last Job Search · Computer link" asks "Let Claude use your computers and other sessions from here?". Choose Allow, once. A
 card on your page's **To do** says which chat and what to choose. After that first job, the
 chat on your computer takes the next ones by itself, with nothing to allow.
 

@@ -75,6 +75,29 @@ def run(me, app, *args):
     return r.returncode, r.stdout + r.stderr
 
 
+def on_a_computer(me, app, *args):
+    """As `run`, on the person's own computer rather than in a cloud chat."""
+    env = {k: v for k, v in ENV.items() if k != "CLAUDE_CODE_REMOTE"}
+    r = subprocess.run([sys.executable, os.path.join(me, "tools", "sync_app.py"), *args],
+                       cwd=me, env=dict(env, LJS_APP_URL=app), text=True, encoding="utf-8",
+                       errors="replace", capture_output=True)
+    return r.returncode, r.stdout + r.stderr
+
+
+def sync_app_kept(path):
+    """Where the sync keeps a file of theirs it had to move out of the update's way."""
+    return f".set-aside/{path}.mine"
+
+
+def _plain_enough(out):
+    """What the sync says about a file it kept aside is said in words a person can read."""
+    for ln in out.splitlines():
+        if ".set-aside" in ln:
+            low = ln.lower()
+            for word in ("commit", "stash", "branch", "repo", "untracked", "worktree", "—"):
+                assert word not in low, (word, ln)
+
+
 def test_the_first_sync_merges_a_template_made_repo(repos):
     app, me = repos
     write(app, "README.md", "v2\n")
@@ -151,12 +174,16 @@ def test_an_app_that_carries_a_personal_path_is_refused(repos):
     assert read(me, "job_search_tracker.csv") == "date,company\n"
 
 
-def test_uncommitted_changes_stop_it_first(repos):
+def test_an_unsaved_change_to_an_app_file_is_kept_aside_and_never_stops_it(repos):
+    """An unsaved edit to one of the app's own files stopped every update (the review of
+    2026-11-18). The update puts that file back anyway, so the edit is kept aside first,
+    nothing of it lost, and the update comes in."""
     app, me = repos
     write(me, "README.md", "half done\n")
     rc, out = run(me, app)
-    assert rc == 1 and "Commit or stash" in out
-    assert read(me, "README.md") == "half done\n"
+    assert rc == 0, out
+    assert read(me, "README.md") == "v1\n"
+    assert read(me, sync_app_kept("README.md")) == "half done\n"
 
 
 def test_in_the_app_itself_it_does_nothing(repos):
@@ -382,6 +409,47 @@ def test_if_stale_with_uncommitted_work_stops_and_records_nothing(repos, tmp_pat
     rc, out = r.returncode, r.stdout + r.stderr
     assert rc == 1 and "Commit or stash" in out
     assert _stamp(me) == ""
+
+
+def test_an_app_file_edited_on_a_computer_no_longer_stops_every_days_update(repos, tmp_path):
+    """The review of 2026-11-18: a copy on the person's computer with one unsaved edit to an
+    app file never updated again. Only a cloud chat saved what was unsaved first, and only
+    the person's own files, so every day's check stopped on it ("Commit or stash these
+    first"). The update puts the app's files back anyway: the edit is kept aside, nothing of
+    it lost, said once, and the update comes in. Their own unsaved files still stop it."""
+    app, me = repos
+    _with_local_origin(me, tmp_path)
+    assert run(me, app)[0] == 0
+    write(app, "README.md", "v2\n")
+    commit(app, "app v2")
+    write(me, "tools/x.py", "a = 'my own edit'\n")
+    write(me, "job_search_tracker.csv", "date,company\nunsaved\n")
+    before = head(me)
+    write(me, ".git/ljs-last-sync", "2000-01-01\n")
+    rc, out = on_a_computer(me, app, "--if-stale")
+    assert rc == 1 and "job_search_tracker.csv" in out, out
+    assert head(me) == before and read(me, "tools/x.py") == "a = 'my own edit'\n"
+    assert not os.path.exists(os.path.join(me, ".set-aside"))
+    sh(me, "git", "checkout", "--", "job_search_tracker.csv")
+    write(me, ".git/ljs-last-sync", "2000-01-01\n")
+    rc, out = on_a_computer(me, app, "--if-stale")
+    assert rc == 0, out
+    assert read(me, "README.md") == "v2\n"
+    assert read(me, "tools/x.py") == "a = 1\n"
+    assert read(me, sync_app_kept("tools/x.py")) == "a = 'my own edit'\n"
+    assert sh(me, "git", "status", "--porcelain") == ""
+    assert _stamp(me)
+    said = [ln for ln in out.splitlines() if sync_app_kept("tools/x.py") in ln]
+    assert len(said) == 1, out
+    _plain_enough(out)
+    # A second edit to the same file the next day is kept beside the first, never over it.
+    write(me, "tools/x.py", "a = 'edited again'\n")
+    write(me, ".git/ljs-last-sync", "2000-01-01\n")
+    rc, out = on_a_computer(me, app, "--if-stale")
+    assert rc == 0, out
+    assert read(me, sync_app_kept("tools/x.py")) == "a = 'my own edit'\n"
+    assert read(me, ".set-aside/tools/x.py.2.mine") == "a = 'edited again'\n"
+    assert read(me, "tools/x.py") == "a = 1\n"
 
 
 def test_nothing_is_merged_under_a_landing_and_the_check_runs_again(repos, tmp_path):
@@ -710,29 +778,30 @@ def test_the_setting_is_the_persons_never_the_apps():
             assert "app_updates" not in read(ROOT, rel), rel
 
 
-def test_a_merge_git_refuses_stops_and_keeps_their_unsaved_file(repos):
+def test_a_merge_git_refuses_keeps_their_unsaved_file_aside_and_takes_the_update(repos):
     """The app adds a file where the person has one not saved yet (a portal built and not
     committed, under a name the app later ships). Git refuses the merge; the sync used to
     carry on regardless, put the app's file over theirs and commit a one-parent commit that
-    recorded no merge, so the next sync brought the same commit again."""
+    recorded no merge, so the next sync brought the same commit again. Then it stopped, and
+    on a computer, where nothing saves that file, it stopped every day for good (the review
+    of 2026-11-18). Now their file is kept aside, nothing of it lost, and the update is a
+    real merge."""
     app, me = repos
     assert run(me, app)[0] == 0
     write(app, "tools/newthing.py", 'print("the app version")\n')
     commit(app, "app adds newthing")
     write(me, "tools/newthing.py", "MY OWN UNSAVED WORK\n")
     before = head(me)
-    rc, out = run(me, app)
-    assert rc == 1, out
-    assert "stopped, nothing changed" in out
-    assert "tools/newthing.py" in out
-    assert read(me, "tools/newthing.py") == "MY OWN UNSAVED WORK\n"
-    assert head(me) == before
-    assert sh(me, "git", "status", "--porcelain") == "?? tools/newthing.py\n"
-    # Once it is moved out of the way, the update is a real merge.
-    os.remove(os.path.join(me, "tools", "newthing.py"))
-    rc, out = run(me, app)
+    rc, out = on_a_computer(me, app)
     assert rc == 0, out
+    assert read(me, sync_app_kept("tools/newthing.py")) == "MY OWN UNSAVED WORK\n"
+    assert read(me, "tools/newthing.py") == 'print("the app version")\n'
+    assert head(me) != before
     assert len(sh(me, "git", "log", "-1", "--format=%P").split()) == 2
+    assert sh(me, "git", "status", "--porcelain") == ""
+    said = [ln for ln in out.splitlines() if sync_app_kept("tools/newthing.py") in ln]
+    assert len(said) == 1, out
+    _plain_enough(out)
 
 
 def test_the_days_check_is_kept_by_one_clock_whoever_writes_it():

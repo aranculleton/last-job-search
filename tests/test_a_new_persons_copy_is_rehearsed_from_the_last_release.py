@@ -82,10 +82,18 @@ def test_a_new_persons_copy_is_the_release_tree_set_up_as_the_example_person(tmp
     env.update(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM="1")
     assert rehearse_sync._seed_fresh("v1.0.0", str(tmp_path), env) == ""
     seed = tmp_path / "seed"
-    # The release's tree, one commit as the template makes it, then their setup.
+    # The release's tree and its own history, as a copy that took that release holds it, then
+    # their setup. With a history of its own (one commit, as the template makes it) its first
+    # update always took the app's master and never a release, so the rehearsal never played
+    # out a stranger's update to the newest release (the review of 2026-11-18).
     assert (seed / "tools" / "x.py").read_text(encoding="utf-8") == "a = 1\n"
-    assert _git(seed, "log", "--format=%s").stdout.split("\n")[:2] == ["set me up",
-                                                                       "Initial commit"]
+    assert _git(seed, "log", "--format=%s").stdout.split("\n")[:2] == ["set me up", "the app"]
+    released = _git(app, "rev-parse", "v1.0.0^{commit}").stdout.strip()
+    assert _git(seed, "merge-base", "--is-ancestor", released, "HEAD").returncode == 0
+    after = _git(app, "rev-parse", "master").stdout.strip()
+    assert _git(seed, "cat-file", "-e", after + "^{commit}").returncode != 0
+    assert _git(seed, "tag").stdout == "" and _git(seed, "remote").stdout == ""
+    assert _git(seed, "branch", "--format=%(refname:short)").stdout.split() == ["master"]
     assert (seed / "profile" / "person.json").is_file()
     assert (seed / "job_search_tracker.csv").is_file()
     assert (seed / "README.md").read_text(encoding="utf-8") == "The app.\n"

@@ -14,8 +14,8 @@ and puts it on your page. The first of them stays open afterwards as "Last Job S
 computer" and takes every later job there by itself, so nothing new
 needs your OK; any others are put away by themselves once their work is done, and are safe to
 delete. To watch one, open it in the Claude app on your computer. The first is started by one
-small chat of Claude's, "Last Job Search · Starts chats on your computer" (one made by an
-older version may still be called "Job search: starts chats on your computer"), which stays.
+small chat of Claude's, "Last Job Search · Computer link" (one made by an older version
+takes that name at the next daily tidy-up), which stays.
 The first time, it asks "Let Claude use your computers and other sessions from here?": choose Allow,
 once, and a card on your page's To do says which chat. If your computer is off, your page
 says so in one line and the work waits; nothing else is asked of you.
@@ -143,9 +143,9 @@ neither the steps say all three in one line. Never pass on a Mac's keys to anyon
    (`computer-bridge`). Not listed after they say done: give the steps once more, then the
    fallbacks below still work.
 2. **Claude's OK, once** (`computer-allow`, `computer-auto-again`), held by one small chat of
-   its own, "Last Job Search · Starts chats on your computer" (`tools/computer.py`
-   STARTER_TITLE; one made before keeps OLD_STARTER_TITLE, "Job search: starts chats on your
-   computer", until the daily tidy-up renames it, and the page names it as it is called). A
+   its own, "Last Job Search · Computer link" (`tools/computer.py` STARTER_TITLE; one
+   made before keeps its name from OLD_STARTER_TITLES until the daily tidy-up renames it, and
+   the page names it as it is called). A
    chat that approves is tied to the person's devices for good: no chat can archive it, itself
    included, no scheduled task may fire into it and no other chat's message reaches it. So the
    page's helper and the brief never approve: their `route` makes the starter once

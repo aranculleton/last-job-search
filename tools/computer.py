@@ -24,8 +24,7 @@ there is, tried in this order (`route`), and the page says which in one line:
      Auto, named "Job search · <job> · <computer>", with a prompt complete from the start.
      Its results come back through the page's database and the person's copy, never a
      message between chats (claude_surfaces: session-approvals), and the starter chat, "Last
-     Job Search · Starts chats on your computer" (STARTER_TITLE; "Job search: starts chats on
-     your computer" before), archives it once its work is finished
+     Job Search · Computer link" (STARTER_TITLE; OLD_STARTER_TITLES before), archives it once its work is finished
      (`finished`), whichever chat answers the page by then;
   3. the scheduled task on the computer (claude_surfaces: routines-local) takes it on its
      next run, while the desktop app is open there (`computer task`); with nothing waiting it
@@ -169,8 +168,12 @@ READS = ("ok", "stopped", "none")
 # old name keeps it until the daily tidy-up renames it (tidy.new_name), or for good where that
 # rename was refused, so the page names each by the name it has (starter_title), never by one
 # it may not have.
-STARTER_TITLE = "Last Job Search \u00b7 Starts chats on your computer"
+STARTER_TITLE = "Last Job Search \u00b7 Computer link"
 OLD_STARTER_TITLE = "Job search: starts chats on your computer"
+# Every name a starter was made under before this one, each renamed by the daily tidy-up: the
+# one before #289, and "Last Job Search · Starts chats on your computer" (#345), which was cut
+# off in the person's list of chats (the maintainer, 2026-11-18: "clearly too long").
+OLD_STARTER_TITLES = (OLD_STARTER_TITLE, "Last Job Search \u00b7 Starts chats on your computer")
 
 # What the person sees: one line a state, and at most one action (templates/app/DESIGN.md).
 # The steps of an action come from tools/claude_surfaces.json, never written here.
@@ -1155,6 +1158,14 @@ def listener_woke(db: dict, chat: str, now: dt.datetime, out_dir: str, path: str
     filing = idle_line(now)
     if filing:
         said += " First, " + filing + "."
+    # Made before it was named (no name on record) or under the name before #289: its name lives
+    # in the Claude app on this computer, where a rename from the cloud never showed (the
+    # maintainer, 2026-11-18), so this chat renames itself, asked once.
+    if str(rec.get("title") or "").strip() != LISTENER_TITLE and not rec.get("named_at"):
+        fields["named_at"] = at
+        said += (" First, once: rename this chat to \u201c" + LISTENER_TITLE + "\u201d where you "
+                 "can, by asking the Claude app's own session tools in plain words (claude_surfaces: "
+                 "computer-chat-archive), never the person; where you cannot, leave it.")
     return {"batches": _starter_set(db, fields, out_dir, dump_dir, "listener-woke",
                                     LISTENER_DOC), "next": said}
 
@@ -3032,8 +3043,8 @@ def session_prompt(wid: str, title: str, url: str, copy: str) -> str:
 # since issue #289 (STARTER_TITLE): it holds the person's OK to use their computer, and one put
 # away is made again, asking for that OK again.
 APP_CHAT = re.compile(r"^\s*(?:Job search\s+\u00b7\s+\S.*\s+\u00b7\s+\S.*|Last Job Search\s+\u00b7\s+"
-                      r"(?!(?:Your computer|Brief|Page|Scheduled runs|Starts chats on your "
-                      r"computer)\s*$)\S.*)$", re.I)
+                      r"(?!(?:Your computer|Brief|Page|Scheduled runs|Computer link|Starts chats on "
+                      r"your computer)\s*$)\S.*)$", re.I)
 _RUNNING = ("running", "working", "busy", "active", "progress", "streaming", "waiting",
             "requires", "blocked", "paused", "input", "permission")
 # The states that say a chat has finished, as whole words ("incomplete" is not "complete").

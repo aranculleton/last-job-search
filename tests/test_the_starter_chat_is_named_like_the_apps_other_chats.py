@@ -35,8 +35,11 @@ from test_the_computer_side_just_works import BRIDGE  # noqa: E402
 
 assert copy  # the fixture, imported
 
-NEW = "Last Job Search · Starts chats on your computer"
+NEW = "Last Job Search · Computer link"
 OLD = "Job search: starts chats on your computer"
+# The name it had for one day (#345), too long for the person's list of chats (the maintainer,
+# 2026-11-18: "'starts chat on your computer' is clearly too long").
+LONG = "Last Job Search · Starts chats on your computer"
 STARTER = "session_EXAMPLESTARTERCHAT"
 WID = "network~read~1"
 WORK = (WID, _w("network", "Harbourline Bank", to="computer", title="People at Harbourline Bank",
@@ -95,7 +98,10 @@ def _done(*more: str) -> None:
 
 def test_the_starter_is_made_under_the_new_name_and_known_by_either():
     assert computer.STARTER_TITLE == NEW and computer.OLD_STARTER_TITLE == OLD
-    for name in (NEW, OLD):
+    assert set(computer.OLD_STARTER_TITLES) == {OLD, LONG}
+    # Short enough to read whole in the list of chats, as the app's other names are.
+    assert len(NEW) <= len("Last Job Search · Your computer")
+    for name in (NEW, LONG, OLD):
         # The app's own chat, kept for good by the tidy-up whichever name it has.
         assert tidy.APP_TITLE.match(name) and tidy.STARTER_NAME.match(name), name
         assert not tidy.HELPER_NAME.match(name) and not tidy.LISTENER_NAME.match(name), name
@@ -105,7 +111,7 @@ def test_the_starter_is_made_under_the_new_name_and_known_by_either():
     # the person's OK to use their computer, and a new one would ask for it again.
     old = (T - timedelta(hours=5)).isoformat()
     listing = [{"title": t, "id": f"local-{i}", "status": "idle", "updated_at": old}
-               for i, t in enumerate((NEW, OLD, "Last Job Search · People at Harbourline Bank"))]
+               for i, t in enumerate((NEW, LONG, OLD, "Last Job Search · People at Harbourline Bank"))]
     got = [r["title"] for r in computer.archivable(listing, True, now=T)]
     assert got == ["Last Job Search · People at Harbourline Bank"], got
 
@@ -138,6 +144,13 @@ def test_the_daily_tidy_up_renames_a_starter_made_before_once_and_keeps_it(copy,
     assert tidy.renamed() == {STARTER: NEW}
     out = _plan(copy, tmp_path, monkeypatch, chats)
     assert not [ln for ln in out.splitlines() if ln.startswith("rename ")], out
+
+
+def test_a_starter_under_the_long_name_takes_the_short_one(copy, tmp_path, monkeypatch):
+    out = _plan(copy, tmp_path, monkeypatch, _listed(_chat(STARTER, LONG)))
+    want = '{"session_id": "' + STARTER + '", "title": "' + NEW + '"}'
+    assert [ln for ln in out.splitlines() if ln.startswith("rename ") and want in ln], out
+    assert f"archive {STARTER}" not in out, out
     # Under its new name it is kept, and left alone.
     out = _plan(copy, tmp_path, monkeypatch, _listed(_chat(STARTER, NEW)), renamed_before={})
     assert not [ln for ln in out.splitlines() if ln.startswith("rename ")], out
@@ -163,8 +176,8 @@ def test_the_page_names_a_starter_made_before_by_the_name_it_has(copy, tmp_path,
     for on in ("allow", "mode"):
         _named(_made_before(on, tmp_path), NEW)
     line, _, _ = _said(_made_before("mode", tmp_path))
-    assert line == ("Waiting for you to switch the chat “Last Job Search · Starts chats on your "
-                    "computer” back to Auto: a setting in that chat, so nothing pops up there.")
+    assert line == ("Waiting for you to switch the chat “Last Job Search · Computer link” back "
+                    "to Auto: a setting in that chat, so nothing pops up there.")
     # What the brief and the day's update check say to the person names it the same way.
     assert any(f"“{NEW}”" in ln for ln in computer.check(allow, T, envs=BRIDGE))
 

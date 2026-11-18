@@ -86,7 +86,7 @@ if _HERE not in sys.path:
 # Since issue #289 every one is "Last Job Search · <what it is for>" (a one-off job's with its
 # day), and every older name is still known: an install keeps chats made under them.
 APP_NAME = "Last Job Search"
-APP_TITLE = re.compile(r"^(?:[^\w\s]{1,3}\s*)?(?:Job search(?::\s*\S.{0,60}|\s+(?:helper|page)\b.{0,60}"
+APP_TITLE = re.compile(r"^(?:[^\w\s]{1,3}\s*)?(?:Job search(?::\s*\S.{0,60}|\s+(?:helper|page|ops)\b.{0,60}"
                        r"|\s+\u00b7\s+\S.{0,60}\s+\u00b7\s+\S.{0,40})"
                        r"|Last Job Search\s+\u00b7\s+\S.{0,80})$",
                        re.I)
@@ -94,17 +94,24 @@ APP_TITLE = re.compile(r"^(?:[^\w\s]{1,3}\s*)?(?:Job search(?::\s*\S.{0,60}|\s+(
 # and every older one ("Job search helper", "... (finishing up)"). Only the live one, the chat
 # meta/listen names, is kept: the rest are put away as soon as their work is on master, never
 # kept for being used lately (the maintainer, 2026-11-04: at most two such chats, the person's
-# own and the live page helper; a heavy user's renewals had stacked up several).
+# own and the live page helper; a heavy user's renewals had stacked up several). Those names
+# exactly (HELPER_NAME): a chat the person titled "Job search page not updating" was taken for
+# one and put away (review of the tidy-up, 2026-11-18).
 # The computer starter (tools/computer.py STARTER_TITLE), kept for good, by its name since
-# issue #289 or the one before (OLD_STARTER_TITLE), which one made earlier keeps until renamed.
+# issue #289 or either before it (OLD_STARTER_TITLES), which one made earlier keeps until renamed.
 STARTER_NAME = re.compile(r"^(?:[^\w\s]{1,3}\s*)?(?:Job search:\s+starts chats on your computer\b"
-                          r"|Last Job Search\s+\u00b7\s+Starts chats on your computer\s*$)", re.I)
+                          r"|Last Job Search\s+\u00b7\s+(?:Starts chats on your computer|Computer "
+                          r"link)\s*$)", re.I)
 # The computer's own chat (tools/computer.py LISTENER_TITLE), kept open for the next job there,
 # by its name or by the page's record of it (meta/computer_listener), whatever it is called.
 LISTENER_NAME = re.compile(r"^(?:[^\w\s]{1,3}\s*)?(?:Job search:\s+on your computer\b|Last Job "
                            r"Search\s+\u00b7\s+Your computer\s*$)", re.I)
-HELPER_NAME = re.compile(r"^(?:[^\w\s]{1,3}\s*)?(?:Job search\s+(?:helper|page)\b|Last Job Search"
-                         r"\s+\u00b7\s+Page(?:\s+\(.*\))?\s*$)", re.I)
+HELPER_NAME = re.compile(r"^(?:[^\w\s]{1,3}\s*)?(?:Job search(?:\s+helper|\s+page|:\s+Claude's helper "
+                         r"\(keep this\))(?:\s+\(finishing up\))?|Last Job Search\s+\u00b7\s+Page"
+                         r"(?:\s+\([^)]*\))?)\s*$", re.I)
+# The scheduled tasks' own chat of the 3.x setup ("Job search ops (scheduled routines run here)"),
+# kept while the setup names it or a task of the search, on or paused, is bound to it.
+OPS_NAME = re.compile(r"^(?:[^\w\s]{1,3}\s*)?Job search ops\b", re.I)
 # The chat the scheduled tasks moved into when the brief's chat approved computer access
 # (computer.py trust), under its name before issue #289.
 OLD_RUNS_NAME = "Job search: scheduled runs"
@@ -335,6 +342,33 @@ def due(today: str = "", db: dict | None = None, skip: str = "",
     return False
 
 
+NOT_DUE = "tidy: done for today already; nothing to do for it. Say nothing about it."
+
+
+def due_steps(dump: str, today: str = "", now: dt.datetime | None = None) -> str:
+    """What a run that is not the page's own chat (the brief's) does about the day's tidy-up,
+    judged from a fresh read of the page in `dump` (meta, work and beats), so the page's own
+    day mark counts: the steps the page's chat is given, or that there is nothing to do. Only
+    the chat that answered the page was ever told to tidy, so a quiet page, or one answered by
+    a chat on the person's computer, was never tidied."""
+    import page_db
+    try:
+        db = page_db.load(dump)
+    except Exception:  # noqa: BLE001  not a read of the page: this checkout's own mark alone
+        db = None
+    listener = _listener(dump)
+    day = today or dt.date.today().isoformat()
+    if not due(day, db=db, skip=str(listener.get("chat") or ""), listener=listener,
+               now=now or dt.datetime.now(dt.timezone.utc)):
+        return NOT_DUE
+    import app
+    weekly = completed_due(day)
+    if weekly:
+        ask_completed(day)
+    return ("tidy: once today, asking nobody: the app's own old chats (tools/tidy.py). "
+            + app.TIDY_GIVE + (app.TIDY_COMPLETED if weekly else ""))
+
+
 PAGE_MARK = "tidy"          # meta/tidy on the page: the day the tidy-up last ran, any chat
 
 
@@ -364,7 +398,8 @@ def _mark_checked(today: str, now: str = "") -> None:
     if not path:
         return
     at = now or dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    keep = {k: v for k, v in _checked().items() if k in ("recheck", "completed", "retire_at")}
+    keep = {k: v for k, v in _checked().items()
+            if k in ("recheck", "completed", "completed_asked", "retire_at")}
     with open(path, "w", encoding="utf-8", newline="\n") as fh:
         json.dump({"checked": today, "at": at, "sweep": SWEEP, **keep}, fh)
         fh.write("\n")
@@ -403,12 +438,27 @@ def completed_due(today: str, last: str | None = None) -> bool:
         return True
 
 
+def ask_completed(today: str) -> None:
+    """The week's sweep was asked for today (its line printed): only `done` after it marks it
+    done (mark_completed). Marked as it was printed, a chat that never finished the tidy-up
+    skipped that week's."""
+    path = _checked_path()
+    if not path:
+        return
+    got = _checked()
+    got["completed_asked"] = today
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
+        json.dump(got, fh)
+        fh.write("\n")
+
+
 def mark_completed(today: str) -> None:
     path = _checked_path()
     if not path:
         return
     got = _checked()
     got["completed"] = today
+    got.pop("completed_asked", None)
     with open(path, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(got, fh)
         fh.write("\n")
@@ -593,6 +643,29 @@ def brought_back_by_mistake(records: list[dict], live: dict) -> set[str]:
             and _is_apps(live.get(x.get("id")))}
 
 
+def archive_failed(records: list[dict], chats: list[dict]) -> set[str]:
+    """Chats recorded as put away that today's listing still shows open and unused since the
+    day they were recorded: the archive never took (refused, or the chat was still at work), so
+    they are judged again, never skipped for good (review of the tidy-up, 2026-11-18). One used
+    after that day was brought back by the person and stays theirs; a listing cut down to ids
+    and titles says nothing of a chat's state, so nothing is judged again from it."""
+    rows = {str(c.get("id") or ""): c for c in chats or []}
+    out = set()
+    for x in records or []:
+        sid = str(x.get("id") or "")
+        c = rows.get(sid)
+        if not c or x.get("restored") or x.get("gone"):
+            continue
+        if not any(c.get(k) for k in ("session_status", "status", "status_bucket")):
+            continue
+        if "archived" in _status(c, None):
+            continue
+        used, on = _last_used(c, None)[:10], str(x.get("on") or "")[:10]
+        if on and used and used <= on:
+            out.add(sid)
+    return out
+
+
 # ------------------------------------------------------------------ reading what the tools gave
 
 
@@ -707,6 +780,15 @@ def saved_since(d: dict | None, branches: set[str] | None, github: set[str] | No
     if used is None or not tips:
         return False
     return max(tips) >= used.timestamp() - RECENT_S
+
+
+def _used_after_last_save(d: dict | None, last: str) -> bool:
+    """Was the chat get_session described (`d`) used more than RECENT_S after the newest save on
+    its own branches, as GitHub dates them (TIPS)? False where that is not known."""
+    import app_model
+    tips = [TIPS[b] for b in _branches_of(d or {}) if b in TIPS]
+    used = app_model.parse_time(last)
+    return bool(tips) and used is not None and max(tips) < used.timestamp() - RECENT_S
 
 
 def own_branches(info: dict) -> set[str]:
@@ -911,6 +993,9 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
     # this same plan moves away (the maintainer's live run, 2026-11-05: two one-time tasks
     # fired into a helper the tidy-up named for archiving).
     fires: dict = {}
+    named_tasks = {str(r.get("trigger_id") or "") for r in reg.get("routines") or []} - {""}
+    bound = {str(t.get("session") or t.get("persistent_session_id") or "") for t in triggers
+             if str(t.get("id") or "") in named_tasks} - {""}
     for t in triggers:
         sid = str(t.get("session") or t.get("persistent_session_id") or "")
         if sid and t.get("enabled") is not False:
@@ -1119,6 +1204,12 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
         if sid == ops:
             keep("the older ops chat, which relays to the phone and is never rebuilt")
             continue
+        if OPS_NAME.match(title) and sid in bound:
+            # A task of the search bound to it, paused or on: turned on again, it would fire
+            # into an archived chat. Once nothing is, it goes like any finished chat, never kept
+            # for good under a title the tidy-up did not know (review, 2026-11-18).
+            keep("a scheduled task of the search, on or paused, is bound to it")
+            continue
         if STARTER_NAME.match(title):
             # The one chat that holds the computer approval: it can be archived by no chat,
             # and it is woken again for the next work on the computer (tools/computer.py).
@@ -1140,9 +1231,11 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
             # which may yet take it. Every helper from before was started earlier.
             keep("a helper started since this one took the page, which may yet take it")
             continue
-        if sid == brief_chat and sid != adopt and brief.get("trigger_id") and sid in old_helpers:
+        if sid == brief_chat and sid != adopt and brief.get("trigger_id"):
             # Turned off or resting, the brief does not move (a working brief never does by
-            # itself either): its chat is kept, so it never comes back on in an archived one.
+            # itself either): its chat is kept, so it never comes back on in an archived one,
+            # its own chat as much as an old helper it stayed in (review, 2026-11-18: its own
+            # chat was put away while it was off).
             keep("the brief, turned off or resting, is bound to it")
             continue
         d = info.get(sid)
@@ -1169,13 +1262,17 @@ def plan(chats: list[dict], triggers: list[dict], info: dict, reg: dict, listene
         last = _last_used(s, d)
         quiet = _days_since(last, today)
         waits = "requires_action" in status or "blocked" in status
-        if sid == ret and _ago_s(last, now) < RETIRE_QUIET_S:
+        if (sid == ret or (sid in old_helpers and _used_after_last_save(d, last))) \
+                and _ago_s(last, now) < RETIRE_QUIET_S:
             # The helper just taken over from: put away once its work is proven saved
             # (saved_since) and it has been quiet RETIRE_SAVED_S, else after a day of quiet.
             # Nothing wakes it after the hand-over, so "it puts itself away" never happened, and
             # the hand-over comes at the same time each morning, so a day of quiet was always a
             # few seconds short: yesterday's helper stayed every day (the maintainer's chat
-            # list, 2026-11-16).
+            # list, 2026-11-16). So is an older page chat known to have been used well after
+            # its last save: it went once quiet ten minutes, and what it did after that save
+            # could be only where it ran (review, 2026-11-18). One whose saves GitHub does not
+            # date goes once idle, as decided on 2026-11-05.
             if _running(status) or _ago_s(last, now) < RETIRE_SAVED_S:
                 keep("it puts itself away once its work is saved")
                 continue
@@ -1328,21 +1425,20 @@ RUNS_NAME = APP_NAME + " \u00b7 Scheduled runs"     # tools/computer.py, trust: 
 
 def new_name(sid: str, title: str, brief_chat: str = "", computer_chat: str = "") -> str:
     """The name one of the app's chats kept for good should have now (issue #289), or "": the
-    brief's own chat under an older brief name, the computer's own chat under any of the
-    app's names, the chat the scheduled runs moved into, and the computer starter under its
+    brief's own chat under an older brief name, the chat the scheduled runs moved into, and the computer starter under its
     exact old name (missed at first: it stayed "Job search: starts chats on your computer"
     beside the renamed ones). Never a chat of the person's own: each only under a name the
     app gave it."""
     import routines
     if sid and sid == brief_chat and routines._BRIEF_TITLE.match(title):
         return routines.BRIEF_CHAT_TITLE
-    if sid and sid == computer_chat and (APP_TITLE.match(title) or LISTENER_NAME.match(title)):
-        import computer
-        return computer.LISTENER_TITLE
+    # Never the computer's own chat (`computer_chat`): its name lives in the Claude app on the
+    # computer, and a rename from here changed only Claude's side, so the page named it by a name
+    # the person's list did not show (the maintainer, 2026-11-18). It renames itself there.
     if title.lower() == OLD_RUNS_NAME.lower():
         return RUNS_NAME
     import computer
-    if title.lower() == computer.OLD_STARTER_TITLE.lower():
+    if title.lower() in {t.lower() for t in computer.OLD_STARTER_TITLES}:
         return computer.STARTER_TITLE
     return ""
 
@@ -1362,6 +1458,11 @@ def renamed(made: bool = False) -> dict:
             no = rec.get("rename_refused") or []
             no = {str(x) for x in no} if isinstance(no, list) else set()
             out = {k: v for k, v in out.items() if k not in no}
+            # The last name a rename made, kept when a later one was refused: the starter
+            # renamed once and refused the next was named on the page by its first name of all
+            # (review, 2026-11-18).
+            had = rec.get("named") if isinstance(rec.get("named"), dict) else {}
+            out.update({str(k): str(v) for k, v in had.items() if str(k) not in out})
         return out
     except (OSError, ValueError, AttributeError):
         return {}
@@ -1418,6 +1519,11 @@ def _note_renamed(names: dict, refused=()) -> None:
     no = [x for x in no if x not in names] + refused
     if no or "rename_refused" in got:
         got["rename_refused"] = no
+    made = {k: v for k, v in names.items() if k not in refused}
+    if made or "named" in got:
+        had = got.get("named") if isinstance(got.get("named"), dict) else {}
+        had.update(made)
+        got["named"] = had
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(got, fh, indent=2, ensure_ascii=False)
@@ -1615,7 +1721,8 @@ def run_plan(a) -> int:
         print("tidy: this copy's address is not known, so nothing is tidied today. "
               "python3 tools/tidy.py done")
         return 0
-    done = {x["id"] for x in archived()} - brought_back_by_mistake(records, live)
+    done = {x["id"] for x in archived()} - brought_back_by_mistake(records, live) \
+        - archive_failed(records, listed)
     runs, extra = run_chats(tasks, _remembered_runs(), done, {s.get("id") for s in listed})
     _remember_runs(runs)
     jobs: dict = {}
@@ -1850,6 +1957,8 @@ def run_done(ids: list[str], titles: dict, today: str, refused=()) -> str:
     """Record what was archived (profile/tidy.json), the renames the plan asked for (once
     each, made or refused; `refused`, the ids of those refused) and that today's tidy-up ran."""
     _mark_checked(today)
+    if _checked().get("completed_asked"):
+        mark_completed(today)         # the week's sweep was asked for, and this tidy-up did it
     _note_renamed(_take_renames(), refused)
     if not ids:
         return "tidy: done for today"
@@ -2115,6 +2224,10 @@ def main(argv: list[str]) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     d = sub.add_parser("due")
     d.add_argument("--today", default="")
+    d.add_argument("--dump", default="", help="a fresh read of the page (meta, work and beats): "
+                                              "judged with the page's own day mark, and what "
+                                              "to do is printed")
+    d.add_argument("--now", default="")
     p = sub.add_parser("plan")
     p.add_argument("--dump", default="")
     p.add_argument("--sessions", action="append", default=[])
@@ -2164,7 +2277,11 @@ def main(argv: list[str]) -> int:
         print("tidy: recorded; nothing to say")
         return 0
     if a.cmd == "due":
-        return 0 if due(a.today) else 1
+        if not a.dump:
+            return 0 if due(a.today) else 1
+        import app_model
+        print(due_steps(a.dump, a.today, app_model.parse_time(a.now) if a.now else None))
+        return 0
     if a.cmd == "plan":
         if not a.sessions and not a.stdin:
             print("tidy: list the chats first (list_sessions, mine: true, every page) and pass "
