@@ -4453,9 +4453,10 @@
   const HELP_START = {"you-finish": "Finish your profile", reading: "Set it up", export: "Add your LinkedIn messages"};
   function helpWhy(i) {
     const k = txt(obj(i).key);
-    return k === "you-finish" ? "Your profile: every " + noun() + " and letter is built from it"
-      : k === "reading" ? "Let Claude read profiles before it writes to people"
-      : k === "export" ? "Your LinkedIn messages keep who you know up to date" : "";
+    // Each a sentence with its full stop, as the lines beside it (the screen review, 2026-11-18).
+    return k === "you-finish" ? "Your profile: every " + noun() + " and letter is built from it."
+      : k === "reading" ? "Let Claude read profiles before it writes to people."
+      : k === "export" ? "Your LinkedIn messages keep who you know up to date." : "";
   }
   function settingUpNow() { const su = obj(M().setup); return !!txt(su.state) && txt(su.state) !== "done"; }
   // Anything on To do can be hidden for a week (the maintainer, 2026-10-29: everything shown
@@ -5848,7 +5849,8 @@
     "A person's name, anywhere, opens everything about them: what was said, what is owed, where they work.",
     "Paste a job link into Add a job you found on Jobs, and Claude scores it against your profile in a couple of minutes.",
     "Not interested in someone or something? The trash on its card puts it away.",
-    "Read your prep opens an interview prep full screen.",
+    // A button is quoted by its name, as it reads on the page (the screen review, 2026-11-18).
+    "\u201cRead your prep\u201d, on an interview, opens its prep full screen.",
     "Got a message from someone? Paste it in Contacts, under Got a message, and Claude drafts the reply.",
     "Edit the brief, above, changes what it covers or which days it comes.",
     "Claude checks everything it writes against your profile, and never sends anything for you.",
