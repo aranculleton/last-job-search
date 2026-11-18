@@ -2615,9 +2615,20 @@ READ_FIRST = ("listen: this page was made by an older version of the app, and it
               "person.")
 PRUNE_SAID = ("upkeep: old finished records the page no longer shows are deleted: send "
               "these batches after this wake's work, asking nobody:")
+
+
+def _load_first(*names: str) -> str:
+    """The clause that loads the tools a step calls where the chat has not: in a chat made with
+    create_session they are deferred, named but not callable until ToolSearch loads them."""
+    return ("(ToolSearch select:%s first, where they are not loaded)"
+            % ",".join("mcp__claude-code-remote__" + n for n in names))
+
+
 # How the listings reach the tidy-up: in one heredoc, as the tools returned them, never typed
 # into files first (the maintainer's copy, 2026-11-05).
-TIDY_GIVE = ("list_sessions (mine: true) and list_triggers, every page; then python3 "
+TIDY_GIVE = ("list_sessions (mine: true) and list_triggers, every page "
+             + _load_first("list_sessions", "list_triggers", "get_session", "archive_session",
+                           "set_session_title") + "; then python3 "
              "tools/tidy.py plan --dump \"$D\" --stdin with one JSON object on standard input "
              "(a quoted heredoc): {\"sessions\": <what list_sessions returned>, \"triggers\": "
              "<what list_triggers returned>}, each page as it came (a list of them for several), "
@@ -2633,9 +2644,23 @@ TIDY_SAID = ("tidy: once today, after this wake's work and asking nobody: the ap
 # whole listing typed back by hand was slow, costly and cut short (H-4; second audit A6, R3).
 TIDY_NOW = ("tidy: now, once the batches above are sent, asking nobody: the app's chat this one "
             "took the page over from, {old}, is put away as soon as its work is saved "
-            "(tools/tidy.py). get_session (session_id {old}); then python3 tools/tidy.py retire "
+            "(tools/tidy.py). get_session (session_id {old}) "
+            + _load_first("get_session", "archive_session") + "; then python3 tools/tidy.py retire "
             "--dump \"$D\" --stdin with {{\"details\": <what get_session returned>}} in a quoted "
             "heredoc; do what it prints, and archive nothing by hand.")
+
+
+def tidy_said(now) -> str:
+    """The day's tidy-up as a check-in or a ring asks for it: once a week it also asks for the
+    tasks that have fired, so the app's one-off check-ins are cleaned away (every day, it
+    swelled the listing typed back). Noted as asked here; only `tidy.py done` after it marks
+    the week's sweep done."""
+    import tidy
+    day = now.date().isoformat()
+    weekly = tidy.completed_due(day)
+    if weekly:
+        tidy.ask_completed(day)
+    return TIDY_SAID + (TIDY_COMPLETED if weekly else "")
 
 
 def cmd_listen(a) -> int:
@@ -2674,14 +2699,7 @@ def cmd_listen(a) -> int:
         if got.get("retire"):
             print(TIDY_NOW.format(old=got["retire"]))
         else:
-            # Once a week the sweep also asks for the tasks that have fired, so the app's
-            # one-off check-ins are cleaned away; every day it swelled the listing typed back.
-            import tidy
-            day = now.date().isoformat()
-            weekly = tidy.completed_due(day)
-            print(TIDY_SAID + (TIDY_COMPLETED if weekly else ""))
-            if weekly:
-                tidy.mark_completed(day)
+            print(tidy_said(now))
     return 0
 
 
@@ -2903,6 +2921,9 @@ def cmd_wake(a) -> int:
     sends: list[tuple[str, str, bool]] = []
     after: list[str] = list(st.get("after") or [])
     tidy_due = bool(st.get("tidy"))
+    # The chat taken over from, where only it is asked about (check_in's `retire`): dropped, every
+    # ring after the day's tidy-up listed every chat and task again.
+    retire = str(st.get("retire") or "")
     applied_any = False
     copy_now = False             # this run applies taps that change the copy, claimed before
     fetch_then = ""              # a tap's files to take before anything else (FETCH_FIRST)
@@ -3009,6 +3030,7 @@ def cmd_wake(a) -> int:
         if reads:
             notes.append(page_reads.summary(page_db.load(a.dump), chat, reads))
         after, tidy_due = list(got["prune"]), bool(got["tidy"])
+        retire = str(got.get("retire") or "")
         todo = app_actions.pending(page_db.load(a.dump), chat, now)
         phase = "next"
         if todo:
@@ -3028,7 +3050,7 @@ def cmd_wake(a) -> int:
                 # A tap that changes the copy waits for its claim: if another chat holds it,
                 # nothing here may have changed.
                 _save_wake_state(a.dump, {"phase": "claimed", "runs": run, "after": after,
-                                          "tidy": tidy_due})
+                                          "tidy": tidy_due, "retire": retire})
                 _print_wake(head, notes, _send_as(sends, rd, a.dump), url, then=[
                     "then: send these, and once every one is accepted, run this again with the "
                     "same folder: it applies what the person did (it changes your copy, so "
@@ -3213,7 +3235,7 @@ def cmd_wake(a) -> int:
         if after:
             last += [PRUNE_SAID] + after
         if tidy_due:
-            last.append(TIDY_SAID)
+            last.append(TIDY_NOW.format(old=retire) if retire else tidy_said(now))
     _print_wake(head, notes, _send_as(sends, rd, a.dump), url, then=then + last)
     return 0
 

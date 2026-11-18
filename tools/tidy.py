@@ -342,6 +342,33 @@ def due(today: str = "", db: dict | None = None, skip: str = "",
     return False
 
 
+NOT_DUE = "tidy: done for today already; nothing to do for it. Say nothing about it."
+
+
+def due_steps(dump: str, today: str = "", now: dt.datetime | None = None) -> str:
+    """What a run that is not the page's own chat (the brief's) does about the day's tidy-up,
+    judged from a fresh read of the page in `dump` (meta, work and beats), so the page's own
+    day mark counts: the steps the page's chat is given, or that there is nothing to do. Only
+    the chat that answered the page was ever told to tidy, so a quiet page, or one answered by
+    a chat on the person's computer, was never tidied."""
+    import page_db
+    try:
+        db = page_db.load(dump)
+    except Exception:  # noqa: BLE001  not a read of the page: this checkout's own mark alone
+        db = None
+    listener = _listener(dump)
+    day = today or dt.date.today().isoformat()
+    if not due(day, db=db, skip=str(listener.get("chat") or ""), listener=listener,
+               now=now or dt.datetime.now(dt.timezone.utc)):
+        return NOT_DUE
+    import app
+    weekly = completed_due(day)
+    if weekly:
+        ask_completed(day)
+    return ("tidy: once today, asking nobody: the app's own old chats (tools/tidy.py). "
+            + app.TIDY_GIVE + (app.TIDY_COMPLETED if weekly else ""))
+
+
 PAGE_MARK = "tidy"          # meta/tidy on the page: the day the tidy-up last ran, any chat
 
 
@@ -371,7 +398,8 @@ def _mark_checked(today: str, now: str = "") -> None:
     if not path:
         return
     at = now or dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    keep = {k: v for k, v in _checked().items() if k in ("recheck", "completed", "retire_at")}
+    keep = {k: v for k, v in _checked().items()
+            if k in ("recheck", "completed", "completed_asked", "retire_at")}
     with open(path, "w", encoding="utf-8", newline="\n") as fh:
         json.dump({"checked": today, "at": at, "sweep": SWEEP, **keep}, fh)
         fh.write("\n")
@@ -410,12 +438,27 @@ def completed_due(today: str, last: str | None = None) -> bool:
         return True
 
 
+def ask_completed(today: str) -> None:
+    """The week's sweep was asked for today (its line printed): only `done` after it marks it
+    done (mark_completed). Marked as it was printed, a chat that never finished the tidy-up
+    skipped that week's."""
+    path = _checked_path()
+    if not path:
+        return
+    got = _checked()
+    got["completed_asked"] = today
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
+        json.dump(got, fh)
+        fh.write("\n")
+
+
 def mark_completed(today: str) -> None:
     path = _checked_path()
     if not path:
         return
     got = _checked()
     got["completed"] = today
+    got.pop("completed_asked", None)
     with open(path, "w", encoding="utf-8", newline="\n") as fh:
         json.dump(got, fh)
         fh.write("\n")
@@ -1914,6 +1957,8 @@ def run_done(ids: list[str], titles: dict, today: str, refused=()) -> str:
     """Record what was archived (profile/tidy.json), the renames the plan asked for (once
     each, made or refused; `refused`, the ids of those refused) and that today's tidy-up ran."""
     _mark_checked(today)
+    if _checked().get("completed_asked"):
+        mark_completed(today)         # the week's sweep was asked for, and this tidy-up did it
     _note_renamed(_take_renames(), refused)
     if not ids:
         return "tidy: done for today"
@@ -2179,6 +2224,10 @@ def main(argv: list[str]) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     d = sub.add_parser("due")
     d.add_argument("--today", default="")
+    d.add_argument("--dump", default="", help="a fresh read of the page (meta, work and beats): "
+                                              "judged with the page's own day mark, and what "
+                                              "to do is printed")
+    d.add_argument("--now", default="")
     p = sub.add_parser("plan")
     p.add_argument("--dump", default="")
     p.add_argument("--sessions", action="append", default=[])
@@ -2228,7 +2277,11 @@ def main(argv: list[str]) -> int:
         print("tidy: recorded; nothing to say")
         return 0
     if a.cmd == "due":
-        return 0 if due(a.today) else 1
+        if not a.dump:
+            return 0 if due(a.today) else 1
+        import app_model
+        print(due_steps(a.dump, a.today, app_model.parse_time(a.now) if a.now else None))
+        return 0
     if a.cmd == "plan":
         if not a.sessions and not a.stdin:
             print("tidy: list the chats first (list_sessions, mine: true, every page) and pass "
