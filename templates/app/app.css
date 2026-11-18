@@ -1823,7 +1823,8 @@ label.pick { display: flex; align-items: flex-start; justify-content: center; wi
     content: ""; position: absolute;
     top: calc(50% - max(50%, 12px * var(--pz))); bottom: calc(50% - max(50%, 12px * var(--pz)));
     left: calc(50% - max(50%, 12px * var(--pz))); right: calc(50% - max(50%, 12px * var(--pz))); }
-  a.bp-link, .bp-all > summary, .bp-up-row .up-title > a.up-link { min-height: calc(24px * var(--pz)); }
+  /* Interviews' Coming up titles too: at the computer's 14px text a one-line title is 23px. */
+  a.bp-link, .bp-all > summary, :is(.bp-up-row, .up-row) .up-title > a.up-link { min-height: calc(24px * var(--pz)); }
 }
 /* A setting's pill is its label's target, the whole pill: its words alone were 18px of its 36px. */
 .pills .choice { position: relative; }

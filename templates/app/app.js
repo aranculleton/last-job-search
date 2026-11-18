@@ -8211,7 +8211,7 @@
       const key = "doc-dl:" + a.id + ":" + k;
       return h("li", {class: "doc-row", "data-doc": k}, icon("k-application"),
         h("span", {class: "doc-words"}, h("span", {class: "doc-name"}, name), " ", h("span", {class: "doc-meta"}, (n ? [plural(n, "page", "pages"), "checked"] : ["checked", "page count not read here"]).join(" \u00b7 "))),
-        h("span", {class: "doc-acts"}, f && f.asset ? btn("", () => download(f, key), {kind: "quiet icon-only", small: true, icon: "download", key, aria: "Download " + lc1(name) + ": " + txt(f.name)}) : null,
+        h("span", {class: "doc-acts"}, f && f.asset ? btn("", () => download(Object.assign({company: txt(a.company)}, f), key), {kind: "quiet icon-only", small: true, icon: "download", key, aria: "Download " + lc1(name) + ": " + txt(f.name)}) : null,
           docPencil(a, k)), noteFor(key));
     }));
   }
