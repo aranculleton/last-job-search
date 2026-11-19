@@ -6771,6 +6771,8 @@
     // Everything booked, the one Today leads with included: two interviews in a week showed
     // one (the maintainer, 2026-11-18). Coming up is the calendar; Today is what to do first.
     const upCards = allUp.slice(0, 4);
+    // The one Today leads with is its time and title there, its prep's button being Today's.
+    const onToday = new Set(upCards.filter((u) => !isFree(upKeys(u))).map((u) => u.id));
     upCards.forEach((u) => take(upKeys(u)));
     // People: whose move it is, and what the move is, leaving out who a step above names.
     const ppl = peopleItems().filter((p) => personRank(p) === 0 && !["not_contacted", "closed"].includes(txt(p.status)) && isFree(["p:" + p.id]) && !stoppedNow(p.id, txt(p.employer)))
@@ -6819,7 +6821,7 @@
     // Booked things only: a follow-up 45 days late is To do's, never Coming up's, and the line
     // says what the strip shows (the audit, 2026-11-03).
     put(grid, briefPanel("upcoming", "Coming up", [weekStrip(allUp), upCards.length ? (() => { const seen = new Set(); const lead = (upCards.find((u) => u.kind === "interview") || {}).id;
-      return h("ul", {class: "plain bp-up", "data-fit": "2,2"}, upCards.map((u) => upRow(u, "brief", seen, null, lead))); })()
+      return h("ul", {class: "plain bp-up", "data-fit": "2,2"}, upCards.map((u) => upRow(u, "brief", seen, null, lead, onToday.has(u.id)))); })()
       : h("p", {class: "muted"}, (allUp.length ? "Nothing else booked." : "Nothing booked yet.") + briefWaiting())],
       // "All 1 coming up" said nothing the panel did not: a count only where there is more.
       [navLink("interviews", allUp.length > 1 && allUp.length > upCards.length ? "All " + allUp.length + " coming up" : "Coming up"),
@@ -10025,19 +10027,24 @@
   }
   // A row: when, what (its tap opens it), whether it is ready, and a calendar with a plus to
   // add it to yours. One button a row, never a row of them (the maintainer, 2026-11-02).
-  function upRow(u, where, prepped, nextPrep, leadRow) {
+  function upRow(u, where, prepped, nextPrep, leadRow, onToday) {
     const brief = where === "brief";
     const add = u.pending ? stateWord("Saving", null) : !obj(u.cal).ics ? null : btn("", () => calSheet([u]),
       {kind: "quiet icon-only", small: true, icon: "cal-add", key: (brief ? "bp-cal:" : "cal:") + u.id, aria: "Add to your calendar: " + txt(u.title)});
     const rm = u.own && !brief && !u.pending ? btn("", () => act([{item: txt(u.id), action: "upcoming.remove", rev: txt(u.rev)}], "Taken off: " + txt(u.title)),
       {kind: "quiet icon-only", small: true, icon: "bin", key: "up-rm:" + u.id, aria: "Take it off: " + txt(u.title)}) : null;
-    const prep = brief ? upPrep(u, prepped || new Set(), true, nextPrep, leadRow) : null;
+    const prep = brief && !onToday ? upPrep(u, prepped || new Set(), true, nextPrep, leadRow) : null;
     // Asked for and not confirmed by them yet: said on its row, here and on the Brief.
     const maybe = u.tentative ? stateWord(NOT_CONFIRMED, null) : null;
     // Its prep under its title: a pill on the next interview's row alone (upPrep), the quiet
     // words on the others, so the rows keep their height wherever the panel is drawn.
+    // Its prep's quiet words end its time's line ("Fri 30 Oct · 10:00 · No prep yet"): a line
+    // of their own made each row a line taller, and two rows squeezed the progress chart under
+    // them on a laptop (2026-11-18). The pill keeps its own line.
+    const quiet = prep && !prep.querySelector("button") ? prep : null;
     if (brief) return h("li", {class: "bp-up-row"},
-      h("span", {class: "up-main"}, h("span", {class: "up-when"}, [upDayLabel(u.day), upWhen(u)].filter(Boolean).join(" · ")), h("span", {class: "up-title"}, upGo(u)), maybe, prep), add);
+      h("span", {class: "up-main"}, h("span", {class: "up-when"}, [upDayLabel(u.day), upWhen(u)].filter(Boolean).join(" · "), quiet ? [" · ", quiet] : null),
+        h("span", {class: "up-title"}, upGo(u)), maybe, quiet ? null : prep), add);
     const sub = [UP_WORDS[txt(u.kind)] || "", upNote(u), txt(u.place)].filter(Boolean).join(" \u00b7\u00a0");
     // A row of a day's card (the redesign, phase 2, 2026-11-17): its time in a steady column, what
     // it is in the title's size, what kind and whether its prep is ready on the line under it

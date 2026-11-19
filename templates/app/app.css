@@ -2963,6 +2963,7 @@ ul.bp-news { gap: 12px; }
 /* Its day and time wrap inside its box: held to one line, a time from another zone ran under
    the calendar beside it and out of the panel at a tablet's width (2026-11-11). */
 .bp-up-row .up-when { font-size: var(--t-sm); color: var(--muted); white-space: normal; }
+.bp-up-row .up-when > .up-prep { display: inline; font-weight: 400; }
 .bp-up-row .up-title { overflow-wrap: anywhere; }
 @media (min-width: 760px) and (pointer: fine), (min-width: 760px) and (pointer: none) {
   .bp-up-row .up-prep > .btn.small { min-height: 24px; padding: 2px 12px; }

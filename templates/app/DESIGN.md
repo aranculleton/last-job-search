@@ -52,7 +52,9 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   is To do's first card said once. With nothing on To do or booked today, Today is the first
   search. Coming up lists everything booked, the one Today leads with included: a week with
   two interviews showed one, and read as the other missing (the maintainer, 2026-11-18: "i defo
-  have multiple things coming up but only one is showing in brief"). Why: the Brief's Today picked one thing, its
+  have multiple things coming up but only one is showing in brief"). The one Today leads with
+  is its day, time and title there and nothing more: its prep's button is Today's, and twice it
+  made the Brief's first row the tallest and took the room the progress chart grows into. Why: the Brief's Today picked one thing, its
   Next three another and To do a third, and their counts read 4, 1 and 3 over seven messages
   (the redesign's reviews, 2026-11-16). (one-answer test; Today tests)
 - What helps Claude do more (your profile, reading profiles, your LinkedIn messages) is never
@@ -237,7 +239,9 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   send", the person's words rather than "drafts ready to apply"), a short list's rows each in a soft box
   as Coming up's are, the rows a step of the spacing scale further apart up to 24px, and past
   that the pills a step under what they open, the spare room at the panel's foot. Your
-  progress's chart grows into its room, up to 160px. (the maintainer, 2026-11-07: "u see how
+  progress's chart grows into its room, up to 160px, and every booking on Coming up comes
+  before its height: on a laptop where the bookings leave it under 96px it takes what is left,
+  never a booking given way for it (2026-11-18). (the maintainer, 2026-11-07: "u see how
   its bunched at the top? be smart about this"; room tests)
 - **Your progress is jobs and people, chosen for the person.** At most four numbers, picked by
   the engine (`app_model._glance`) from what is true now: applied, interviews, offers;
@@ -464,7 +468,9 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   as To do does), and the next interview whose prep is ready carries "Read your prep", as the
   Brief offers it (it said "Prep ready" with no way to read it, the screen review, 2026-11-18); a row with no time yet has a soft "+ Add the time" under what it is. The
   Brief's Coming up says the next interview's prep, ready, as a soft pill under its title, "Read
-  your prep", the others' in the quiet words ("No prep yet"), never underlined words; "Prepare
+  your prep", the others' in the quiet words ("No prep yet") at the end of their time's line,
+  never a line of their own (two rows a line taller each squeezed the progress chart under them on
+  a laptop, 2026-11-18), and never underlined words; "Prepare
   me", with its gauge, is on Coming up's row and To do's card, as beside it on the Brief it
   grew the row after the panel was fitted. Why:
   seven cards under day headers, icons floating mid-card where a missing trash left its slot
