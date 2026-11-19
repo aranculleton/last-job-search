@@ -711,10 +711,11 @@ def test_contacts_says_claude_is_finding_people_and_not_an_unrelated_chat(run, p
     got = run("engine", html=page, viewport=WIDE, clock=CLOCK, seed=seed, steps=[
         {"hash": "contacts", "read": "#main .sec-head"}])
     assert not got["errors"], got["errors"]
-    # The header's own Find people says it is going; no line of its own for Claude's work
-    # (2026-11-04), and never an unrelated chat.
+    # No line of its own for Claude's work (2026-11-04), and never an unrelated chat. Find
+    # people steps aside while the run goes, the header's work pill saying it: a "Finding
+    # people" pill here as well said it twice (the screen review, 2026-11-18).
     said = got["after"][0]["text"]
-    assert "Finding people" in said and "scratch the job drafts" not in said, said
+    assert "Find people" not in said and "Finding people" not in said and "scratch the job drafts" not in said, said
 
 
 def test_settings_says_ready_once(run, model, tmp_path):

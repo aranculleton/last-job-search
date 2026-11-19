@@ -67,23 +67,28 @@ def test_find_people_left_empty_looks_at_the_employers_wanted(run, tmp_path):
 PLAIN = "[...document.querySelectorAll('#main button')].filter((b) => /^(Find people|Find jobs)$/.test(b.textContent.trim())).length"
 
 
-def test_a_people_run_going_turns_find_people_into_what_is_going_and_never_starts_a_second(run, tmp_path, vp):
+def test_a_people_run_going_takes_find_people_off_and_never_starts_a_second(run, tmp_path, vp):
+    # While it goes Find people steps aside, and the header's work pill is the one place that
+    # says it: a "Finding people" pill in the screen's header as well said it twice (the screen
+    # review, 2026-11-18).
     going = "[...document.querySelectorAll('#main button')].filter((b) => b.textContent.trim().startsWith('Finding people')).length"
-    got = _go(run, tmp_path, [{"hash": "contacts", "eval": "[" + PLAIN + ", " + going + "]"}, {"open": "head-find-people:going"}],
+    got = _go(run, tmp_path, [{"hash": "contacts", "eval": "[" + PLAIN + ", " + going + "]", "count": '[data-k="head-find-people:going"]'}],
               vp, seed={"work/network~1": _work("network", "People at the employers you want")}, clock=T)
     plain, shown = got["after"][0]["eval"]
-    assert plain == 0 and shown >= 1, got["after"][0]["text"][:400]
-    # Tapping it shows the work; nothing new is asked for.
+    assert plain == 0 and shown == 0 and got["after"][0]["count"] == 0, got["after"][0]["text"][:400]
+    # Nothing new is asked for.
     assert [w["kind"] for w in got["work"]] == ["network"], got["work"]
 
 
 def test_a_search_going_takes_find_jobs_off_jobs_and_says_it_is_searching(run, tmp_path):
-    """Find jobs is the search going ("Finding jobs") while it runs, and the header carries no
-    line of its own about it: the work pill and the button say it (2026-11-05)."""
-    got = _go(run, tmp_path, [{"hash": "jobs", "read": "#main .sec-head", "eval": PLAIN}], PHONE,
+    """Find jobs steps aside while the search runs, and the screen's header carries no line or
+    pill of its own about it: the work pill says it (2026-11-05). A "Finding jobs" pill there
+    beside the work pill and the open panel was the same thing three times, and with the panel
+    open a tap on it did nothing (the screen review, 2026-11-18)."""
+    got = _go(run, tmp_path, [{"hash": "jobs", "read": "#main .sec-head", "eval": PLAIN, "count": '#main [data-k$=":going"]'}], PHONE,
               seed={"work/search~1": _work("search", "Finding jobs")}, clock=T)
     head = got["after"][0]["text"]
-    assert got["after"][0]["eval"] == 0 and "Finding jobs" in head, head
+    assert got["after"][0]["eval"] == 0 and got["after"][0]["count"] == 0 and "Finding jobs" not in head, head
     assert "Searching now" not in head and "Claude is on it" not in head, head
     assert [w["kind"] for w in got["work"]] == ["search"]
 
@@ -103,23 +108,17 @@ LEFT = """(() => { const b = document.querySelector('#main .sec-head [data-k="he
           card: card ? left(card.textContent) : null, rail: rail && rail.querySelector('.sum-small') ? left(rail.querySelector('.sum-small').textContent) : null}; })()"""
 
 
-def test_a_search_going_says_its_time_left_as_its_card_does_with_no_gauge(run, tmp_path):
+def test_a_search_going_says_its_time_left_once_as_its_card_does_with_no_gauge(run, tmp_path):
     # "Finding jobs" as underlined words among pills, "38 min of Claude" beside it, "about 5
     # min left" on its card and "About 8 minutes left" over the card: one search, three
     # durations, and the gauge read as the wait (the screen review, 2026-11-11). While it runs
-    # it is a soft pill saying what its card says is left, with no gauge; the panel's line says
-    # the same.
+    # the screen's header has no pill of it at all, the work pill being Claude's one button
+    # (the screen review, 2026-11-18), and the panel's line says what its card says is left.
     got = _go(run, tmp_path, [{"hash": "jobs", "eval": LEFT}], WIDE, seed=GOING, clock=T)["after"][0]["eval"]
-    assert got["btn"] and got["btn"].startswith("Finding jobs · "), got
-    assert got["soft"] and not got["gauge"], got
-    assert got["card"] and got["btn"].endswith(got["card"] + " left"), got
-    assert got["rail"] and got["rail"].lower() == got["card"].lower(), got
-    # Its words read as one line: the pill's gap stood between "Finding jobs" and " · about 7
-    # min left" as well as their own space (README picture, 4.15.0).
-    assert got["gap"] is not None and got["gap"] <= 6, got
-    # A phone leaves its time to its card, so the header's pills keep to their rows.
+    assert got["btn"] is None and not got["gauge"], got
+    assert got["card"] and got["rail"] and got["rail"].lower() == got["card"].lower(), got
     phone = _go(run, tmp_path, [{"hash": "jobs", "eval": LEFT}], PHONE, seed=GOING, clock=T)["after"][0]["eval"]
-    assert phone["btn"] and phone["soft"] and not phone["gauge"], phone
+    assert phone["btn"] is None, phone
 
 
 # Jobs and Coming up left this list on 2026-11-05: their headers say nothing of Claude's

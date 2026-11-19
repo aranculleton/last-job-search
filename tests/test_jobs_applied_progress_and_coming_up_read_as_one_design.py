@@ -98,7 +98,8 @@ def test_jobs_leads_with_what_to_apply_to_in_its_stages_best_fit_first(run, tmp_
     assert len(seen["asked"]) == 2, seen["asked"]
     # The stages each under a small heading, best fit first within each.
     heads = [g[0] for g in seen["groups"]]
-    assert heads == ["Ready to send", "Being written", "New"], heads
+    # The job being written that has a question for you needs your answer (2026-11-18).
+    assert heads == ["Needs your answer", "Ready to send", "New"], heads
     for head, fits in seen["groups"]:
         assert fits == sorted(fits, reverse=True), (head, fits)
     # The folds under the list in the person's words.

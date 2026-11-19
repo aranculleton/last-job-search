@@ -2033,7 +2033,8 @@ S.two_asks = async (a) => {
   const o = await open({html: a.html, hash: "jobs", fake: {canSend: "available"}});
   const {page} = o;
   await draftViaDialog(page);
-  await page.evaluate(() => { location.hash = "drafts"; });
+  // Your resume's card is on Your profile (the screen review, 2026-11-18).
+  await page.evaluate(() => { location.hash = "profile"; });
   await turn(page, 6);
   await page.locator('#main [data-k="gen-make"]').click();
   await turn(page, 8);
@@ -2043,8 +2044,8 @@ S.two_asks = async (a) => {
 };
 
 // A resume for no job in particular, from every Jobs tab (the maintainer, 2026-10-31: "it's
-// hidden atm"): the header's quiet link opens Drafts at its card, and with none made yet the
-// card offers one.
+// hidden atm"): the header's quiet link opens its card on Your profile, and with none made yet
+// the card offers one.
 S.general_resume = async (a) => {
   const o = await open({html: a.html, hash: "jobs", fake: {canSend: "available"}});
   const {page} = o;

@@ -268,7 +268,8 @@ def test_the_resume_that_breaks_the_persons_rules_offers_only_a_fresh_one(run, t
     m["resume"]["breaks"] = ["it has dashes your documents never use"]
     m["resume"]["asset"] = None
     card = '[data-item="resume-current"], [data-item="resume-general"]'
-    got = _go(run, tmp_path, [{"hash": "drafts", "read": card}], PHONE, model=m, clock=T)
+    # Its one card is on Your profile, Jobs' "Your CV" opening it (the screen review, 2026-11-18).
+    got = _go(run, tmp_path, [{"hash": "profile", "read": card}], PHONE, model=m, clock=T)
     text = got["after"][0]["text"]
     assert "Not to send" in text and "Make a fresh one" in text and "dashes your documents never use" in text
     assert "Download" not in text and "Download this one anyway" not in text
@@ -404,15 +405,23 @@ def test_the_briefs_jobs_tile_leads_with_the_drafts_ready_to_apply(run, tmp_path
     # the redesign, 2026-11-17).
     # Since the redesign's second round (2026-11-17), in the words Jobs' headings use: the draft
     # asking whether it went is "to confirm", the fold's own word.
-    assert "2 applications ready to send, 1 to confirm" in tile and "Nothing new to look at." not in tile, tile
+    # Every "Did you apply?" Jobs' fold holds, in plain words: the Brief said "1 to confirm"
+    # beside Jobs' "2 to confirm" (the screen review, 2026-11-18).
+    assert "2 applications ready to send, 2 to say if you applied" in tile and "Nothing new to look at." not in tile, tile
     assert "drafts ready to apply" not in tile, tile
     # One sentence whose total is the tab's since the UX review of 2026-11-10 (U-9).
     # The tab's total first (U-9); what makes it up is test_the_jobs_line_adds_up_to_its_tab's.
-    assert drafts.startswith("3 to apply for: "), ("the same count as Jobs' one list", drafts[:120])
-    got = _go(run, tmp_path, [{"hash": "brief", "click": "2 applications ready to send, 1 to confirm", "role": "link",
+    # The draft asking whether it went is the fold's, never in the total (2026-11-18).
+    assert drafts.startswith("2 to apply for: "), ("the same count as Jobs' one list", drafts[:120])
+    got = _go(run, tmp_path, [{"hash": "brief", "click": "2 applications ready to send, 2 to say if you applied", "role": "link",
                                "until": "location.hash.startsWith('#drafts')"}], WIDE, model=m, clock=T)
     assert got["after"][0]["hash"].startswith("#drafts"), got["after"][0]["hash"]
+    # With no draft and no "Did you apply?" left either, nothing is owed: a question about
+    # applying is owed as much as a draft is (2026-11-18).
     m["ready"] = []
+    got = _go(run, tmp_path, [{"hash": "brief", "read": "#main .bp-jobs"}], WIDE, model=m, clock=T)
+    assert "2 to say if you applied" in got["after"][0]["text"], got["after"][0]["text"]
+    m["needs_you"] = [n for n in m["needs_you"] if n.get("kind") not in ("confirm", "conflict")]
     got = _go(run, tmp_path, [{"hash": "brief", "read": "#main .bp-jobs"}], WIDE, model=m, clock=T)
     assert "Nothing new to look at." in got["after"][0]["text"], got["after"][0]["text"]
 

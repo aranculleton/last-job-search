@@ -26,6 +26,14 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **A link to Applied opens Applied.** It opened whichever Jobs tab you used last.
+- **Jobs' numbers add up and agree.** "5 to apply for" stood over parts adding to 4: a job asking whether you applied is no longer in the total, only in its own count, and the Brief now says the same number as Jobs, as "2 to say if you applied".
+- **A job being written that has a question for you is under Needs your answer**, not Being written, and counted there.
+- **Your CV is shown once on Jobs.** To apply had a link and a card for it; the link stays on every Jobs tab and opens its card on Your profile.
+- **"Finding jobs" is said once while a search runs.** A pill of it beside the work button and the open panel did nothing when tapped; the work button and the search's own card say it. The same for Find people on Contacts.
+- **Settings names what it counts: "Kinds of job you hid"**, beside Jobs' count of single jobs you hid.
+- **A CV made for someone has its trash too**, asking "Not sending this to Tamsin?", with the file kept.
+- **The tour describes Jobs as it is now**, To apply and Applied, in your word for the document.
 - **A change made by hand to one of the app's own files on your computer no longer stops every update.** Only a chat in the cloud could get past an unsaved change like that, so a copy on your computer with one never updated again. The update puts the app's own files back in any case, so your change is now kept in a folder called .set-aside, where nothing of it is lost, the app's file is put back and the update comes in, saying so once. Unsaved changes to your own files still wait for you, as before.
 - **A file of your own with the same name as one an update brings no longer stops every update.** On your computer nothing ever moved such a file out of the way, so the update stopped on it every day. It is now kept in the .set-aside folder, nothing of it lost, the app's own file takes its name and the update comes in, saying so once.
 - **The chat that looks after your page follows the newest instructions as soon as an update brings them.** The update's note to read them again reached only the helper doing the work for it, so a chat kept open for days went on following the instructions it started with. That note now comes back to the chat itself.

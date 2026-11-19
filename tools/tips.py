@@ -172,9 +172,9 @@ PAGE_TOUR = (
              "that is due, an interview coming up. A card's filled button is its next step; "
              "the trash puts it away."},
     {"key": "jobs", "tab": "jobs", "title": "Jobs",
-     "text": "Every role from found to applied. Found: scored out of 100 for how well it "
-             "fits you; choose Draft this on one you like. Drafts: your resume and letter, "
-             "checked; get the files, apply on the employer's site, then I have applied. "
+     "text": "Two tabs. To apply: each role scored out of 100 for how well it fits you; "
+             "choose Draft this on one you like, and its documents are written and checked "
+             "on its card; get the files, apply on the employer's site, then I have applied. "
              "Applied: each one tracked, its follow-ups back in To do."},
     {"key": "contacts", "tab": "contacts", "title": "Contacts",
      "text": "Why people: someone inside who puts your name forward gets you far more "

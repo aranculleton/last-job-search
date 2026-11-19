@@ -1239,8 +1239,9 @@ METHODS: dict[str, dict] = {
             (211, "2026-11-16", True, "the one card for a sign-in in a chat on the person's computer covers only reads waiting on that chat's sign-in: a sign-in in the page's own browser keeps its own card, and the computer's I've signed in no longer sends it back"),
             (212, "2026-11-17", True, "the page is redesigned: warm paper and charcoal with a clay mark, one type scale, one family of buttons, tabs and folds; Coming up joins the phone's tabs and Chat is a header button; To do and the Brief give one ranked answer with a call booked today leading; Jobs by stage and best match, Coming up a card a day, Contacts sending from under each draft; the four cards share rows, an Update menu and a stepper, and an employer's card says what Claude found and whether it clears the person's bar"),
             (213, "2026-11-18", True, "text a step smaller (a computer's Standard 14px, Larger 107%, a phone's Larger 108%); each document downloads from its own icon on its row, with no Get both files and no Open that saved the file; I have applied stays on a card whose box asks a question; Coming up on the Brief lists everything booked, the one Today leads with included; a form answer's and a note's Copy, a prep's code's Copy, Edit the brief, a resume made for a contact's Download and a picture's Remove are their icons"),
+            (214, "2026-11-18", True, "every address to Applied opens its tab; To apply's total leaves out the \"did you apply?\" questions, counted once on Jobs and the Brief, which says \"to say if you applied\"; a job being written with a question for you needs your answer; Your CV is one link on each Jobs tab, opening its card on Your profile; Find jobs and Find people step aside while their run goes; Settings' Kinds of job you hid; a CV made for someone has its trash; the tour names To apply and Applied in the person's word"),
         ),
-        "fingerprint": "8b47d70ef3316b03",
+        "fingerprint": "2f49c64415440faa",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",

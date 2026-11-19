@@ -542,7 +542,8 @@ def test_a_newer_view_document_replaces_its_section_without_a_republish(run, pag
     # Ready only when nothing waits on it (the review of 2026-11-11). In the words of the list's
     # headings, the "Did you apply?" questions the fold's own count (the redesign's second round,
     # 2026-11-17).
-    assert r["lede"].startswith("4 to apply for: 2 ready to send, 1 new. 2 to confirm."), r["lede"]
+    # A "Did you apply?" is the fold's, never in the total (the screen review, 2026-11-18).
+    assert r["lede"].startswith("3 to apply for: 2 ready to send, 1 new. 2 to confirm."), r["lede"]
 
 
 # ------------------------------------------------------------------ To do, alerts and suggestions
@@ -1170,8 +1171,9 @@ def test_keyboard_alone_reaches_and_works_everything_and_the_shortcuts_can_be_sw
     # 2026-11-11 (row 40): it asked about the Fernhill Freight application, which Applied
     # listed as sent. Since the redesign's phase 2 (2026-11-17) every "Did you apply" waits in
     # the one fold under the list, so j reaches the first card shown, the first draft
-    # ready to send.
-    assert r["cardFocus"] == "app-copperleaf-payments", r["cardFocus"]
+    # ready to send. Since the screen review of 2026-11-18 the job being written with a
+    # question for you needs your answer, so it heads the list.
+    assert r["cardFocus"] == "r12-2", r["cardFocus"]
     assert r["moreClosed"], "Esc closes a card's More"
     assert r["typed"] == ["gj", "Chat"], "typing in a box is never a shortcut"
     assert r["offStays"] == "Settings" and r["stored"] == "off"
@@ -1885,7 +1887,9 @@ def test_a_resume_for_no_job_in_particular_is_one_tap_from_jobs_and_offered_when
     r = run("general_resume", html=pages["sample"])
     _clean(r)
     assert r["link"] == "Your CV", r
-    assert r["hash"].startswith("#drafts") and "Your CV" in r["card"], r
+    # Its one card is on Your profile, the link on every Jobs tab opening it: To apply showed
+    # "Your CV" twice, the link and the card under the list (the screen review, 2026-11-18).
+    assert r["hash"].startswith("#profile") and "Your CV" in r["card"], r
     assert r["make"] == 0 and r["work"] == [], "with a CV made, the card offers it, never a second"
     none = _sample()
     none["resume"] = {}
