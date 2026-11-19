@@ -1583,14 +1583,18 @@ def snapshot(window: int) -> dict:
             "employers_out": sorted(declined_now())}
 
 
-def _record_path() -> str:
-    return person.state(*RECORD)
+def _record_path(at: str = "") -> str:
+    """The record of what rounds searched with: beside the round's summaries (`at`, its
+    `--summary-dir`), else the person's own documents/rounds/searched/with.json. Kept in the
+    person's own folder whatever a round's summaries said, a test's round in a folder of its
+    own left a file in the person's copy (the 4.17.0 rehearsal)."""
+    return os.path.join(at, *RECORD[2:]) if at else person.state(*RECORD)
 
 
-def last_record() -> tuple[str, dict]:
+def last_record(at: str = "") -> tuple[str, dict]:
     """(the round's name, what it searched with) for the last round recorded, or ("", {})."""
     try:
-        with open(_record_path(), encoding="utf-8") as fh:
+        with open(_record_path(at), encoding="utf-8") as fh:
             got = json.load(fh)
     except (OSError, ValueError):
         return "", {}
@@ -1603,9 +1607,9 @@ def last_record() -> tuple[str, dict]:
     return name, r
 
 
-def record(name: str, snap: dict, day: str) -> None:
-    """Keep what this round searched with, the last RECORD_KEEP rounds."""
-    p = _record_path()
+def record(name: str, snap: dict, day: str, at: str = "") -> None:
+    """Keep what this round searched with, the last RECORD_KEEP rounds (`at`: _record_path)."""
+    p = _record_path(at)
     try:
         with open(p, encoding="utf-8") as fh:
             got = json.load(fh)
@@ -1671,7 +1675,7 @@ def _own_steps() -> list[str]:
 
 
 def header(window_line: str, window: int, name: str = "", today: str = "",
-           keep: bool = True, skipped: dict | None = None) -> list[str]:
+           keep: bool = True, skipped: dict | None = None, at: str = "") -> list[str]:
     """The lines a round prints before it searches: its window (whose), its places, the kinds
     of employer out, how many employers are out by name, the person's own steps that also
     clear the list, what changed since the last round, and anything turned down still on a
@@ -1690,7 +1694,7 @@ def header(window_line: str, window: int, name: str = "", today: str = "",
     for step in _own_steps():
         lines.append(f"  also before each brief, your own step {step} (its own setting, "
                      "left as it is)")
-    was, before = last_record()
+    was, before = last_record(at)
     if before.get("with"):
         moved = changed(before["with"], snap)
         lines.append(f"  since the last search ({was}, {before.get('date') or 'no date'}): "
@@ -1715,7 +1719,7 @@ def header(window_line: str, window: int, name: str = "", today: str = "",
                      "what you want differ (`python3 tools/wants.py check` names each)")
     if keep and name:
         try:
-            record(name, snap, today or person.today().isoformat())
+            record(name, snap, today or person.today().isoformat(), at)
         except OSError:
             pass
     return lines

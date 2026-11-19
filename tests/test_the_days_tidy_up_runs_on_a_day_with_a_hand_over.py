@@ -27,7 +27,10 @@ from test_one_chat_answers_the_page import Copy  # noqa: E402
 
 OLD = "session_EXAMPLEYESTERDAYSPAGE"
 NEW = "session_EXAMPLETODAYSPAGE"
-CLOUD = {"CLAUDE_CODE_REMOTE": "true"}
+# A cloud chat on a machine in London, as the days below are London's: the tidy-up names its
+# day by the machine's own clock (`tidy.py done`, the check-in), and on a machine 14 hours
+# ahead or 11 behind these times fall on other days (Everywhere's ahead and behind, 4.17.0).
+CLOUD = {"CLAUDE_CODE_REMOTE": "true", "TZ": "Europe/London"}
 
 
 @pytest.fixture
