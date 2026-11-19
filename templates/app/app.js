@@ -358,12 +358,14 @@
   // margin: wrapped under a pill and its gauge it kept the 8px meant for the gauge and stood
   // 20px in (the screen review, 2026-11-18).
   function quietFit() {
-    for (const b of document.querySelectorAll(".lead-quiet")) b.classList.remove("lead-quiet");
+    for (const b of document.querySelectorAll(".lead-quiet")) { b.classList.remove("lead-quiet"); b.style.removeProperty("--q-in"); }
     for (const b of document.querySelectorAll(".card .card-actions > .btn.quiet:not(.icon-only):not(.stop-claude)")) {
       if (!shownIn(b)) continue;
       const row = b.parentElement.getBoundingClientRect(), q = b.getBoundingClientRect();
       const m = parseFloat(getComputedStyle(b).marginInlineStart) || 0;
-      if (Math.abs(q.left - m - row.left) < 2) b.classList.add("lead-quiet");
+      // Leading its line: drawn in by its padding and its own margin (app.css), its place in
+      // the row unchanged, so it never fits back on the line above.
+      if (Math.abs(q.left - m - row.left) < 2) { b.classList.add("lead-quiet"); if (m) b.style.setProperty("--q-in", m + "px"); }
     }
   }
   function lineFit() { moreFit(); quietFit(); sepFit(); clampFit(); }
