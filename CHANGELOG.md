@@ -20,6 +20,10 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Changed
+
+- **The app's builder hands over to its next chat by itself.** After each release, and after each weekly run, the chat that built it starts the next one, moves its scheduled tasks there and puts itself away, so the maintainer never pastes a prompt. Nothing in your own copy changes.
+
 ### Fixed
 
 - **The tour shows you round the page as it is now.** Its Contacts step sent you to "Messages", a view the new look took away: each person's note waits on their card. And its To do step said the trash puts a card away, where a card is put off with Later.

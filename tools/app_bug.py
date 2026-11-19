@@ -90,6 +90,11 @@ BUILDER_CHAT_PROMPT = ("This chat runs the app's weekly builder on its schedule,
 # The chat a version's builder hands over to: the builder prompt in MAINTAINING.md, its notes
 # empty, with the maintainer's copy filled in where the prompt leaves a place for it.
 VERSION_TITLE = "App builder: next version"
+# The maintainer's own setup for builder chats alone (2026-11-19): it pre-approves the hand-over's
+# calls for those chats only, never in a person's copy, whose settings stay as the app ships them.
+BUILDER_ENV_NAME = "last-job-search builder"
+BUILDER_ENV = (f"<the id of the environment named \"{BUILDER_ENV_NAME}\", from list_environments; "
+               "none: leave environment_id out>")
 COPY_PLACE = "<my copy, owner/name>"
 TOKENS_HOURS = 12                     # the denylist is built again after this, as the push gate's is
 WAKE_HOURS = 1                        # urgent bugs in a burst poke the builder once
@@ -467,6 +472,7 @@ def handover(kind: str, copy: str, chat: str) -> dict:
         made = dict(made, title=VERSION_TITLE, prompt=builder_prompt(_copy(copy)))
     else:
         raise ValueError("kind is week or version")
+    made = dict(made, environment_id=BUILDER_ENV)
     new = "<the new chat's id, from create_session>"
     return {"calls": [
         {"tool": "create_session", "args": made,

@@ -47,6 +47,12 @@ errors: list[str] = []
 # an entry must add it here too - that is the point: the diff shows both.
 ALLOWED_PERMISSIONS = {
     "Skill(job-application-assistant)",
+    # Reads only, for the weekly builder's hand-over to its next chat (app_bug.py handover):
+    # its own chat's id and the tasks bound to it. Making or deleting a chat or a task is
+    # never pre-approved here: this file is every person's (approved by the maintainer's
+    # notes, 2026-11-19).
+    "mcp__claude-code-remote__get_session",
+    "mcp__claude-code-remote__list_triggers",
     # Narrowed from the upstream template's blanket Bash(bun run:*), which
     # pre-approved `bun run <any file>`. One entry per shipped portal CLI,
     # matching what each SKILL.md already declares in its allowed-tools.
