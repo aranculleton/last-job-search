@@ -15065,7 +15065,7 @@
   // 2026-11-18).
   const TOUR = () => [
     ["brief", "Brief", "Your day at a glance. Tap any line to go to it."],
-    ["todo", "To do", "What needs you, five at a time, most urgent first. A card's filled button is its next step; the trash puts it away."],
+    ["todo", "To do", "What needs you, five at a time, most urgent first. A card's filled button is its next step; Later in its corner brings it back another day."],
     ["jobs", "Jobs", "Two tabs. To apply: each role with a number out of 100 for how well it fits you (75 or more is a strong fit), then your " + noun() + " and letter for it once you choose Draft this. Applied: each one you sent, tracked."],
     ["contacts", "Contacts", "Someone inside who puts your name forward beats applying cold. Claude finds who to write to and drafts the note; you send it yourself. Tap a name to see everything about them."],
     ["interviews", "Coming up", "Everything booked, by day: interviews, calls, tests and closing days, each ready to add to your calendar, and your prep for each interview."],

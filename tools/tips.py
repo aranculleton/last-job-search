@@ -170,7 +170,7 @@ PAGE_TOUR = (
     {"key": "todo", "tab": "todo", "title": "To do",
      "text": "What needs you, five at a time, most urgent first: a question, a follow-up "
              "that is due, an interview coming up. A card's filled button is its next step; "
-             "the trash puts it away."},
+             "Later in its corner brings it back another day."},
     {"key": "jobs", "tab": "jobs", "title": "Jobs",
      "text": "Two tabs. To apply: each role scored out of 100 for how well it fits you; "
              "choose Draft this on one you like, and its documents are written and checked "
@@ -179,8 +179,8 @@ PAGE_TOUR = (
     {"key": "contacts", "tab": "contacts", "title": "Contacts",
      "text": "Why people: someone inside who puts your name forward gets you far more "
              "interviews than applying cold. Claude finds who to write to and drafts a short "
-             "note; you send it on LinkedIn yourself. Messages holds the notes ready to send. "
-             "A name opens everything about that person."},
+             "note; you send it on LinkedIn yourself. Each person's note waits on their card, "
+             "ready to copy. A name opens everything about that person."},
     {"key": "interviews", "tab": "interviews", "title": "Coming up",
      "text": "Everything booked or due, by day: interviews, calls, tests and closing days. "
              "Add any of it to your calendar, and add anything else with Add a date. "
