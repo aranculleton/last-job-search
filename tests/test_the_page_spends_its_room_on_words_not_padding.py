@@ -285,18 +285,25 @@ def test_a_rows_line_of_facts_never_hides_a_dot_mid_line(run, tmp_path, vp):
 LATER = r"""(() => [...document.querySelectorAll('#main [data-todo] .hide-x')].filter((b) => b.getClientRects().length).map((b) => ({
   card: b.closest('[data-todo]').dataset.todo, label: b.getAttribute('aria-label') || '',
   word: [...b.querySelectorAll('span:not(.sr-only)')].filter((s) => s.getBoundingClientRect().width > 4).map((s) => s.textContent.trim()).join(' '),
-  bin: !!b.querySelector('svg path[d^="M4 7h16"]')})))()"""
+  bin: !!b.querySelector('svg path[d^="M4 7h16"]'),
+  more: [...b.closest('[data-todo]').querySelectorAll('.more-panel button')].map((x) => x.textContent.trim())})))()"""
 
 
 def test_putting_off_on_to_do_says_later_and_the_trash_is_only_for_what_goes(run, tmp_path, vp):
     got = _eval(run, tmp_path, "todo", LATER, vp)
     later = [g for g in got if g["label"].startswith(("Later", "Hide for a week"))]
-    person = [g for g in got if g["label"].startswith("Not ")]
-    assert later and person, got
+    person = [g for g in got if g["card"].startswith("person:")]
+    goes = [g for g in got if g["label"].startswith("Not going ahead")]
+    assert later and person and goes, got
     # A card put off for a while says so in words, with a clock, never the trash.
     assert all(g["word"] == "Later" and not g["bin"] for g in later), later
-    # A card about one person keeps the trash: its choices include letting them go.
-    assert all(g["bin"] and not g["word"] for g in person), person
+    # A card about one person says Later in its corner too, and the choices about the person
+    # ("Not Tamsin?") are under its More: its trash in the corner where every other card has
+    # Later opened them about who referred them (the screen review, 2026-11-18).
+    assert all(g["word"] == "Later" and not g["bin"] for g in person), person
+    assert all(any(m.startswith("Not ") and m.endswith("?") for m in g["more"]) for g in person), person
+    # The trash is for what goes: an interview not going ahead keeps it.
+    assert all(g["bin"] and not g["word"] for g in goes), goes
 
 
 # ------------------------------------------------------------------ Jobs: a card's lines
@@ -693,3 +700,47 @@ def test_why_keeps_to_the_last_facts_words_at_any_width(run, tmp_path):
     # and Why did not fit together. Any width, from 140px to 300px, keeps them together.
     got = _eval(run, tmp_path, "jobs", NARROW_WHY, PHONE)
     assert got and all(d <= 4 for d in got), got
+
+
+# One employer, one name, in Messages to send: "Larkspur Retail" and "Larkspur Retail Ltd" stood
+# two rows apart as if two employers (the screen review, 2026-11-18).
+SEND_NAMES = r"""(() => [...document.querySelectorAll('#main .send-card .g-row .g-name')].filter((n) => n.getClientRects().length).map((n) => n.textContent.replace(/\s+/g, ' ').trim()))()"""
+
+
+def test_messages_to_send_say_one_name_for_one_employer(run, tmp_path, vp):
+    names = _eval(run, tmp_path, "todo", SEND_NAMES, vp)
+    lark = [n for n in names if "Larkspur" in n]
+    assert len(lark) >= 2, names
+    assert not any("Larkspur Retail Ltd" in n for n in lark), names
+
+
+# The widest gap between one letter (or space) and the next on a line of Next three's rows: a
+# dot cut at the start of a line left its width as a hole between two words, "Have   you used
+# Looker?" and "Juno,   Wren and 5 more" (the screen review, 2026-11-18).
+NEXT_GAPS = r"""(() => [...document.querySelectorAll('#main .bp-next a.bp-link')].filter((a) => a.getClientRects().length).map((a) => {
+  const ch = [];
+  const w = document.createTreeWalker(a, NodeFilter.SHOW_TEXT);
+  for (let n = w.nextNode(); n; n = w.nextNode()) {
+    if (n.parentElement.closest('.sep-dot')) { ch.push(null); continue; }
+    for (let i = 0; i < n.data.length; i++) {
+      const g = document.createRange(); g.setStart(n, i); g.setEnd(n, i + 1);
+      const r = [...g.getClientRects()].find((x) => x.width > 0.1);
+      ch.push(r ? {c: n.data[i], l: r.left, r: r.right, t: r.top, b: r.bottom} : null);
+    }
+  }
+  const sp = parseFloat(getComputedStyle(a).fontSize) * 0.4;
+  let worst = 0, at = '';
+  for (let i = 1; i < ch.length; i++) {
+    const p = ch[i - 1], q = ch[i];
+    if (!p || !q || Math.abs(p.t - q.t) > 2) continue;
+    const gap = q.l - p.r;
+    if (gap > worst) { worst = gap; at = p.c + '|' + q.c; }
+  }
+  return {text: a.textContent.slice(0, 50), worst: Math.round(worst * 10) / 10, at, space: Math.round(sp * 10) / 10};
+}))()"""
+
+
+def test_next_threes_rows_have_no_hole_between_their_words(run, tmp_path, vp):
+    rows = _eval(run, tmp_path, "brief", NEXT_GAPS, vp)
+    assert any("Looker" in r["text"] for r in rows), rows
+    assert all(r["worst"] <= 2 for r in rows), rows

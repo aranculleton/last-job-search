@@ -255,7 +255,9 @@ def test_the_briefs_coming_up_never_lists_a_late_follow_up(run, tmp_path):
                                                        "(document.querySelector('[data-k=\"bp:upcoming\"] .bp-body') || {}).innerText || '']"}],
               model=model, clock="2026-10-28T09:00:00Z")
     count, text = got["after"][0]["eval"]
-    assert count == 0 and "Nothing else booked." in text and "Nothing booked in the next two weeks" not in text
+    # The one booked thing is listed, the one Today leads with included (DESIGN.md, Brief: a
+    # week with two interviews showed one, 2026-11-18); the late follow-ups never are.
+    assert count == 0 and "Phone screen: Larkspur Retail" in text and "Nothing booked in the next two weeks" not in text
 
 
 # ------------------------------------------------------------------ the interview card (interviews 7, 14, 17, 22, 26)
@@ -347,6 +349,8 @@ def test_coming_up_reads_your_prep_with_the_pill_to_do_has(run, tmp_path, vp):
     got = _go(run, tmp_path, [{"hash": "interviews", "eval": look}, {"hash": "todo", "eval": (
         "[...document.querySelectorAll('#main [data-item=\"soon:int-larkspur-supply\"] .card-actions .btn')].map((b) => b.textContent.trim())")}], vp=vp)
     rows, todo = got["after"][0]["eval"], got["after"][1]["eval"]
-    assert rows["pills"] == [["Prepare me", False]], rows
+    # The next interview with its prep ready reads it from its row, as the Brief offers it, and
+    # the next with none carries Prepare me (DESIGN.md, Coming up; the screen review, 2026-11-18).
+    assert rows["pills"] == [["Read your prep", False], ["Prepare me", False]], rows
     assert ["Prep ready", "SPAN", True] in rows["ready"] and rows["links"] == 0, rows
     assert "Read your prep" in todo, todo

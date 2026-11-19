@@ -317,7 +317,9 @@ def test_jobs_you_hid_names_them_plainly_and_asks_before_bringing_back_hundreds(
         {"open": "info-sum:search-pay", "read": '[data-k="det:info:search-pay"]'},
     ], PHONE, model=m)
     rules = got["after"][0]["text"]
-    assert rules.startswith("Jobs you hid") and "235 jobs" in rules and "Hidden by you: 233 jobs" in rules and "Quayside Foods: 2 jobs" in rules, rules
+    # Named for what it counts, the kinds of job hidden: "Jobs you hid: 10 jobs" sat beside Jobs'
+    # "1 you hid" (the screen review, 2026-11-18).
+    assert rules.startswith("Kinds of job you hid") and "2 kinds, 235 jobs" in rules and "Hidden by you: 233 jobs" in rules and "Quayside Foods: 2 jobs" in rules, rules
     assert "Bring back 233 jobs?" in got["after"][1]["dialog"] and not [a for a in got["actions"] if a["action"] == "rule.lift"], "asked first"
     follow = got["after"][3]
     assert follow["count"] == 12 and "94 more employers" in follow["text"] and "6 employers you ruled out are not followed" in follow["text"], follow

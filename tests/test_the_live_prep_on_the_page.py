@@ -788,10 +788,12 @@ def test_on_a_practice_day_coming_up_and_to_do_lead_with_the_same_step(run, tmp_
     todo = ("(() => { const c = [...document.querySelectorAll('#main [data-item]')].find((x) => x.dataset.item === 'soon:%s');"
             " return c ? c.querySelector('.card-actions > .btn').textContent.trim() : null; })()" % IV)
     # Coming up's row for that interview: its step, else (since the redesign's phase 2,
-    # 2026-11-17) the row is its own tap to read the prep, with its "Prep ready" chip.
+    # 2026-11-17) the row is its own tap to read the prep, with its "Prep ready" chip, and since
+    # the screen review (2026-11-18) the next interview's row with its prep ready carries "Read
+    # your prep" as To do does.
     row = ("(() => { const r = [...document.querySelectorAll('#main .up-row')].find((x) => (x.querySelector('.up-link') || {getAttribute: () => ''}).getAttribute('href') === '#interviews/%s');"
            " if (!r) return null; const b = r.querySelector('.up-prep .btn'); return b ? b.textContent.trim() : r.classList.contains('opens') ? 'Read your prep: ' + r.querySelector('.up-sub .state-word').textContent : null; })()" % IV)
-    for days, lead, step in ((1, "Practise 3 questions", "Practise 3 questions"), (3, "Read your prep", "Read your prep: Prep ready")):
+    for days, lead, step in ((1, "Practise 3 questions", "Practise 3 questions"), (3, "Read your prep", "Read your prep")):
         got = _go(run, tmp_path, _soon(days), [{"hash": "todo", "eval": todo}, {"hash": "interviews", "eval": row}], vp)
         assert [a["eval"] for a in got["after"]] == [lead, step], (days, [a["eval"] for a in got["after"]])
 

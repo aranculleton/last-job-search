@@ -505,6 +505,9 @@ function budgetProbe() {
       // card's details: the words' own, never one of the card's actions (the redesign, 2026-11-16).
       folds: cs.filter((b) => b.matches(".pdraft > summary, .read-all")).length,
       alerts: c.querySelectorAll(".alert, .suggest").length,
+      // A box asking a question is open on it, never a typical closed card (DESIGN.md, a card's
+      // budget): counted for the words alone, its controls held to the card's budget as before.
+      asks: c.querySelectorAll(".question").length,
       labels: cs.map((b) => (b.getAttribute("aria-label") || b.textContent || "").replace(/\s+/g, " ").trim().slice(0, 24))};
   });
   return {chrome, screenWords: wordsIn(main, true), screenControls: controls(main, true).length, filled, cards};
@@ -2033,7 +2036,8 @@ S.two_asks = async (a) => {
   const o = await open({html: a.html, hash: "jobs", fake: {canSend: "available"}});
   const {page} = o;
   await draftViaDialog(page);
-  await page.evaluate(() => { location.hash = "drafts"; });
+  // Your resume's card is on Your profile (the screen review, 2026-11-18).
+  await page.evaluate(() => { location.hash = "profile"; });
   await turn(page, 6);
   await page.locator('#main [data-k="gen-make"]').click();
   await turn(page, 8);
@@ -2043,8 +2047,8 @@ S.two_asks = async (a) => {
 };
 
 // A resume for no job in particular, from every Jobs tab (the maintainer, 2026-10-31: "it's
-// hidden atm"): the header's quiet link opens Drafts at its card, and with none made yet the
-// card offers one.
+// hidden atm"): the header's quiet link opens its card on Your profile, and with none made yet
+// the card offers one.
 S.general_resume = async (a) => {
   const o = await open({html: a.html, hash: "jobs", fake: {canSend: "available"}});
   const {page} = o;
@@ -2443,12 +2447,11 @@ S.downloads = async (a) => {
   const o = await open({html: a.html, hash: "drafts", fake: a.fake});
   const {page, store} = o;
   const r = {};
-  // Its suggestion is decided first: while it stands, the files wait under its More, the card
-  // keeping to one filled pill and two soft ones (the review, 2026-11-05).
-  const both = page.getByRole("button", {name: "Get both files: Morgan_Ellis_CV_Ellerwick.pdf and Morgan_Ellis_Cover_Letter_Ellerwick.pdf"});
-  if (!(await both.isVisible().catch(() => false))) await openMore(page, "app-ellerwick-insight");
-  await both.click();
-  await page.waitForTimeout(200);
+  // Each document from its own download icon on its row (the maintainer, 2026-11-18).
+  for (const name of ["Download CV: Morgan_Ellis_CV_Ellerwick.pdf", "Download cover letter: Morgan_Ellis_Cover_Letter_Ellerwick.pdf"]) {
+    await page.getByRole("button", {name}).click();
+    await page.waitForTimeout(200);
+  }
   await turn(page, 8);
   r.saves = (await calls(page)).filter((c) => c.cap === "downloads");
   r.note = await T(page, '#main [data-item="app-ellerwick-insight"] .note');
@@ -2939,7 +2942,7 @@ S.chat_pics = async (a) => {
   await page.waitForFunction(() => [...document.querySelectorAll(".talk-attach img.pic-thumb")].every((i) => i.complete && i.naturalWidth > 0), null, {timeout: 5000}).catch(() => {});
   r.tray = await page.evaluate(() => [...document.querySelectorAll(".talk-attach .pic-chip")].map((c) => {
     const img = c.querySelector("img.pic-thumb");
-    return {img: !!img, loaded: !!img && img.complete && img.naturalWidth > 0, state: c.querySelector(".pic-state").textContent, remove: (c.querySelector("button") || {}).textContent};
+    return {img: !!img, loaded: !!img && img.complete && img.naturalWidth > 0, state: c.querySelector(".pic-state").textContent, remove: (c.querySelector("button") || {}).textContent, removeName: (c.querySelector("button") || {getAttribute: () => null}).getAttribute("aria-label")};
   }));
   r.uploaded = await page.evaluate(() => (window.__ljsAssets || []).slice());
   r.typed = await page.inputValue("#talk-text");
@@ -3019,6 +3022,10 @@ S.prep_reader = async (a) => {
 S.iv_cards = async (a) => {
   const o = await open({html: a.html, viewport: a.viewport, hash: "interviews", clock: a.clock});
   await interviewCards(o.page);
+  // Every card, the finished ones too: an interview that has ended waits under the fold
+  // (DESIGN.md, Coming up's Interviews list), so the fold is opened before they are read.
+  const fold = o.page.locator('#main [data-k="fold:interviews"]');
+  if (await fold.count()) { await fold.first().click(); await turn(o.page, 4); }
   const r = {errors: o.errors};
   r.cards = await o.page.$$eval("#main article.card.interview", (cs) => cs.map((c) => ({
     // Its pill at the top, or leading its line of when on a phone (the screen review, 2026-11-11).

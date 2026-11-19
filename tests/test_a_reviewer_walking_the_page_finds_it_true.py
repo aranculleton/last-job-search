@@ -78,8 +78,9 @@ def test_a_job_being_drafted_says_where_its_draft_stands_with_cancel_and_stays_c
     # "3 to send, 2 still to make".
     # Each stage in its heading's word (the redesign's second round, 2026-11-17): the job just
     # asked for and the draft never made, which Claude makes next by itself, are both being
-    # written; the job asking whether it was applied to waits in the fold, counted there once.
-    assert "5 to apply for: 1 ready to send, 2 being written, 1 new. 1 to confirm." in summary, summary
+    # written; the job asking whether it was applied to waits in the fold, counted there once,
+    # and never in the total (the screen review, 2026-11-18).
+    assert "4 to apply for: 1 ready to send, 2 being written, 1 new. 1 to confirm." in summary, summary
     assert ("Claude is on it" in going or "Draft" in going) and "Stop Claude" in going, going
     assert "Finished: putting it on your page" in finished, finished
     assert "Draft ready" not in finished and "See the draft" not in finished, finished
@@ -126,7 +127,8 @@ def test_the_brief_counts_drafts_ready_apart_from_those_being_made_and_apply_wai
     # application ready to send (the redesign, phase 2, 2026-11-17); one never made is being
     # written, Claude's own work, named on the Brief only when nothing else is owed, and never
     # counted as ready (the redesign's second round, 2026-11-17).
-    assert brief.strip() == "1 application ready to send", brief
+    # Whether one was applied to is Jobs' own count, in plain words (the screen review, 2026-11-18).
+    assert brief.strip() == "1 application ready to send, 1 to say if you applied", brief
     assert "Apply on" not in card, card
     assert "Not made yet" in card or "Claude" in card, card
 
@@ -301,7 +303,9 @@ def test_a_row_put_off_is_not_done_and_contacts_says_it_is_put_off(run, tmp_path
     wren = '#main [data-item="fernhill_freight_halloway"]'
     got = _go(run, tmp_path, [
         {"hash": "todo", "read": "#main .summary"},
-        {"click": "Not Wren", "then": "Next week"},
+        # Put off from the card's own Later since 2026-11-18, every To do card's corner, a card
+        # about a person too; its choices about the person are under its More.
+        {"click": "Later: Follow up with Wren at Fernhill Freight", "then": "Next week"},
         {"tick": 12000, "read": "#main"},
         {"hash": "contacts", "read": wren},
     ], PHONE, model=m)
@@ -353,7 +357,8 @@ def test_shorter_warmer_more_formal_pin_it_and_make_one_carry_the_gauge(run, tmp
     got = _go(run, tmp_path, [
         {"hash": "contacts", "click": "Change the note to Pell", "eval": NO_GAUGE, "count": "#main .pen-tell [data-wakes] + .cost"},
         {"hash": "brief", "eval": NO_GAUGE, "read": "#main .pin-offer"},
-        {"hash": "jobs", "eval": NO_GAUGE, "read": '#main [data-item="resume-current"]'},
+        # Your resume's card is on Your profile, Jobs' link opening it (the screen review, 2026-11-18).
+        {"hash": "profile", "eval": NO_GAUGE, "read": '#main [data-item="resume-current"]'},
     ], WIDE, model=m)
     pen, brief, jobs = got["after"]
     # Since 2026-11-05 the chips fill the box and its one Ask Claude carries the one gauge (the
@@ -412,7 +417,11 @@ FACE = r"""(() => {
     const rows = '.card-actions, .wc-actions, .suggest-acts, .more-acts, .g-acts, .fix, .bp-foot, .opts';
     const pills = [...c.querySelectorAll('.btn, a.applylink')].filter((b) => seen(b) && b.closest('[data-card]') === c && !b.closest('.g-row, .more-panel, .info-panel')
       && !b.matches('.icon-only, .link, .more-btn') && (!b.matches('.quiet') || b.parentElement.matches(rows)));
-    out[c.getAttribute('data-item')] = pills.map((b) => (b.getAttribute('aria-label') || b.textContent).trim().slice(0, 40));
+    // A grey box's answers answer the box, never the card's row (DESIGN.md, a card's budget,
+    // 2026-11-18): the card's face and its box are each held to their own count.
+    const say = (b) => (b.getAttribute('aria-label') || b.textContent).trim().slice(0, 40);
+    out[c.getAttribute('data-item')] = {face: pills.filter((b) => !b.closest('.suggest, .question')).map(say),
+      box: pills.filter((b) => b.closest('.suggest, .question')).map(say)};
   }
   return out;
 })()"""
@@ -439,12 +448,13 @@ def test_every_card_keeps_to_one_filled_and_two_soft_pills_and_each_pencil_has_i
         {"hash": "jobs", "read": '#main [data-item="r12-1"]'},
     ], PHONE, model=m)
     jobs, todo = got["after"][0]["eval"], got["after"][1]["eval"]
-    over = {k: v for k, v in {**jobs, **todo}.items() if len(v) > 3}
+    # The card's own row keeps to three pills and its grey box to its two answers.
+    over = {k: v for k, v in {**jobs, **todo}.items() if len(v["face"]) > 3 or len(v["box"]) > 2}
     assert not over, over
-    assert "Write to Tam" in got["after"][2]["text"] and len(jobs["r12-1"]) == 3, jobs["r12-1"]
+    assert "Write to Tam" in got["after"][2]["text"] and len(jobs["r12-1"]["face"]) + len(jobs["r12-1"]["box"]) == 3, jobs["r12-1"]
     checks = got["after"][0]["text"]
     assert "CV" in checks and "letter" in checks, checks
-    ivs = {k: v for k, v in todo.items() if k.startswith("soon:")}
+    ivs = {k: v["face"] + v["box"] for k, v in todo.items() if k.startswith("soon:")}
     assert ivs and not any("new day" in " ".join(v).lower() for v in ivs.values()), ivs
 
 

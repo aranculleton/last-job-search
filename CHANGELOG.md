@@ -26,6 +26,32 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **A link to Applied opens Applied.** It opened whichever Jobs tab you used last.
+- **Jobs' numbers add up and agree.** "5 to apply for" stood over parts adding to 4: a job asking whether you applied is no longer in the total, only in its own count, and the Brief now says the same number as Jobs, as "2 to say if you applied".
+- **A job being written that has a question for you is under Needs your answer**, not Being written, and counted there.
+- **Your CV is shown once on Jobs.** To apply had a link and a card for it; the link stays on every Jobs tab and opens its card on Your profile.
+- **"Finding jobs" is said once while a search runs.** A pill of it beside the work button and the open panel did nothing when tapped; the work button and the search's own card say it. The same for Find people on Contacts.
+- **Settings names what it counts: "Kinds of job you hid"**, beside Jobs' count of single jobs you hid.
+- **A CV made for someone has its trash too**, asking "Not sending this to Tamsin?", with the file kept.
+- **The tour describes Jobs as it is now**, To apply and Applied, in your word for the document.
+- **On a wide screen a document's download and pencil, and Stop Claude on a card, sit near their words.** On a very wide screen they stood across the card, about 1,000px from what they act on.
+- **On a phone the line under each past job in Your profile is shown in full.** It was cut short ("4 poi..."), though it is what the row is for.
+- **Your profile on a wide screen reads what to fill in, then your experience, then the rest.** Education stood beside "Still to fill in", so it read before your jobs.
+- **Contacts in the side menu shows how many messages you have to send**, as Jobs and Coming up show theirs.
+- **Settings says "Only in the Claude app" beside reading LinkedIn profiles**, where "Open in the Claude app" read as something to do.
+- **On a phone "End of day" stays on one line in Coming up, and a name on a To do list gets all the room its buttons leave.**
+- **On a phone "I heard back" lines up with the card's words when it sits under "Prepare me" and its time**, where it stood further in than under a lone button.
+- **No more holes between words on the Brief.** "Have   you used Looker?" and "Juno,   Wren and 5 more" had a wide gap mid-line where a line broke near a dot. The words now sit a space apart.
+- **Coming up lets you read the next interview's prep.** Its row said "Prep ready" with no way to open it; it now has "Read your prep", as the Brief does.
+- **A job waiting for Claude reads as waiting.** Its title stays beside its dot, with "Waiting for Claude" under it, no empty bar until Claude starts it, no line saying it runs in a chat of its own while it waits, and "Waiting:" over a single job. It says "Claude starts this next" rather than talking about a helper.
+- **The time on a running job starts with a capital letter** ("Under a minute so far · about 7 min left"), and the time left never splits over two lines.
+- **The work button at the top of a phone says what its number is**, such as "2 busy", never a spinner and a bare "2".
+- **Today's interview on the Brief is a box its own size**, never stretched to twice its height on a wide screen.
+- **Messages to send names one employer one way.** "Larkspur Retail" and "Larkspur Retail Ltd" showed as if they were two employers.
+- **A To do card about a person is put off the same way as every other card.** "Send Tamsin your CV" had a trash in its corner, which asked "Not Tamsin?" about the person who referred you; it now has the clock and "Later", and "Not Tamsin?" is under its More.
+- **The Brief's tip about your prep names its button in quotation marks**, and each line on the "Help Claude do more" card ends with a full stop.
+- **An interview you withdrew from, or one that has otherwise ended, is now with your finished interviews in Coming up.** It sat among the ones still to come, still offering "I heard back" and your prep; now it waits under "earlier, finished" with the others, and its card offers nothing more to do.
+- **Contacts uses the whole width of a wide screen.** On a big window each person's card ran the whole width with its message kept to a comfortable line length, so the right half of every card was empty. Where there is room, the cards now stand side by side, in the same order, and a phone or a smaller window keeps one under the other.
 - **A change made by hand to one of the app's own files on your computer no longer stops every update.** Only a chat in the cloud could get past an unsaved change like that, so a copy on your computer with one never updated again. The update puts the app's own files back in any case, so your change is now kept in a folder called .set-aside, where nothing of it is lost, the app's file is put back and the update comes in, saying so once. Unsaved changes to your own files still wait for you, as before.
 - **A file of your own with the same name as one an update brings no longer stops every update.** On your computer nothing ever moved such a file out of the way, so the update stopped on it every day. It is now kept in the .set-aside folder, nothing of it lost, the app's own file takes its name and the update comes in, saying so once.
 - **The chat that looks after your page follows the newest instructions as soon as an update brings them.** The update's note to read them again reached only the helper doing the work for it, so a chat kept open for days went on following the instructions it started with. That note now comes back to the chat itself.
@@ -96,7 +122,7 @@ make sense to somebody whose repo just received it.
 - **`computer.listener_quiet` is retired.** It told the old keep-alive ring when the computer's own chat had gone quiet; the chat now waits for work in code and nothing rings it to keep it awake, so nothing used it (issue 322).
 
 - **Your page has a new look, and it is quicker to use.** Warm paper and charcoal with a clay mark, one clear type scale, and one kind of each control: buttons, tabs, search, filters and folds look and behave the same everywhere. On a phone, Coming up has its own tab and Chat is a button at the top, as on a computer. Each card shows one main button, one other and More, so what to do next stands out; To do and the Brief give the same answer to "what next?", with a call or test booked today leading the Brief. Jobs are grouped by how far along they are, best match first, each with one fit ring; Coming up is one card a day; Contacts puts Copy and I sent it under each message, and the cards for an employer, a person, an application and an interview share one tidy layout, with an Update menu and where things stand as steps. An employer's card now also says what Claude found about them and whether they clear your bar. It is easier to read with a screen reader or high-contrast colours too.
-- **`computer.listener_quiet` is retired.** It told the old keep-alive ring when the computer's own chat had gone quiet; the chat now waits for work in code and nothing rings it to keep it awake, so nothing used it (issue 322).
+- **The page's text is a step smaller, and simple things are simple icons.** On a computer the text is 14px, the size Claude's own app uses, and Larger and Smaller are small steps either side of it. Each of a draft's documents has its own download icon in place of "Get both files", and a copy, an edit or a removal that only does that is its icon. "I have applied" stays on a card that asks you a question, and the Brief's Coming up lists everything booked.
 - **The cards that open from a name are cleaner and easier to read.** An employer's, a person's, an application's and an interview's card now list what they hold as tidy rows: each says where it stands and opens with one tap, the arrow at its end saying so. An application's and an interview's stages run down a timeline, filled once done. On a laptop a card is as tall as what it holds, and its title no longer has a box drawn round it.
 
 ## [4.16.1] - 2026-11-12

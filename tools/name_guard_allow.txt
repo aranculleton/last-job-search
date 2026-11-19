@@ -819,3 +819,9 @@ Pension Funds           # a kind of employer, not a person: tools/sector.py and 
 Harbourline Pension Plan  # invented employer, tests/test_what_the_person_turned_down_is_followed_everywhere.py
 Unheard Of Ltd          # invented employer nobody has judged, tests/test_an_employers_card_says_what_claude_found.py
 Wexford Capital         # invented employer, tests/test_what_the_person_wants_is_one_record.py
+Fernhollow Insurance    # invented employer, tests/test_an_interview_that_ended_is_finished_in_coming_up.py
+Quillmark Analytics     # invented employer, tests/test_an_interview_that_ended_is_finished_in_coming_up.py
+Bramblegate Lending     # invented employer, tests/test_an_interview_that_ended_is_finished_in_coming_up.py
+Brindlemoor Freight     # invented employer, tests/test_an_interview_that_ended_is_finished_in_coming_up.py
+Quillfeather Health     # invented employer, tests/test_an_interview_that_ended_is_finished_in_coming_up.py
+Larchmere Insurance     # invented employer, tests/test_an_interview_that_ended_is_finished_in_coming_up.py

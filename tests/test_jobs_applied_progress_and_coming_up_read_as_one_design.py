@@ -98,7 +98,8 @@ def test_jobs_leads_with_what_to_apply_to_in_its_stages_best_fit_first(run, tmp_
     assert len(seen["asked"]) == 2, seen["asked"]
     # The stages each under a small heading, best fit first within each.
     heads = [g[0] for g in seen["groups"]]
-    assert heads == ["Ready to send", "Being written", "New"], heads
+    # The job being written that has a question for you needs your answer (2026-11-18).
+    assert heads == ["Needs your answer", "Ready to send", "New"], heads
     for head, fits in seen["groups"]:
         assert fits == sorted(fits, reverse=True), (head, fits)
     # The folds under the list in the person's words.
@@ -136,7 +137,7 @@ DOCS = r"""(() => { const c = document.querySelector('[data-item="app-ellerwick-
   return {well: w ? getComputedStyle(w).backgroundColor : null, sunk: (() => { const p = document.createElement('div'); p.style.background = 'var(--sunk)'; document.body.append(p);
     const v = getComputedStyle(p).backgroundColor; p.remove(); return v; })(), chips: c.querySelectorAll('.doc-part').length,
     rows: [...c.querySelectorAll('.doc-row')].map((r) => ({name: r.querySelector('.doc-name').textContent, meta: r.querySelector('.doc-meta').textContent,
-      open: !!r.querySelector('.doc-acts [data-k^="doc-open:"]'), pen: (r.querySelector('.doc-acts .btn.icon-only') || {textContent: ''}).textContent.trim(),
+      open: (r.querySelector('.doc-acts [data-k^="doc-dl:"].icon-only') || {getAttribute: () => ''}).getAttribute('aria-label'), pen: (r.querySelector('.doc-acts .btn.icon-only:not([data-k^="doc-dl:"])') || {textContent: ''}).textContent.trim(),
       h: Math.round(r.getBoundingClientRect().height)}))}; })()"""
 
 
@@ -146,7 +147,9 @@ def test_a_drafts_documents_are_rows_in_a_soft_well(run, tmp_path, vp):
     assert seen["chips"] == 0 and seen["well"] == seen["sunk"], seen
     assert [r["name"] for r in seen["rows"]] == ["CV", "Cover letter"], seen
     for r in seen["rows"]:
-        assert r["meta"] == "1 page · checked" and r["open"] and r["h"] >= 44, r
+        assert r["meta"] == "1 page · checked" and r["h"] >= 44, r
+        # Each saved from its own download icon, named for the document and its file (2026-11-18).
+        assert r["open"].startswith("Download " + ("CV" if r["name"] == "CV" else "cover letter") + ": "), r
     assert seen["rows"][0]["pen"].startswith("Edit the CV") and seen["rows"][1]["pen"].startswith("Edit the letter"), seen
 
 
@@ -227,7 +230,8 @@ COMING = r"""(() => { const days = [...document.querySelectorAll('#main [data-k=
       rows: d.querySelectorAll('.up-row').length})),
     rows: [...document.querySelectorAll('#main .up-row')].map((r) => { const w = r.querySelector(':scope > .up-when'), t = r.querySelector('.up-title'), link = r.querySelector('.up-link');
       const wr = w.getBoundingClientRect();
-      return {id: r.dataset.item, when: w.querySelector('.btn') ? null : [Math.round(wr.left), Math.round(wr.width)], size: parseFloat(getComputedStyle(t).fontSize), weight: getComputedStyle(t).fontWeight,
+      return {id: r.dataset.item, when: w.querySelector('.btn') ? null : [Math.round(wr.left), Math.round(wr.width)],
+        wordDay: !!r.closest('.up-day').querySelector('.up-when.day-word'), size: parseFloat(getComputedStyle(t).fontSize), weight: getComputedStyle(t).fontWeight,
         menus: r.querySelectorAll('.up-menu').length, loose: [...r.querySelectorAll('.btn.icon-only')].filter((b) => !b.closest('.up-menu')).length,
         items: [...r.querySelectorAll('.up-menu .menu-item')].map((b) => b.textContent), chip: [...r.querySelectorAll('.up-sub .state-word')].map((s) => s.textContent),
         opens: link ? r.classList.contains('opens') && getComputedStyle(r).cursor === 'pointer' : null}; }),
@@ -235,6 +239,7 @@ COMING = r"""(() => { const days = [...document.querySelectorAll('#main [data-k=
     lg: (() => { const p = document.createElement('span'); p.style.fontSize = 'var(--t-lg)'; document.querySelector('#main').append(p);
       const v = parseFloat(getComputedStyle(p).fontSize); p.remove(); return v; })(),
     rem: parseFloat(getComputedStyle(document.documentElement).fontSize),
+    word: document.querySelectorAll('#main .up-when.day-word').length,
     here: document.querySelectorAll('#main .up-row .up-here').length}; })()"""
 
 
@@ -244,7 +249,10 @@ COMING = r"""(() => { const days = [...document.querySelectorAll('#main [data-k=
 # with its day, issue 334), so the rows still line up (DESIGN.md, "A time from another zone").
 # The device's zone is set both ways: taken from the machine, the far zones of Everywhere drew
 # the design's own wider column, 90 and 150px, against the home zone's 56 and 64, and the test
-# failed there with nothing wrong (2026-11-17).
+# failed there with nothing wrong (2026-11-17). Where a row says "End of day" or "All day", the
+# home column is 5rem on every row of its day alike, so the words keep one line: at 56px "End of
+# day" broke over two (the screen review, 2026-11-18); the other days keep their own column, so
+# their titles keep their width on a phone (2026-11-19).
 @pytest.mark.parametrize("zone", [PERSON_ZONE, "Pacific/Kiritimati"], ids=["home", "far"])
 @pytest.mark.parametrize("vp", [PHONE, WIDE], ids=["phone", "wide"])
 def test_coming_up_is_a_card_a_day_each_row_its_time_what_it_is_and_one_more(run, tmp_path, vp, zone):
@@ -253,11 +261,14 @@ def test_coming_up_is_a_card_a_day_each_row_its_time_what_it_is_and_one_more(run
     assert all(d["lists"] == 1 and d["rows"] >= 1 for d in seen["days"]), seen["days"]
     rows = {r["id"]: r for r in seen["rows"]}
     # The time a steady column, as wide on every row with a time.
-    times = {tuple(r["when"]) for r in seen["rows"] if r["when"]}
     home = zone == PERSON_ZONE
     assert (seen["here"] == 0) == home, (zone, seen["here"])
-    want = (64 if vp is WIDE else 56) if home else round((10 if vp is WIDE else 8) * seen["rem"])
-    assert len(times) == 1 and next(iter(times))[1] == want, (times, want)
+    for worded in (True, False):
+        times = {tuple(r["when"]) for r in seen["rows"] if r["when"] and r["wordDay"] is worded}
+        if not times:
+            continue
+        want = (round(5 * seen["rem"]) if worded else 64 if vp is WIDE else 56) if home else round((10 if vp is WIDE else 8) * seen["rem"])
+        assert len(times) == 1 and next(iter(times))[1] == want, (worded, times, want)
     # A title in a card title's size (To do's), semibold; one More, no bare icons beside it.
     for r in seen["rows"]:
         assert r["size"] == seen["lg"] and r["weight"] == "600", (r, seen["lg"])
@@ -267,8 +278,11 @@ def test_coming_up_is_a_card_a_day_each_row_its_time_what_it_is_and_one_more(run
     assert screen["items"][:2] == ["Add to your calendar", "Change the day"], screen
     assert rows["up-ev20261020120000"]["items"] == ["Add to your calendar", "Take it off"], rows["up-ev20261020120000"]
     assert rows["up-app-copperleaf-payments-recruiter-call-2026-10-30"]["chip"] == ["No prep yet"]
-    # Only the next interview with no prep carries "Prepare me"; reading a prep is the row's own tap.
-    assert seen["prep"] == ["up-prep:up-app-copperleaf-payments-recruiter-call-2026-10-30=Prepare me"], seen["prep"]
+    # Only the next interview with no prep carries "Prepare me", and the next interview, its prep
+    # ready, "Read your prep", as the Brief offers it: it said "Prep ready" with no way to read
+    # it (the screen review, 2026-11-18). The others' prep is read from the row's own tap.
+    assert seen["prep"] == ["up-read:up-app-larkspur-supply-phone-screen-2026-10-28=Read your prep",
+                            "up-prep:up-app-copperleaf-payments-recruiter-call-2026-10-30=Prepare me"], seen["prep"]
 
 
 def test_a_coming_up_row_opens_what_it_is_from_anywhere_on_it(run, tmp_path):

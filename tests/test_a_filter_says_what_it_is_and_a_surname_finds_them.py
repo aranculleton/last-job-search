@@ -70,7 +70,8 @@ def test_a_resume_made_for_someone_is_on_their_card(run, tmp_path):
                                "asset": None, "get": {"kind": "files", "id": "files~resume-larkspur_retail_castellan",
                                                       "args": {"paths": ["documents/network/larkspur_retail_castellan/Morgan_Ellis_Resume_For_Juno.pdf"]}}}
     got = _go(run, tmp_path, [
-        {"hash": "contacts", "eval": "[...document.querySelectorAll('#main [data-resume-for]')].map((e) => [e.getAttribute('data-resume-for'), e.textContent])"},
+        # Its Download is an icon since 2026-11-18, its words its name.
+        {"hash": "contacts", "eval": "[...document.querySelectorAll('#main [data-resume-for]')].map((e) => [e.getAttribute('data-resume-for'), e.textContent + ' ' + [...e.querySelectorAll('button')].map((b) => b.getAttribute('aria-label') || '').join(' ')])"},
     ], WIDE, model=m)
     lines = got["after"][0]["eval"]
     assert len(lines) == 1 and lines[0][0] == "larkspur_retail_castellan", lines

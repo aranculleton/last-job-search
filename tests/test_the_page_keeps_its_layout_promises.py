@@ -290,7 +290,7 @@ def test_16_a_jobs_cards_facts_are_one_line_on_a_wide_screen(layouts, vp):
     things (the maintainer, 2026-11-04): a Found, Drafts or Applied card says its facts on one
     line wide. A phone wraps them as words do.
 
-    The redesign of 2026-11-16 draws a laptop's words at 15px, where they were 11px: seven facts
+    The redesign of 2026-11-16 draws a laptop's words at 14px, where they were 11px: seven facts
     no longer fit beside Claude's work in a 1440px window, so a card narrower than 840px may
     take two lines, broken between facts, never three (the overlap test holds where it breaks).
     A card as wide as a laptop's column without the work beside it still takes one."""

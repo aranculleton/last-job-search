@@ -45,19 +45,21 @@ def test_the_line_says_the_tabs_total_and_what_makes_it_up(run, tmp_path, vp):
     assert m and int(m.group(1)) == tab, seen
     parts = re.findall(r"(\d+) (needs? your answer|ready to send|being written|new)", m.group(2))
     # The parts are the headings' own words, in the headings' order, and count the cards under
-    # each; the drafts asking whether they went are counted in the tab and wait in the fold.
+    # each, and add up to the tab; the jobs and drafts asking whether they went wait in the
+    # fold, counted there alone: "5 to apply for" stood over parts adding to 4 (the screen
+    # review, 2026-11-18).
     said = [w.replace("need your", "needs your") for _, w in parts]
     assert said == [h.lower() for h in seen["heads"]], (said, seen["heads"])
     for n, w in parts:
         assert int(n) == sum(1 for st in seen["stages"] if WORDS[st] == w.replace("need your", "needs your")), (n, w, seen)
-    asked_drafts = sum(1 for x in seen["fold"] if x.startswith("app-"))
-    assert sum(int(n) for n, _ in parts) + asked_drafts == tab, seen
+    assert sum(int(n) for n, _ in parts) == tab, seen
     assert int(m.group(3) or 0) == len(seen["fold"]) and seen["foldSays"].startswith("%d jobs to confirm" % len(seen["fold"])), seen
     # "4 to send" read against "nothing is ever sent"; "ready to send" is the heading's own word.
     assert not re.search(r"\d+ to send", seen["line"]), seen
     for gone in ("strong", "waiting on you", "being made", "still to make", "to look at"):
         assert gone not in seen["line"], (gone, seen)
-    assert m.group(0).strip() == "5 to apply for: 2 ready to send, 1 being written, 1 new. 2 to confirm.", seen
+    # The job being written that asks a question of its own needs your answer (2026-11-18).
+    assert m.group(0).strip() == "4 to apply for: 1 needs your answer, 2 ready to send, 1 new. 2 to confirm.", seen
 
 
 def test_ready_is_only_a_draft_nothing_waits_on_and_one_not_made_is_being_written(run, tmp_path):
@@ -67,8 +69,9 @@ def test_ready_is_only_a_draft_nothing_waits_on_and_one_not_made_is_being_writte
     2026-11-17)."""
     got = _go(run, tmp_path, [{"hash": "jobs", "eval": LOOK}], WIDE, clock=T)
     line = got["after"][0]["eval"]["line"]
-    # The draft that asks whether it went is in the fold's count alone, said once.
-    assert "2 ready to send, 1 being written" in line and "your answer" not in line and line.count("confirm") == 1, line
+    # The draft that asks whether it went is in the fold's count alone, said once; the one that
+    # needs your answer is the job being written with a question of its own (2026-11-18).
+    assert "1 needs your answer, 2 ready to send" in line and line.count("your answer") == 1 and line.count("confirm") == 1, line
     from test_the_page_journeys import _sample
     m = _sample()
     for a in m["ready"]:
@@ -93,7 +96,10 @@ def test_the_brief_counts_the_drafts_as_jobs_does(run, tmp_path, vp):
     # redesign's second round, 2026-11-17).
     got = _go(run, tmp_path, [{"hash": "jobs", "eval": BOTH}, {"hash": "brief", "eval": BRIEF}], vp, clock=T)
     jobs, brief = got["after"][0]["eval"], got["after"][1]["eval"]
-    assert brief.startswith("2 applications ready to send"), brief
+    # Three stages owed in the sample since the screen review of 2026-11-18 (the job being
+    # written with a question needs your answer; every "Did you apply?" is counted): said
+    # without the noun, so the line keeps to two lines of a laptop's panel.
+    assert brief == "2 ready to send, 1 needs your answer, 2 to say if you applied", brief
     for word in ("ready to send", "needs your answer", "being written"):
         j = re.search(r"(\d+) " + word, jobs)
         b = re.search(r"(\d+) (?:applications? )?" + word, brief)
