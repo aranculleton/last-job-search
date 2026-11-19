@@ -421,6 +421,8 @@ def test_a_builder_hands_over_to_its_successor_moves_its_tasks_and_archives_itse
         made = got["calls"][0]["args"]
         assert made["source_url"] == f"https://github.com/{app_setup.APP_REPO}"
         assert made["permission_mode"] == "auto"
+        # The next builder runs on the builders' own setup, which pre-approves its hand-over.
+        assert app_bug.BUILDER_ENV_NAME in made["environment_id"]
         assert "session_EXAMPLECHAT" in got["calls"][1]["why"]
         moved = got["calls"][2]["args"]
         assert moved["persistent_session_id"] != "session_EXAMPLECHAT"
@@ -429,7 +431,8 @@ def test_a_builder_hands_over_to_its_successor_moves_its_tasks_and_archives_itse
         assert "only when every task moved" in got["calls"][-1]["why"]
         assert "archive nothing" in got["calls"][0]["why"]
     week = app_bug.handover("week", "example-owner/my-search", "session_EXAMPLECHAT")
-    assert week["calls"][0]["args"] == app_bug.task("example-owner/my-search")["calls"][0]["args"]
+    assert week["calls"][0]["args"] == dict(app_bug.task("example-owner/my-search")["calls"][0]["args"],
+                                            environment_id=app_bug.BUILDER_ENV)
     # The next weekly chat can still be asked for the maintainer items with no other context.
     assert "do the maintainer items" in app_bug.BUILDER_CHAT_PROMPT
     assert app_bug.BUILDER_PROMPT in app_bug.BUILDER_CHAT_PROMPT
