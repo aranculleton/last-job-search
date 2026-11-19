@@ -2285,8 +2285,11 @@ def main():
     lines = [line]
     try:
         import wants
+        # Kept beside the round's summaries: a round told to keep them elsewhere (a test's)
+        # leaves nothing in the person's own documents/rounds (the 4.17.0 rehearsal).
         lines = wants.header(line, a.jobage, name=os.path.basename(os.path.abspath(a.out)),
-                             today=a.today, keep=a.round == 1, skipped=wants.skipped_now())
+                             today=a.today, keep=a.round == 1, skipped=wants.skipped_now(),
+                             at=a.summary_dir or "")
         lines += ["  " + wants.say(f) for f in wants.drift()]
     except Exception as e:  # noqa: BLE001  the window alone, and the round goes on
         lines.append(f"searching with: the rest could not be read ({type(e).__name__}: {e})")

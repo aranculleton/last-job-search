@@ -244,8 +244,10 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   as Coming up's are, the rows a step of the spacing scale further apart up to 24px, and past
   that the pills a step under what they open, the spare room at the panel's foot. Your
   progress's chart grows into its room, up to 160px, and every booking on Coming up comes
-  before its height: on a laptop where the bookings leave it under 96px it takes what is left,
-  never a booking given way for it (2026-11-18). (the maintainer, 2026-11-07: "u see how
+  before its height and before a list's further rows under it: on a laptop where the bookings
+  leave the chart under 96px, or Jobs room for its first three alone (a wider type, as
+  Windows' and a Mac's draw), each takes what is left, never a booking given way for it
+  (2026-11-18). (the maintainer, 2026-11-07: "u see how
   its bunched at the top? be smart about this"; room tests)
 - **Your progress is jobs and people, chosen for the person.** At most four numbers, picked by
   the engine (`app_model._glance`) from what is true now: applied, interviews, offers;

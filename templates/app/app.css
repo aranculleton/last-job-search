@@ -34,6 +34,9 @@
   --target: calc(44px * var(--tz));
   /* The page's own size undone (applySize): 24px * --pz is 24px on the screen. */
   --pz: 1;
+  /* A quiet button's own margin, set by the script on one leading its line (quietFit), so it
+     is drawn in by it as well as its padding. */
+  --q-in: 0px;
   --gap: 12px;
 }
 
@@ -783,8 +786,11 @@ details.more.split[open] { flex-basis: auto; }
 /* Leading a line of its row, a quiet button's words line up with the card's own (app.js,
    quietFit); after a button and its gauge it keeps 16px from the gauge, so "I heard back" is
    never read as the gauge's words (the redesign's second round, 2026-11-17). */
-.card .card-actions > .btn.quiet.lead-quiet { margin-inline-start: -16px !important; }
-@media (max-width: 759px) { .card .card-actions > .btn.quiet.lead-quiet { margin-inline-start: -12px !important; } }
+/* Drawn in, never laid out in: a negative margin let a button wrapped onto a line of its own
+   fit back on the line above, over the gauge, and the fit turned on itself (Windows type,
+   4.17.0). The shift takes the button's own margin back too (--q-in, quietFit). */
+.card .card-actions > .btn.quiet.lead-quiet { position: relative; inset-inline-start: calc(-16px - var(--q-in, 0px)); }
+@media (max-width: 759px) { .card .card-actions > .btn.quiet.lead-quiet { inset-inline-start: calc(-12px - var(--q-in, 0px)); } }
 .card-actions > [data-wakes] + .cost + .btn.quiet { margin-inline-start: 4px; }
 @media (max-width: 759px) { .card-actions > [data-wakes] + .cost + .btn.quiet { margin-inline-start: 8px; } }
 @media (hover: hover) { .card.app-record .card-actions > .btn.quiet:hover { background: var(--raised); } }

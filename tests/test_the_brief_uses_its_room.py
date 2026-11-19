@@ -90,7 +90,14 @@ def test_the_jobs_panel_lists_more_where_it_has_room(run, tmp_path):
     # six was what this window held beside the sample's other panels, and moved with them
     # (a booked interview kept in Coming up, the screen review, 2026-11-11).
     room = next(p[3] for p in r["panels"] if p[0] == "bp:jobs")
-    assert r["shown"] > 3 and room is not None and room < min(r["rows"]), r
+    assert room is not None and room < min(r["rows"]), r
+    # More than its three wherever the row gives it the room: in the browser's own type, beside
+    # every booking on Coming up; in a wider type (Windows', a Mac's) the bookings take that
+    # room first and Jobs keeps its three, with nothing left under them (DESIGN.md, the
+    # Brief's room, 2026-11-18).
+    if not os.environ.get("FONTCONFIG_FILE"):
+        assert r["shown"] > 3, r
+    assert r["shown"] >= 3, r
     assert any(t.startswith("All ") for t in r["all"]), r
 
 
