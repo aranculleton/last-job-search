@@ -62,6 +62,6 @@
   {"module": "tools/app_lists.py", "name": "CHUNK_CUT", "date": "2026-11-12", "announced": "4.16.1"},
   {"module": "tools/page_db.py", "name": "PART_MIN_BYTES", "date": "2026-11-12", "announced": "4.16.1"},
   {"module": "tools/page_db.py", "name": "PART_CUT", "date": "2026-11-12", "announced": "4.16.1"},
-  {"module": "tools/computer.py", "name": "listener_quiet", "date": "2026-11-17", "announced": "Unreleased"}
+  {"module": "tools/computer.py", "name": "listener_quiet", "date": "2026-11-17", "announced": "4.17.0"}
  ]
 }
