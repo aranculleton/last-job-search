@@ -123,7 +123,8 @@ def test_the_general_resumes_pencil_opens_its_bullets_and_sends_the_ones_ticked(
                  "centres, cutting forecast error from 22% to 14%."},
         {"id": "EX_TWO", "employer": "Oakmere Foods", "text": "Cut waste by reading the shelf data."}]
     path = _write(tmp_path, "gr", m)
-    got = run("tweak", html=path, viewport=vp, hash="drafts", entry=": your CV",
+    # The general CV's card is on Your profile since 2026-11-18 (Jobs' header links to it).
+    got = run("tweak", html=path, viewport=vp, hash="profile", entry=": your CV",
               exact=False, choose=[["R6", "EX_TWO"]], apply=True)
     assert not got["errors"], got["errors"]
     assert got["text"].split("\n").count("Bullets") >= 1 and "Cut waste by reading the shelf data." in got["all"]
@@ -135,7 +136,7 @@ def test_the_general_resumes_pencil_opens_its_bullets_and_sends_the_ones_ticked(
     assert args["changes"] == [{"p": "R6", "v": ["EX_TWO"]}], args
     assert args.get("keep") is None, args        # never a usual: its Keep box stays off
     m["resume"]["bullets"] = []
-    got = _go(run, tmp_path, [{"hash": "drafts", "count": '[data-k^="tweak:resume:resume-current"]'}], vp, model=m)
+    got = _go(run, tmp_path, [{"hash": "profile", "count": '[data-k^="tweak:resume:resume-current"]'}], vp, model=m)
     assert got["after"][0]["count"] == 0, got
 
 

@@ -1245,8 +1245,9 @@ METHODS: dict[str, dict] = {
             (217, "2026-11-19", False, "the Brief's Coming up: the one Today leads with is its time and title alone, the others' prep in quiet words at the end of their time's line, and every booking comes before the progress chart's height"),
             (218, "2026-11-18", True, "on a wide card a document's download and pencil and a work line's Stop Claude stay within a reading measure of their words; a past job's line under its title wraps on a phone; Your profile in two columns reads what to fill in, then Experience, then the rest; Contacts in the side menu counts its messages to send; Settings says Only in the Claude app as a value; End of day keeps one line in Coming up; a To do row's name gets the room its buttons leave; and I heard back wrapped under a pill and its gauge starts under the card's words; Coming up's titles keep a 24px target"),
             (219, "2026-11-18", True, "every address to Applied opens its tab; To apply's total leaves out the \"did you apply?\" questions, counted once on Jobs and the Brief, which says \"to say if you applied\"; a job being written with a question for you needs your answer; Your CV is one link on each Jobs tab, opening its card on Your profile; Find jobs and Find people step aside while their run goes; Settings' Kinds of job you hid; a CV made for someone has its trash; the tour names To apply and Applied in the person's word"),
+            (220, "2026-11-19", True, "a day's card holds its own time column, 5rem only where one of its rows says End of day or All day, so the other days keep their titles' width on a phone"),
         ),
-        "fingerprint": "0e3dab4b6aea3119",
+        "fingerprint": "cad39c7b25976dc9",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",

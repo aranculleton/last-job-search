@@ -230,7 +230,8 @@ COMING = r"""(() => { const days = [...document.querySelectorAll('#main [data-k=
       rows: d.querySelectorAll('.up-row').length})),
     rows: [...document.querySelectorAll('#main .up-row')].map((r) => { const w = r.querySelector(':scope > .up-when'), t = r.querySelector('.up-title'), link = r.querySelector('.up-link');
       const wr = w.getBoundingClientRect();
-      return {id: r.dataset.item, when: w.querySelector('.btn') ? null : [Math.round(wr.left), Math.round(wr.width)], size: parseFloat(getComputedStyle(t).fontSize), weight: getComputedStyle(t).fontWeight,
+      return {id: r.dataset.item, when: w.querySelector('.btn') ? null : [Math.round(wr.left), Math.round(wr.width)],
+        wordDay: !!r.closest('.up-day').querySelector('.up-when.day-word'), size: parseFloat(getComputedStyle(t).fontSize), weight: getComputedStyle(t).fontWeight,
         menus: r.querySelectorAll('.up-menu').length, loose: [...r.querySelectorAll('.btn.icon-only')].filter((b) => !b.closest('.up-menu')).length,
         items: [...r.querySelectorAll('.up-menu .menu-item')].map((b) => b.textContent), chip: [...r.querySelectorAll('.up-sub .state-word')].map((s) => s.textContent),
         opens: link ? r.classList.contains('opens') && getComputedStyle(r).cursor === 'pointer' : null}; }),
@@ -249,8 +250,9 @@ COMING = r"""(() => { const days = [...document.querySelectorAll('#main [data-k=
 # The device's zone is set both ways: taken from the machine, the far zones of Everywhere drew
 # the design's own wider column, 90 and 150px, against the home zone's 56 and 64, and the test
 # failed there with nothing wrong (2026-11-17). Where a row says "End of day" or "All day", the
-# home column is 5rem on every row alike, so the words keep one line: at 56px "End of day" broke
-# over two (the screen review, 2026-11-18).
+# home column is 5rem on every row of its day alike, so the words keep one line: at 56px "End of
+# day" broke over two (the screen review, 2026-11-18); the other days keep their own column, so
+# their titles keep their width on a phone (2026-11-19).
 @pytest.mark.parametrize("zone", [PERSON_ZONE, "Pacific/Kiritimati"], ids=["home", "far"])
 @pytest.mark.parametrize("vp", [PHONE, WIDE], ids=["phone", "wide"])
 def test_coming_up_is_a_card_a_day_each_row_its_time_what_it_is_and_one_more(run, tmp_path, vp, zone):
@@ -259,11 +261,14 @@ def test_coming_up_is_a_card_a_day_each_row_its_time_what_it_is_and_one_more(run
     assert all(d["lists"] == 1 and d["rows"] >= 1 for d in seen["days"]), seen["days"]
     rows = {r["id"]: r for r in seen["rows"]}
     # The time a steady column, as wide on every row with a time.
-    times = {tuple(r["when"]) for r in seen["rows"] if r["when"]}
     home = zone == PERSON_ZONE
     assert (seen["here"] == 0) == home, (zone, seen["here"])
-    want = (round(5 * seen["rem"]) if seen["word"] else 64 if vp is WIDE else 56) if home else round((10 if vp is WIDE else 8) * seen["rem"])
-    assert len(times) == 1 and next(iter(times))[1] == want, (times, want)
+    for worded in (True, False):
+        times = {tuple(r["when"]) for r in seen["rows"] if r["when"] and r["wordDay"] is worded}
+        if not times:
+            continue
+        want = (round(5 * seen["rem"]) if worded else 64 if vp is WIDE else 56) if home else round((10 if vp is WIDE else 8) * seen["rem"])
+        assert len(times) == 1 and next(iter(times))[1] == want, (worded, times, want)
     # A title in a card title's size (To do's), semibold; one More, no bare icons beside it.
     for r in seen["rows"]:
         assert r["size"] == seen["lg"] and r["weight"] == "600", (r, seen["lg"])

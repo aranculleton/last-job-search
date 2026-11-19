@@ -483,8 +483,8 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   have, it put Coming up's first card past a phone's first-item line in Firefox (Everywhere,
   2026-11-17; layout 1). A row is its time in a
   steady 64px column (tabular, semibold; "End of day" and "All day" in the quiet small words,
-  each on one line, the column 5rem on every row of a list that has one: in a phone's 56px
-  "End of day" broke over two),
+  each on one line, the column 5rem on every row of the day that has one, its other days keeping
+  their titles' width: in a phone's 56px "End of day" broke over two),
   what it is in a card title's size, one line under it saying what kind it is with a chip for
   its prep ("Prep ready" green, "No prep yet" grey), and one More at its end (36px, 44 on touch)
   holding Add to your calendar, Change the day and taking it off: nothing reserves room for a

@@ -303,7 +303,9 @@ def test_a_row_put_off_is_not_done_and_contacts_says_it_is_put_off(run, tmp_path
     wren = '#main [data-item="fernhill_freight_halloway"]'
     got = _go(run, tmp_path, [
         {"hash": "todo", "read": "#main .summary"},
-        {"click": "Not Wren", "then": "Next week"},
+        # Put off from the card's own Later since 2026-11-18, every To do card's corner, a card
+        # about a person too; its choices about the person are under its More.
+        {"click": "Later: Follow up with Wren at Fernhill Freight", "then": "Next week"},
         {"tick": 12000, "read": "#main"},
         {"hash": "contacts", "read": wren},
     ], PHONE, model=m)
@@ -415,7 +417,11 @@ FACE = r"""(() => {
     const rows = '.card-actions, .wc-actions, .suggest-acts, .more-acts, .g-acts, .fix, .bp-foot, .opts';
     const pills = [...c.querySelectorAll('.btn, a.applylink')].filter((b) => seen(b) && b.closest('[data-card]') === c && !b.closest('.g-row, .more-panel, .info-panel')
       && !b.matches('.icon-only, .link, .more-btn') && (!b.matches('.quiet') || b.parentElement.matches(rows)));
-    out[c.getAttribute('data-item')] = pills.map((b) => (b.getAttribute('aria-label') || b.textContent).trim().slice(0, 40));
+    // A grey box's answers answer the box, never the card's row (DESIGN.md, a card's budget,
+    // 2026-11-18): the card's face and its box are each held to their own count.
+    const say = (b) => (b.getAttribute('aria-label') || b.textContent).trim().slice(0, 40);
+    out[c.getAttribute('data-item')] = {face: pills.filter((b) => !b.closest('.suggest, .question')).map(say),
+      box: pills.filter((b) => b.closest('.suggest, .question')).map(say)};
   }
   return out;
 })()"""
@@ -442,12 +448,13 @@ def test_every_card_keeps_to_one_filled_and_two_soft_pills_and_each_pencil_has_i
         {"hash": "jobs", "read": '#main [data-item="r12-1"]'},
     ], PHONE, model=m)
     jobs, todo = got["after"][0]["eval"], got["after"][1]["eval"]
-    over = {k: v for k, v in {**jobs, **todo}.items() if len(v) > 3}
+    # The card's own row keeps to three pills and its grey box to its two answers.
+    over = {k: v for k, v in {**jobs, **todo}.items() if len(v["face"]) > 3 or len(v["box"]) > 2}
     assert not over, over
-    assert "Write to Tam" in got["after"][2]["text"] and len(jobs["r12-1"]) == 3, jobs["r12-1"]
+    assert "Write to Tam" in got["after"][2]["text"] and len(jobs["r12-1"]["face"]) + len(jobs["r12-1"]["box"]) == 3, jobs["r12-1"]
     checks = got["after"][0]["text"]
     assert "CV" in checks and "letter" in checks, checks
-    ivs = {k: v for k, v in todo.items() if k.startswith("soon:")}
+    ivs = {k: v["face"] + v["box"] for k, v in todo.items() if k.startswith("soon:")}
     assert ivs and not any("new day" in " ".join(v).lower() for v in ivs.values()), ivs
 
 

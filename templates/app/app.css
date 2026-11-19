@@ -2988,10 +2988,11 @@ ul.bp-news { gap: 12px; }
   .up-days:has(.up-here) .up-row { grid-template-columns: 8rem minmax(0, 1fr) auto; }
   .up-row > .up-prep { grid-column: 1 / -1; }
 }
-/* Where a row says "End of day", the time column holds it on one line on every row of the list
-   alike, so the rows still line up; a time from another zone keeps its wider column (a stronger
-   rule) and a narrow card its time over the title (a later one). */
-:where(.up-days:has(.up-when.day-word)) .up-row { grid-template-columns: 5rem minmax(0, 1fr) auto; }
+/* Where a row says "End of day", the time column holds it on one line on every row of its day
+   alike, so that card's rows still line up; the other days keep their titles' width (on a phone
+   the whole list's 5rem squeezed every title, 2026-11-19). A time from another zone keeps its
+   wider column (a stronger rule) and a narrow card its time over the title (a later one). */
+:where(.up-day:has(.up-when.day-word)) .up-row { grid-template-columns: 5rem minmax(0, 1fr) auto; }
 /* Where a day's card is narrow for its words (a phone at double text, a time from another
    zone), the time is a line over the title, never a column squeezing it. */
 .up-list { container-type: inline-size; }
