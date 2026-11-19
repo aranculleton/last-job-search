@@ -130,7 +130,6 @@ bdi { unicode-bidi: isolate; }
   border-radius: 999px; border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink); font-weight: 600; font-size: var(--t-sm); cursor: pointer;
 }
 .pill.warn { border-color: var(--st-overdue); color: var(--st-overdue); }
-@media (max-width: 759px) { .run-left { display: none; } }
 .pill .pill-count { display: none; }
 .pill.tight .pill-count { display: inline; }
 .pill.tight .pill-words { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
@@ -830,7 +829,6 @@ details.send { border-top: 1px solid var(--line); }
 
 .stack.list-panel > .card.is-marked { background: var(--sunk); }
 .stack.list-panel > .card.quiet-card { background: var(--seg-track); }
-.after-list { margin-top: 8px; }
 .stack.jobs > .card.job.st-dismissed, .stack.jobs > .card.job.st-applied { background: var(--sunk); }
 @media (hover: hover) { .stack.jobs > .card.job:hover, ul.people > li.person:hover { background: var(--bg); } }
 /* The words to send, with Copy in the bubble's top corner, as on a code block: the words

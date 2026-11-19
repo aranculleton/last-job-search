@@ -351,8 +351,15 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   first within each; the tab, the summary, the menu and the Brief count the same two things,
   drafts to send and jobs to look at. **Each stage has one name everywhere** (app.js
   `JOB_STAGE_WORDS`, `applyStages`, `jobStateWord`): the summary says the headings' words in
-  their order, then the fold's count, "5 to apply for: 2 ready to send, 1 being written, 1 new.
-  2 to confirm."; a card's pill is the same word, left off under a heading that already says
+  their order, then the fold's count, "4 to apply for: 2 ready to send, 1 being written, 1 new.
+  2 to confirm."; the total is the parts added up, and a "Did you apply?" is never in it: it is
+  counted once, the fold's count, the same number on Jobs and the Brief, which says it as "2 to
+  say if you applied" (`applyStages` confirm), its first part naming the applications ("2
+  applications ready to send") unless three stages are owed, when the words alone keep the
+  line to two lines of a laptop's panel. Why: "5 to apply for" over parts adding to
+  4, "2 to confirm" on Jobs and "1 to confirm" on the Brief (the screen review, 2026-11-18). A
+  job being written that asks you something (not "Did you apply?") needs your answer, under
+  that heading and in that count, never "Being written" beside its "1 question for you"; a card's pill is the same word, left off under a heading that already says
   it, and a question waiting on you is the card's pill, "1 question for you"; an employer's
   card says a role's stage ("Being written", "Did you apply?"), and a closing day in Coming up
   the same ("Did you apply? Answer in Jobs."). A draft whose files are still to come, or one
@@ -396,13 +403,19 @@ next?" in its first lines, and nothing asks for a decision a default could make.
 - Jobs' header is the same on both tabs: its title, its one short line (one line on a computer:
   what closes soon is said on its own card, never a second sentence) and when it searched, with
   Find jobs and then "Add a job you found" and your resume as soft pills beside it, as Contacts'.
+  Your resume is that one link on every tab, and it opens its card on Your profile; To apply has
+  no card of it under the list as well. Why: "Your CV" twice on one screen, the link leading to
+  the card a scroll below it (the screen review, 2026-11-18).
   Applied leaves out Find jobs, which does nothing for applications already sent; and "Add a
   job you found" is never only "Add a job", which Your profile says of a past job ("Add a past
   job") (the redesign's second round, 2026-11-17). What
   Claude is doing is the header's work pill and each card's own line, never a line here. While
-  a search runs, Find jobs is the soft pill of it, "Finding jobs · about 5 min left" in its
-  card's own words, with no gauge: "38 min of Claude" beside it read as the wait (the screen
-  review, 2026-11-11). (going-on tests)
+  a search runs, Find jobs steps aside (as Find people does on Contacts): the header's work pill
+  and the search's own card say it, "Finding jobs · about 5 min left", with no gauge. Why: a
+  "Finding jobs" pill in the screen's header beside the work pill and the open panel was the
+  same thing three times, and with the panel open a tap on it did nothing (the screen review,
+  2026-11-18); "38 min of Claude" beside it read as the wait (the screen review, 2026-11-11).
+  (going-on tests)
 - A Jobs card says its facts on one line where its column is 840px or wider, and in at most two,
   broken between facts, beside Claude's work on a laptop (the redesign, 2026-11-16: at 15px seven
   facts do not fit there) (the employer, the town, never its region and country,
@@ -783,7 +796,8 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
 - The header is its title and one short line, the one count of what is written to send ("7
   messages to send"; who needs you only when nothing is), with Find people and
   "Paste a message" (a message from someone not on the list) as soft pills beside it. What
-  Claude is doing is the header's work pill and each card's own line, never a third line.
+  Claude is doing is the header's work pill and each card's own line, never a third line: while
+  a people run goes, Find people steps aside, as Find jobs does on Jobs.
 - Rarely, Claude cannot write a reply honestly without asking (their message is unclear, a
   claim it cannot ground). Then the card asks one question in its one soft grey box, in place
   of the draft until answered: the words it is about as a small quote, the question, and a tap
@@ -798,7 +812,10 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
 - The word is trash, never bin, in everything a person reads: its label, its tips and
   its help. (the maintainer, 2026-11-05; the no-bin words test)
 
-- One icon puts anything away: the trash, top right of every live card. Never an x.
+- One icon puts anything away: the trash, top right of every live card. Never an x. A draft made
+  for someone ("Your CV for Tamsin") has it too, in its own words: "Not sending this to
+  Tamsin?", its file kept either way. Why: on Ready to send it was the one live card with no
+  trash (the screen review, 2026-11-18). (trash tests)
 - Putting off is not putting away: every To do card that is put off (a dated reminder's
   Tomorrow or Next week, a week off) says "Later" with a clock in its corner, the word shown, a
   card about a person ("Send Tamsin your CV") too, whose choices about the person ("Not
@@ -1203,7 +1220,7 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   you've turned down (N)" with what they left out, each name with its small trash; what Claude
   learned has one home, the row "Learned from you" in Your rules, grouped by area, a rule a line
   with its day small at the end. Why one row: "Learned from you" in Your rules and "What you
-  have taught it" under Your data were the same rules twice (the redesign, 2026-11-16). A long section (Your rules, Jobs you hid, each area
+  have taught it" under Your data were the same rules twice (the redesign, 2026-11-16). A long section (Your rules, Kinds of job you hid, each area
   of what it learned, What's new) shows its first few with "Show all" or "Show more". Advanced,
   folded, holds only what can slow things down or use more of the Claude allowance, and says so
   in one line; everything harmless lives where it belongs (Look, This device). A reason is said

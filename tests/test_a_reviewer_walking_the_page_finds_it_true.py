@@ -78,8 +78,9 @@ def test_a_job_being_drafted_says_where_its_draft_stands_with_cancel_and_stays_c
     # "3 to send, 2 still to make".
     # Each stage in its heading's word (the redesign's second round, 2026-11-17): the job just
     # asked for and the draft never made, which Claude makes next by itself, are both being
-    # written; the job asking whether it was applied to waits in the fold, counted there once.
-    assert "5 to apply for: 1 ready to send, 2 being written, 1 new. 1 to confirm." in summary, summary
+    # written; the job asking whether it was applied to waits in the fold, counted there once,
+    # and never in the total (the screen review, 2026-11-18).
+    assert "4 to apply for: 1 ready to send, 2 being written, 1 new. 1 to confirm." in summary, summary
     assert ("Claude is on it" in going or "Draft" in going) and "Stop Claude" in going, going
     assert "Finished: putting it on your page" in finished, finished
     assert "Draft ready" not in finished and "See the draft" not in finished, finished
@@ -126,7 +127,8 @@ def test_the_brief_counts_drafts_ready_apart_from_those_being_made_and_apply_wai
     # application ready to send (the redesign, phase 2, 2026-11-17); one never made is being
     # written, Claude's own work, named on the Brief only when nothing else is owed, and never
     # counted as ready (the redesign's second round, 2026-11-17).
-    assert brief.strip() == "1 application ready to send", brief
+    # Whether one was applied to is Jobs' own count, in plain words (the screen review, 2026-11-18).
+    assert brief.strip() == "1 application ready to send, 1 to say if you applied", brief
     assert "Apply on" not in card, card
     assert "Not made yet" in card or "Claude" in card, card
 
@@ -353,7 +355,8 @@ def test_shorter_warmer_more_formal_pin_it_and_make_one_carry_the_gauge(run, tmp
     got = _go(run, tmp_path, [
         {"hash": "contacts", "click": "Change the note to Pell", "eval": NO_GAUGE, "count": "#main .pen-tell [data-wakes] + .cost"},
         {"hash": "brief", "eval": NO_GAUGE, "read": "#main .pin-offer"},
-        {"hash": "jobs", "eval": NO_GAUGE, "read": '#main [data-item="resume-current"]'},
+        # Your resume's card is on Your profile, Jobs' link opening it (the screen review, 2026-11-18).
+        {"hash": "profile", "eval": NO_GAUGE, "read": '#main [data-item="resume-current"]'},
     ], WIDE, model=m)
     pen, brief, jobs = got["after"]
     # Since 2026-11-05 the chips fill the box and its one Ask Claude carries the one gauge (the

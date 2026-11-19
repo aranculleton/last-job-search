@@ -3415,8 +3415,8 @@
       // screen reader (the calendar-with-a-plus was found by nobody, 2026-11-02).
       title: !label && o.aria ? o.aria : null, onclick}, o.icon ? [icon(o.icon), label] : label);
   }
-  // A button that starts a whole run (a search, a networking run) shows the run already going
-  // instead, and a tap shows its progress: nothing asks for a second one (the maintainer,
+  // A button that starts a whole run (a search, a networking run) is gone while the run goes,
+  // which the header's work pill shows: nothing asks for a second one (the maintainer,
   // 2026-10-29: "theres nothing stopping me from pressing find people/find jobs etc if the
   // task is already in progress").
   const RUN_WORDS = {search: "Finding jobs", network: "Finding people"};
@@ -3424,20 +3424,11 @@
   function runBtn(kind, label, start, o) {
     const r = runOf(kind);
     if (!r) return btn(label, start, o);
-    // One employer's own button steps aside; the head of the screen says what is going.
-    if (o && o.one) return null;
-    // While it runs it is the soft pill of what is going, saying what its card says is left,
-    // with no gauge: "38 min of Claude" beside it read as the wait, beside "about 5 min left"
-    // on its card (the screen review, 2026-11-11).
-    // On a phone its time is left to its card: beside Add a job and your resume it took the
-    // row's room and pushed the list down.
-    const p = progress(r[1]);
-    const left = r[1].status === "queued" ? ", soon" : leftWords(p) ? " · " + leftWords(p) : "";
-    const words = RUN_WORDS[kind] + left;
-    // Its words one span, so the pill's gap stands only after the spinner: between "Finding
-    // jobs" and " · about 7 min left" it doubled their own space (README picture, 4.15.0).
-    return btn([h("span", {class: "spin", "aria-hidden": "true"}), h("span", {}, RUN_WORDS[kind], left ? h("span", {class: "run-left"}, left) : null)], () => openWork(),
-      Object.assign({}, o, {kind: "secondary", icon: null, wakes: null, key: (o && o.key ? o.key : kind) + ":going", aria: words + ": show how it is going"}));
+    // While it runs the button steps aside: the header's work pill (Claude's one button on every
+    // screen) and the run's own card say it, "Finding jobs · about 5 min left". A "Finding jobs"
+    // pill here as well was the same thing three times beside the open panel, and a tap on it
+    // with the panel open did nothing (the screen review, 2026-11-18).
+    return null;
   }
   function alreadyGoing(kind) {
     if (!runOf(kind)) return false;
@@ -3533,8 +3524,10 @@
     }, "jobsw");
   }
   // What "To apply" counts, everywhere it is said: every draft still to send, every job being
-  // drafted (jobDrafting) and every job still to look at (jobToLook), never one twice.
-  function toApplyCount() { return readyItems().filter(readyLive).length + jobRows().filter((r) => jobToLook(r) || jobDrafting(r)).length; }
+  // drafted (jobDrafting) and every job still to look at (jobToLook), never one twice, and never
+  // one asking whether it was applied to: that is the fold's "to confirm", counted apart. "5 to
+  // apply for" stood over parts adding to 4 (the screen review, 2026-11-18).
+  function toApplyCount() { return readyItems().filter((a) => readyLive(a) && !draftAsksApplied(a)).length + jobRows().filter((r) => (jobToLook(r) || jobDrafting(r)) && !asksApplied(r)).length; }
   // Each of them counted at its stage, for Jobs' summary and the Brief: applyStages, with the
   // job's stages. The Brief said "2 drafts ready to apply" beside Jobs' "2 to send, 1 still to
   // make" (the review, 2026-11-05), and "3 drafts ready" over Jobs' "2 ready, 1 waiting on you"
@@ -6861,8 +6854,12 @@
     // Ready means its files are made: one still being made is said apart, as Jobs says it
     // ("2 to send, 1 still to make"), never "2 drafts ready to apply" over it (the review,
     // 2026-11-05).
-    const at = applyStages().drafts;
-    const toSend = at.answer + at.ready + at.writing + at.confirm;
+    const stages = applyStages();
+    const at = stages.drafts;
+    // Whether you applied is asked as Jobs' fold counts it, every one of them (applyStages), in
+    // plain words: "1 to confirm" here stood beside Jobs' "2 to confirm" (the screen review,
+    // 2026-11-18).
+    const toSend = at.answer + at.ready + at.writing + stages.confirm;
     // Counted as Jobs counts them (applyStages), in its words: the drafts' part of its line, a
     // noun first. What is owed, in Jobs' own numbers; one Claude is writing is its work, said in
     // the work pill, and named here only when nothing else is: "2 drafts ready to apply, 1
@@ -6871,9 +6868,12 @@
     // "2 applications ready to send": the person sends them, and "drafts ready to apply" said it
     // in the page's words, not theirs (the UX review of the redesign, 2026-11-17). Each stage in
     // the word Jobs' heading gives it (the redesign's second round, 2026-11-17).
-    const owedParts = [[at.ready, "ready to send"], [at.answer, at.answer === 1 ? "needs your answer" : "need your answer"], [at.confirm, "to confirm"]].filter(([n]) => n);
+    const ASKED = "to say if you applied";
+    const owedParts = [[at.ready, "ready to send"], [at.answer, at.answer === 1 ? "needs your answer" : "need your answer"], [stages.confirm, ASKED]].filter(([n]) => n);
     const sendWords = (owedParts.length ? owedParts : [[at.writing, "being written"]].filter(([n]) => n))
-      .map(([n, w], i) => (i ? n + " " + w : nWord(n, "application", "applications") + " " + w)).join(", ");
+      // Three stages owed say no noun: with it the line took a third line of a laptop's panel and
+      // ran the Brief past the window (Safari's measure, 1000 by 560, 2026-11-18).
+      .map(([n, w], i) => (i || w === ASKED || owedParts.length > 2 ? n + " " + w : nWord(n, "application", "applications") + " " + w)).join(", ");
     const sendLine = toSend ? h("p", {class: "bp-lead bp-send"}, h("a", {href: "#drafts", class: "bp-text bp-link", "data-k": "bp-drafts",
       onclick: (e) => { e.preventDefault(); setPref("drafts:view", "apps"); go("drafts", {focus: true}); }}, h("strong", {}, sendWords))) : null;
     // With nothing new found, the drafts ready to apply are the list, best fit first: the panel
@@ -7150,26 +7150,51 @@
     const w = txt(ac.id) ? workDoc(txt(ac.id)) : null;
     return ac.type === "work" && txt(ac.kind) === "draft" && !(w && TERMINAL.has(txt(w.status)));
   }
-  function jobStage(r) { const d = listDraft(r); if (d) return draftStage(d); const st = jobStatus(r); return st === "asking" ? 0 : st === "drafting" ? 3 : 4; }
+  function jobStage(r) { const d = listDraft(r); if (d) return draftStage(d); const st = jobStatus(r); return st === "asking" || jobAsksYou(r) ? 0 : st === "drafting" ? 3 : 4; }
+  // A job being written with a question for you on its card ("1 question for you"): it waits on
+  // you, under Needs your answer and in that count, never "Being written" (the screen review,
+  // 2026-11-18).
+  function jobAsksYou(r) { return jobStatus(r) === "drafting" && !jobPending(r) && jobQuestions(r).length > 0; }
   // A draft asking whether it was sent waits with the other "Did you apply?" questions.
   function draftAsksApplied(a) { const qs = readyLive(a) ? readyQuestions(a) : []; return qs.length > 0 && applyAsk(qs[0]); }
   // Every job to apply for (toApplyCount), each counted once at its stage, the questions about
-  // whether one was sent apart: Jobs' summary and the Brief say these numbers, in these words.
+  // whether one was sent apart and never in the total: Jobs' summary and the Brief say these
+  // numbers, in these words. `confirm` is every "Did you apply?" on Jobs' fold, those with no
+  // job or draft of their own included (applyAsksAlone), so Jobs and the Brief say one number:
+  // they said 2 and 1 (the screen review, 2026-11-18).
   function applyStages(rows) {
     const n = {answer: 0, ready: 0, writing: 0, fresh: 0, confirm: 0, total: 0, drafts: {answer: 0, ready: 0, writing: 0, confirm: 0}};
     const key = ["answer", "ready", "ready", "writing", "fresh"];
     for (const a of readyItems().filter(readyLive)) {
       const k = draftAsksApplied(a) ? "confirm" : key[draftStage(a)];
-      n[k]++; n.drafts[k]++; n.total++;
+      n[k]++; n.drafts[k]++;
+      if (k !== "confirm") n.total++;
     }
-    for (const r of arr(rows || jobRows()).filter((x) => jobToLook(x) || jobDrafting(x))) {
+    const all = arr(rows || jobRows());
+    for (const r of all.filter((x) => jobToLook(x) || jobDrafting(x))) {
       const st = jobStatus(r);
-      const k = asksApplied(r) ? "confirm" : st === "asking" ? "answer" : st === "drafting" ? "writing" : "fresh";
-      n[k]++; n.total++;
+      const k = asksApplied(r) ? "confirm" : st === "asking" || jobAsksYou(r) ? "answer" : st === "drafting" ? "writing" : "fresh";
+      n[k]++;
+      if (k !== "confirm") n.total++;
       if (jobDrafting(r)) n.drafts[k]++;
     }
+    n.confirm += applyAsksAlone(cardAsks(all)).length;
     return n;
   }
+  // The questions asked on a card in To apply's list: a job's own and its draft's, and a draft's
+  // with no job in the list.
+  function cardAsks(rows) {
+    const on = new Set();
+    for (const r of arr(rows)) {
+      if (!inTab(jobStatus(r), "new") || txt(obj(r.apply).status) === "closed") continue;
+      for (const q of jobQuestions(r)) on.add("need:" + q.id);
+    }
+    for (const a of readyItems().filter(readyLive)) for (const q of readyQuestions(a)) on.add("need:" + q.id);
+    return on;
+  }
+  // "Did you apply to ...?" with no card of its own in the list: To do's question, a card in
+  // Jobs' fold beside the jobs and drafts asking it.
+  function applyAsksAlone(onCards) { return todoItems({each: true}).filter((i) => (i.tab === "jobs" || i.tab === "drafts") && !onCards.has(i.key) && applyAsk(i.need)); }
   // The stages in their words, in the list's order: "2 ready to send, 1 being written, 1 new".
   function stageParts(n, fresh) {
     return [n.answer ? n.answer + " " + (n.answer === 1 ? "needs" : "need") + " your answer" : "", n.ready ? n.ready + " ready to send" : "",
@@ -7308,8 +7333,6 @@
     // While several are being selected every card stays in the list, to be ticked.
     const confirming = tab === "new" && !S.selecting ? inThis.filter(asksApplied) : [];
     const listed = confirming.length ? inThis.filter((r) => confirming.indexOf(r) < 0) : inThis;
-    // Your resume for when nobody named a role: after the jobs, which are what the list is for.
-    const cvCard = tab === "new" ? generalResumeCard() : null;
     const searching = [...allWork()].find(([id, w]) => w.kind === "search" && ACTIVE.has(w.status));
     const sp = searching ? progress(searching[1]) : null;
     // A search Claude has not begun waits, and says so: never "Claude is on it" (2026-11-03).
@@ -7324,7 +7347,7 @@
     // "2 jobs to confirm": every "Did you apply to ...?" in one fold under the list, closed until
     // opened, its cards the same cards they are anywhere (a question on its own card, a draft
     // with its question), so they never lead the list; To do asks them too.
-    const askTodos = selecting ? [] : todoItems({each: true}).filter((i) => (i.tab === "jobs" || i.tab === "drafts") && !onCards.has(i.key) && applyAsk(i.need));
+    const askTodos = selecting ? [] : applyAsksAlone(onCards);
     const nAsk = askTodos.length + confirming.length;
     let sum;
     if (!rows.length && !jb.made_at) sum = "No search yet.";
@@ -7332,8 +7355,8 @@
       // One sentence whose total is the tab's ("To apply 5"): "4 to send, 1 still to make, 1 to
       // look at, 1 strong" added up to nothing on screen, and "send" read against "nothing is
       // ever sent" (the UX review, 2026-11-10, U-9). Its parts are the list's own headings, in
-      // their order, and the questions about what was sent are the fold's own count: "5 to apply
-      // for: 2 ready to send, 1 being written, 1 new. 2 to confirm." (the UX review of the
+      // their order, and the questions about what was sent are the fold's own count, never in
+      // the total: "4 to apply for: 2 ready to send, 1 being written, 1 new. 2 to confirm." (the UX review of the
       // redesign's second round, 2026-11-17: "2 ready, 1 waiting on you, 1 being made, 1 to look
       // at" matched none of the headings).
       const n = applyStages(rows);
@@ -7407,7 +7430,6 @@
     if (selecting && visibleIds.length > 1) put(wrap, selectAll(S.sel.jobs, visibleIds, "Select all " + visibleIds.length + " shown", "jobs"));
     put(wrap, list);
     put(wrap, askFold);
-    if (cvCard) put(wrap, h("div", {class: "after-list"}, cvCard));
     if (shut.length) {
       const st = listState("jobs:closed");
       put(wrap, h("p", {class: "fold"}, h("span", {}, shut.length + " closed: "),
@@ -7706,6 +7728,16 @@
     sheet({title: "Not sending this one?", intro: txt(a.role) + " at " + co + ". Your files are kept either way.",
       choices: binReasons(co, Object.keys(obj(a.apply)).length ? a.apply : obj(j).apply, obj(j).posted_days).map(([w, label]) => ({label, key: "why-" + w,
         run: () => act([{item: a.id, action: "ready.not_applying", value: {why: w === "role" ? "not this role" : w}, rev: a.rev}], w === "employer" ? "No more roles from " + co : "Not applying: " + co)})).concat([elseChoice("application", a.id)])});
+  }
+  // The trash on a draft made for someone ("Your CV for Tamsin"): not sent to them after all. No
+  // reason about pay or place, which teach the job search and mean nothing here; the file is kept.
+  function askRemoveForContact(a, who) {
+    const first = txt(obj(who).first_name) || txt(obj(who).name) || "them";
+    const what = "Your " + noun() + " for " + first;
+    sheet({title: "Not sending this to " + first + "?", intro: what + ". The file is kept either way.",
+      choices: [{label: first + " no longer needs it", key: "why-unneeded",
+        run: () => act([{item: a.id, action: "ready.not_applying", value: {why: "not this role"}, rev: a.rev}], "Not sending: " + what)},
+      elseChoice("application", a.id)]});
   }
   // The bin on an application or an interview: it is over, said the way the tracker records
   // it (the same outcomes as "I heard back").
@@ -8391,7 +8423,10 @@
       h("div", {class: "app-main"},
         h("div", {class: "job-top"}, j && j.score != null ? fitRing(j.score, j.band, {word: true}) : null,
           h("h3", {id: hid}, breakable(a.role)), h("span", {class: "top-end"}, stateWord(word[0], word[1]),
-          live && !forWho ? btn("", () => askRemoveDraft(a), {kind: "quiet icon-only", small: true, icon: "bin", key: "dbin:" + a.id, aria: "Not sending: " + about}) : null)),
+          // A draft made for someone has its trash too, in its own words (DESIGN.md: on Ready to
+          // send it was the one live card without one, the screen review, 2026-11-18).
+          live ? btn("", () => (forWho ? askRemoveForContact(a, forWho) : askRemoveDraft(a)), {kind: "quiet icon-only", small: true, icon: "bin", key: "dbin:" + a.id,
+            aria: forWho ? "Not sending: your " + noun() + " for " + (txt(forWho.first_name) || txt(forWho.name)) : "Not sending: " + about}) : null)),
         // Pay where it is known; "Pay not stated" on nearly every card said nothing (2026-11-03).
         // The last fact, "Why" and the pencil keep together, as on a find's card (2026-11-10).
         jobFactsLine(h("bdi", {class: "co"}, employerLink(a.company, "app:" + a.id, a.role)), [place].filter(Boolean), rest,
@@ -13924,7 +13959,8 @@
     const findBtn = !arr(rows).length || applied ? null : runBtn("search", "Find jobs", () => askSearch(), {small: true, key: "head-find-jobs", icon: "k-search", wakes: "search"});
     const addJob = h("button", {type: "button", class: "btn secondary small", "data-k": "add-job", onclick: () => askAddJob()}, "Add a job you found");
     // The header's own link to your resume on every Jobs tab (the maintainer, 2026-10-31: "it's
-    // hidden atm"), beside the card under the list on To apply.
+    // hidden atm"), opening its card on Your profile: To apply showed "Your CV" twice, this link
+    // and a card under the list (the screen review, 2026-11-18).
     const cv = resumeLink();
     if (cv) cv.className = "btn secondary small";
     return h("div", {class: "head-tools"}, findBtn, addJob, cv);
@@ -14518,8 +14554,10 @@
         h("p", {class: "small muted"}, "Add one on Jobs: Change the search, then Watch an employer. To stop following one, say so in Chat."))) : null,
       // Jobs you hid, in your words: "Hidden by you: 233 jobs", never the engine's "cleared from
       // the list · 233"; and bringing back more than a handful asks first, since one tap put
-      // 233 old jobs back into Jobs (the 3 November audit).
-      infoRow("search-rules", "Jobs you hid", rules.length ? plural(rules.reduce((n, r) => n + (Number(r.count) || 0), 0), "job", "jobs") : "None", rules.length ? h("ul", {class: "plain"}, shortList("hid", rules.map((r) => {
+      // 233 old jobs back into Jobs (the 3 November audit). Named for what it holds, the kinds of
+      // job hidden and the jobs under them: "Jobs you hid: 10 jobs" here beside Jobs' "1 you hid"
+      // (one job set aside there) read as two answers to one question (the screen review, 2026-11-18).
+      infoRow("search-rules", "Kinds of job you hid", rules.length ? plural(rules.length, "kind", "kinds") + ", " + plural(rules.reduce((n, r) => n + (Number(r.count) || 0), 0), "job", "jobs") : "None", rules.length ? h("ul", {class: "plain"}, shortList("hid", rules.map((r) => {
         const n = Number(r.count) || 0;
         const name = txt(r.label) || cap1(txt(r.words));
         const lift = () => act([{item: txt(r.id), action: "rule.lift", value: null, rev: txt(r.rev) || txt(s.rev) || null}], "Brought back: " + name);
@@ -14740,7 +14778,7 @@
     return h("span", {class: "sum-cv"}, " ", l);
   }
   function resumeLink() {
-    return h("button", {type: "button", class: "btn link", "data-k": "jobs-resume", onclick: () => { setPref("drafts:view", "apps"); go("drafts", {focus: true, item: txt(obj(M().resume).id) || "resume-general"}); }}, "Your " + noun());
+    return h("button", {type: "button", class: "btn link", "data-k": "jobs-resume", onclick: () => go("profile", {focus: true, item: txt(obj(M().resume).id) || "resume-general"})}, "Your " + noun());
   }
   // G12. The resume for when nobody named a role: download it, or make a fresh one (model.resume).
   function generalResumeCard() {
@@ -15020,10 +15058,13 @@
     if (effective(tid, ["tip.seen"])) return null;
     return h("p", {class: "tip small muted"}, "Tip: " + cap1(txt(t.text).replace(/^Tip:\s*/, "")), " ", btn("Got it", () => act([{item: tid, action: "tip.seen", value: {area: txt(t.area)}, rev: txt(t.rev) || null}], "Tip put away"), {kind: "secondary", small: true, key: "tip-seen"}));
   }
-  const TOUR = [
+  // Jobs' step in the tabs it has and the person's own word for the document: it still named
+  // "Found / Drafts / Applied" and said "resume" to a page that says CV (the screen review,
+  // 2026-11-18).
+  const TOUR = () => [
     ["brief", "Brief", "Your day at a glance. Tap any line to go to it."],
     ["todo", "To do", "What needs you, five at a time, most urgent first. A card's filled button is its next step; the trash puts it away."],
-    ["jobs", "Jobs", "Every role from found to applied: Found, each with a number out of 100 for how well it fits you (75 or more is a strong fit); Drafts, your resume and letter; Applied, each one tracked."],
+    ["jobs", "Jobs", "Two tabs. To apply: each role with a number out of 100 for how well it fits you (75 or more is a strong fit), then your " + noun() + " and letter for it once you choose Draft this. Applied: each one you sent, tracked."],
     ["contacts", "Contacts", "Someone inside who puts your name forward beats applying cold. Claude finds who to write to and drafts the note; you send it yourself. Tap a name to see everything about them."],
     ["interviews", "Coming up", "Everything booked, by day: interviews, calls, tests and closing days, each ready to add to your calendar, and your prep for each interview."],
     ["settings", "Settings", "Your profile first: jobs, skills, education. Change them any time."],
@@ -15033,7 +15074,7 @@
   // thing they describe. Offered once, after setup (tourCard), and from Settings, Help.
   function tourSteps() {
     const engine = arr(obj(M().help).tour).filter((t) => SECTION_IDS.has(txt(t.tab)));
-    return engine.length ? engine.map((t) => [txt(t.tab), txt(t.title), txt(t.text)]) : TOUR;
+    return engine.length ? engine.map((t) => [txt(t.tab), txt(t.title), txt(t.text)]) : TOUR();
   }
   // The whole tour from step i; with `only`, that one part, offering the next part or Close.
   // Every step can be skipped (Next) and the rest of it too (Skip the rest).
@@ -18532,7 +18573,7 @@
     const a = resolveSection(parts[0]);
     if (!a) return null;
     const b = parts[1] ? resolveSection(parts[1]) : null;
-    return {section: a.section, drafts: a.drafts, work: a.work, split: b && b.section && b.section !== a.section ? b.section : null, item: item || null};
+    return {section: a.section, drafts: a.drafts, work: a.work, applied: !!a.applied, split: b && b.section && b.section !== a.section ? b.section : null, item: item || null};
   }
   // Opening an item: its section, the tab or fold it sits in, then the item itself.
   function placeItem(id) {
@@ -18566,6 +18607,9 @@
     // Leaving Jobs lets its cards take their stages again next time (renderJobs, held).
     if (r.section !== S.section) S.jobsHeld = null;
     if (r.work) { openWork(); return; }
+    // Every way to Applied opens its tab (#applied, #applications, a Brief line): an address
+    // to it opened whichever Jobs tab was used last (the screen review, 2026-11-18).
+    if (r.applied || o.applied) setPref("jobs:tab", "applied");
     // The messages to send are in Contacts now, each on its person's card (2026-11-04).
     if (o.drafts === "messages") r = {section: "contacts"};
     if (S.section !== r.section) S.cameFrom = S.section;
@@ -18805,7 +18849,7 @@
     // An item's own view has an address too: #interviews/<id>/open.
     const opened = p.item && /\/open$/.test(p.item) ? p.item.replace(/\/open$/, "") : null;
     if (!opened && detailDlg) closeDetail(true);
-    go(p.section, {keepSplit: true, focus: !opened, fromHistory: true, item: opened ? null : p.item});
+    go(p.section, {keepSplit: true, focus: !opened, fromHistory: true, applied: p.applied, item: opened ? null : p.item});
     // An old address of Messages (a view until 2026-11-04) is put right: Contacts, on the person.
     if (/^#(drafts-messages|messages)(\/|$)/.test(location.hash)) keepAddress(true);
     if (opened) {
@@ -19579,7 +19623,7 @@
     // where the browser does not say it was a reload.
     if (sget("session", "ljs:left")) { reloaded = true; sset("session", "ljs:left", null); }
     window.addEventListener("pagehide", () => sset("session", "ljs:left", "1"));
-    if (fromHash && fromHash.section && (reloaded || fromHash.item || fromHash.section !== "settings")) { S.section = fromHash.section; S.split = fromHash.split || null; S.focusItem = fromHash.item; if (fromHash.drafts) setPref("drafts:view", fromHash.drafts); placeItem(S.focusItem); }
+    if (fromHash && fromHash.section && (reloaded || fromHash.item || fromHash.section !== "settings")) { S.section = fromHash.section; S.split = fromHash.split || null; S.focusItem = fromHash.item; if (fromHash.drafts) setPref("drafts:view", fromHash.drafts); if (fromHash.applied) setPref("jobs:tab", "applied"); placeItem(S.focusItem); }
     else if (reloaded && remembered && SECTION_IDS.has(remembered)) S.section = remembered;
     else S.section = settingUp() ? "todo" : "brief";
     window.addEventListener("popstate", fromAddress);

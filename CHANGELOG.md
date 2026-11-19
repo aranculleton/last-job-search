@@ -26,6 +26,14 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **A link to Applied opens Applied.** It opened whichever Jobs tab you used last.
+- **Jobs' numbers add up and agree.** "5 to apply for" stood over parts adding to 4: a job asking whether you applied is no longer in the total, only in its own count, and the Brief now says the same number as Jobs, as "2 to say if you applied".
+- **A job being written that has a question for you is under Needs your answer**, not Being written, and counted there.
+- **Your CV is shown once on Jobs.** To apply had a link and a card for it; the link stays on every Jobs tab and opens its card on Your profile.
+- **"Finding jobs" is said once while a search runs.** A pill of it beside the work button and the open panel did nothing when tapped; the work button and the search's own card say it. The same for Find people on Contacts.
+- **Settings names what it counts: "Kinds of job you hid"**, beside Jobs' count of single jobs you hid.
+- **A CV made for someone has its trash too**, asking "Not sending this to Tamsin?", with the file kept.
+- **The tour describes Jobs as it is now**, To apply and Applied, in your word for the document.
 - **On a wide screen a document's download and pencil, and Stop Claude on a card, sit near their words.** On a very wide screen they stood across the card, about 1,000px from what they act on.
 - **On a phone the line under each past job in Your profile is shown in full.** It was cut short ("4 poi..."), though it is what the row is for.
 - **Your profile on a wide screen reads what to fill in, then your experience, then the rest.** Education stood beside "Still to fill in", so it read before your jobs.
