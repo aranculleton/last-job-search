@@ -14,7 +14,10 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   on a computer: on a phone Coming up opened only through the Brief, and Progress lit the Brief
   with no way back (the redesign's second round, 2026-11-17). To do alone carries a badge, and
   no other tab a count; the Chat button a small grey dot after its word while an answer waits
-  unseen. (layout 6, nav order test; contacts rules test)
+  unseen. In the side menu Jobs, Contacts and Coming up carry a quiet count where they have one
+  (to apply, to send, coming up), Contacts' the messages its summary says are to send: it had
+  none while Jobs and Coming up had theirs (the screen review, 2026-11-18). (layout 6, nav
+  order test; contacts rules test; menu count test)
 - Each screen: its title, one plain summary line, at most three blocks before the first item.
   A way to somewhere else (the new jobs, Start again, Paste a message) is a soft pill beside
   the summary, centred on its line, never an underlined line under it; what Claude is doing is the header's work
@@ -373,10 +376,12 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   doing (the UX review of the redesign, 2026-11-17). (jobs page tests, jobs fold test)
 - Applied is ordered by what comes next, the nearest first: an interview by its day, then a
   follow-up by its day, then the rest newest first; "I heard back" is a quiet control beside a
-  card's next step, its words under the card's own where it leads a line and 16px from a gauge
-  before it (a quiet button leading a line was 17px in from the card's words, and after "6 min
-  of Claude" read as the gauge's words: the redesign's second round, 2026-11-17; applied tests:
-  I heard back). Why: the nearest interview (Wed 28 Oct) stood under a later one (Wed 4 Nov),
+  card's next step, its words under the card's own where it leads a line, wrapped under a pill
+  and its gauge included, and 16px from a gauge before it (a quiet button leading a line was
+  17px in from the card's words, and after "6 min of Claude" read as the gauge's words: the
+  redesign's second round, 2026-11-17; on a phone, wrapped under "Prepare me · 6 min of Claude"
+  it stood 20px in where under a lone pill it was flush, the screen review, 2026-11-18; applied
+  tests: I heard back). Why: the nearest interview (Wed 28 Oct) stood under a later one (Wed 4 Nov),
   and five cards each ended in an equal grey "I heard back" (the UX review of the redesign,
   2026-11-17). An application owing a follow-up says so in clay, "Follow up by Wed 28 Oct"
   ("Follow up now" once its day has come), and "Follow-up ready" only once a follow-up is
@@ -437,7 +442,11 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   Open (the file, where it is on the page) and its pencil, 36px (the redesign, phase 2,
   2026-11-17: grey capsules "CV ✎ letter ✎" after "All checks passed:" read as tags, and before
   them bare pencils on the line read as stray marks); the one made for a person says only that
-  its checks passed. The pencils open the Tweak panel; "Change the details" in a job's details
+  its checks passed. The well and a card's line of Claude's work keep a reading measure (720px),
+  so Open, the pencil and Stop Claude stay near their words on a wide card. Why: at 1970px wide
+  the download icon stood about 1,000px from "1 page · checked" and Stop Claude about 1,200px
+  from its words (the screen review, 2026-11-18; controls-by-words test). The pencils open the
+  Tweak panel; "Change the details" in a job's details
   corrects its title, pay or place, code only. What Claude can
   do by itself is never a button: a draft's remake after a check with its fix in hand, and its
   files, are queued by the view, and the card says what Claude is doing. Every control that wakes
@@ -460,7 +469,9 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   the rows inset 16. Why the line's own height: held at 24px for a capsule most days do not
   have, it put Coming up's first card past a phone's first-item line in Firefox (Everywhere,
   2026-11-17; layout 1). A row is its time in a
-  steady 64px column (tabular, semibold; "End of day" and "All day" in the quiet small words),
+  steady 64px column (tabular, semibold; "End of day" and "All day" in the quiet small words,
+  each on one line, the column 5rem on every row of a list that has one: in a phone's 56px
+  "End of day" broke over two),
   what it is in a card title's size, one line under it saying what kind it is with a chip for
   its prep ("Prep ready" green, "No prep yet" grey), and one More at its end (36px, 44 on touch)
   holding Add to your calendar, Change the day and taking it off: nothing reserves room for a
@@ -618,7 +629,10 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   A row is two lines on every screen, at least 48px tall, a hairline between rows: who it is,
   with where they work, on the first, one line cut short with "..." rather than wrapped; how it
   stands (the kind, the day) muted on the second (the redesign's second round, 2026-11-17:
-  "Noor / at Brackenridge / Advisory / First note" ran four lines beside its button). The row
+  "Noor / at Brackenridge / Advisory / First note" ran four lines beside its button), the name
+  given all the room its buttons leave: on a phone the trash is a finger's width, reaching into
+  the card's edge, and the name 8px from the row's button ("Noor at Brackenridge Ad..." was cut
+  with 20px to spare, the screen review, 2026-11-18). The row
   spans the card, its trash at the card's edge (rows stopping short left the trash a column in
   mid-card, the screen review, 2026-11-11), and its buttons sit together at its end, just
   before the trash and 16px from it (the redesign, 2026-11-16: 8px from "See the draft" was
@@ -1199,10 +1213,17 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   Education, Certificates) a small label with its one way to add or change at its right
   ("Add a past job", "Change skills", "Change"), over one card of rows. A past job is a row that opens
   its sheet, its title and employer on one line cut short with an ellipsis, its dates, place and
-  what Claude has on it a quiet line under, and a chevron; taking it off is the last thing in its
-  sheet, never a trash beside a Change on its row. Why: beside "Change" and a trash, "Senior
+  what Claude has on it a quiet line under, wrapping where it must, never cut short (on a phone
+  "4 poi..." cut the line that is the row's point), and a chevron; taking it off is the last thing in its
+  sheet, never a trash beside a Change on its row. In two columns, Still to fill in leads the
+  first and Experience the second, from the top, the other parts under what to fill in, so the
+  page reads what to fill in, then experience, then the rest (at 1970px Education stood beside
+  Still to fill in, read before Experience; the screen review, 2026-11-18). Why: beside "Change" and a trash, "Senior
   Operations Analyst at Brindle & Hart Logistics" ran to six lines on a phone, and Your profile
   was cards where Settings was rows (the redesign's second round, 2026-11-17). (name cards test)
+- A row's value says how the setting stands, never what to do: "Only in the Claude app", never
+  "Open in the Claude app", which read as an instruction beside "Let Claude read LinkedIn
+  profiles" (the screen review, 2026-11-18).
 - Each setting has one home in Settings. Where a setting also has a control elsewhere (the
   Brief's bell, a break from To do), both open the same sheet and can never disagree.
 - Every control does something visible (the sweep test taps all of them) and every action

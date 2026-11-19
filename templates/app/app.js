@@ -354,13 +354,16 @@
   }
   // A quiet button that starts a line of a card's row has its words, not its box, under the
   // card's own words, its box in the card's padding: "I heard back" leading a row stood 17px in
-  // from them (the redesign's second round, 2026-11-17).
+  // from them (the redesign's second round, 2026-11-17). Its start is its box less its own
+  // margin: wrapped under a pill and its gauge it kept the 8px meant for the gauge and stood
+  // 20px in (the screen review, 2026-11-18).
   function quietFit() {
     for (const b of document.querySelectorAll(".lead-quiet")) b.classList.remove("lead-quiet");
     for (const b of document.querySelectorAll(".card .card-actions > .btn.quiet:not(.icon-only):not(.stop-claude)")) {
       if (!shownIn(b)) continue;
       const row = b.parentElement.getBoundingClientRect(), q = b.getBoundingClientRect();
-      if (Math.abs(q.left - row.left) < 2) b.classList.add("lead-quiet");
+      const m = parseFloat(getComputedStyle(b).marginInlineStart) || 0;
+      if (Math.abs(q.left - m - row.left) < 2) b.classList.add("lead-quiet");
     }
   }
   function lineFit() { moreFit(); quietFit(); sepFit(); clampFit(); }
@@ -10066,7 +10069,8 @@
     const opens = go.tagName === "A";
     return h("li", {class: "up-row" + (opens ? " opens" : ""), "data-item": u.id, "data-card": "1", tabindex: "-1",
       onclick: opens ? (e) => { if (e.target.closest("a, button, summary, input, select, textarea, label, details, form, .menu-panel")) return; go.click(); } : null},
-      h("span", {class: "up-when" + (!u.start && !u.time ? " is-word" : "")}, upWhen(u) ? upWhenRow(u) : (u.own || u.pending ? "" : addTimeBtn(u))),
+      // "End of day" and "All day" are words (.day-word), kept on one line in a column that holds them.
+      h("span", {class: "up-when" + (!u.start && !u.time ? " is-word" + (upWhen(u) ? " day-word" : "") : "")}, upWhen(u) ? upWhenRow(u) : (u.own || u.pending ? "" : addTimeBtn(u))),
       h("span", {class: "up-main"}, h("span", {class: "up-title"}, go),
         sub || maybe || chip ? h("span", {class: "up-sub"}, sub ? h("span", {class: "up-note"}, sub) : null, maybe, chip) : null,
         upTimeForm(u), upDayForm(u), upTimed.has(u.id) ? stateLine(txt(obj(upTimeTarget(u)).item), "up:" + u.id) : null),
@@ -14170,7 +14174,7 @@
   // from the model's `where` (CONTRACT, CAPABILITY_MAP G3), and what this page knows itself
   // where the model says nothing yet.
   const WHERE_WORDS = {ready: ["Ready", "ok"], not_set_up: ["Not set up", "warn"], not_listening: ["Not listening", "warn"], sign_in: ["Sign in once", "warn"],
-    desktop: ["Open in the Claude app", null], open_in_app: ["Open in the Claude app", null], optional: ["Optional", null], off: ["Not set up", null], paused: ["Paused", null], paste: ["Off", null]};
+    desktop: ["Only in the Claude app", null], open_in_app: ["Only in the Claude app", null], optional: ["Optional", null], off: ["Not set up", null], paused: ["Paused", null], paste: ["Off", null]};
   function whereState() {
     const w = obj(M().where);
     const helper = txt(obj(w.helper).state) || (freshHeartbeat() || S.can.comments === "available" ? "ready" : "not_listening");
@@ -14678,8 +14682,12 @@
       h("div", {class: "prof-top"}, h("h3", {id, class: "group"}, label), action || null), body);
     const missing = arr(y.missing);
     const grid = h("div", {class: "prof-grid"});
+    // In two columns Still to fill in leads the first and Experience the second, the rest under
+    // what to fill in (app.css, .prof-lead): at 1970px Education stood beside it, read before
+    // Experience (the screen review, 2026-11-18).
     if (missing.length) put(grid, part("pf-missing", "Still to fill in", null, h("ul", {class: "plain set-rows prof-missing checks-list"},
       missing.map((m) => h("li", {class: "toggle-row", "data-card": "1", "data-item": "missing:" + txt(m.part || m.say)}, h("span", {}, txt(m.say)), missingFix(m))))));
+    if (missing.length) grid.classList.add("prof-lead");
     const jobs = arr(y.jobs);
     put(grid, part("pf-jobs", "Experience", btn("Add a past job", () => jobSheet(null), {kind: "secondary", small: true, key: "you-add-job"}),
       jobs.length ? h("ul", {class: "plain set-rows prof-jobs"}, jobs.map((j) => {
@@ -18890,8 +18898,9 @@
   function icon(name) { return svg("svg", {viewBox: "0 0 24 24", class: "ic", "aria-hidden": "true", focusable: "false"}, [svg("path", {d: ICON[name] || ICON.todo, fill: "none", stroke: "currentColor", "stroke-width": "2", "stroke-linecap": "round", "stroke-linejoin": "round"})]); }
 
   // A quiet count beside the sections a person checks (the maintainer, 2026-10-26): jobs to
-  // look at, drafts to send, interviews coming up. To do keeps the one coloured badge.
-  const NAV_COUNT_WORDS = {jobs: " to apply", drafts: " to send", interviews: " coming up"};
+  // look at, drafts to send, interviews coming up, and Contacts' messages to send (the screen
+  // review, 2026-11-18: it had none). To do keeps the one coloured badge.
+  const NAV_COUNT_WORDS = {jobs: " to apply", drafts: " to send", contacts: " to send", interviews: " coming up"};
   // When Claude last answered in the conversation, or "".
   function lastAnswerAt() {
     const ms = convMessages(currentConv()).filter((m) => !m.node && m.from !== "you" && m.from !== "note" && txt(m.at));
@@ -18907,6 +18916,8 @@
     }
     if (id === "jobs") n = toApplyCount();
     else if (id === "drafts") n = readyItems().filter(readyLive).length + messageItems().filter((m) => !settledAction(m.id, ["msg.sent", "msg.skip"]) && msgStatus(m) === "to_send").length;
+    // The number Contacts' summary says ("7 messages to send"), from the one list both read.
+    else if (id === "contacts") n = sendList().length;
     // Coming up: the one number its screen and the Brief also say (2026-10-29: a count that
     // differs between two places reads as a bug).
     else if (id === "interviews") n = Array.isArray(M().upcoming) ? upcomingItems().length : interviewItems().filter((i) => !isPast(i.when) && txt(i.status) !== "done" && !ivOver(i)).length;

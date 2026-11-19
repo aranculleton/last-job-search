@@ -237,6 +237,7 @@ COMING = r"""(() => { const days = [...document.querySelectorAll('#main [data-k=
     lg: (() => { const p = document.createElement('span'); p.style.fontSize = 'var(--t-lg)'; document.querySelector('#main').append(p);
       const v = parseFloat(getComputedStyle(p).fontSize); p.remove(); return v; })(),
     rem: parseFloat(getComputedStyle(document.documentElement).fontSize),
+    word: document.querySelectorAll('#main .up-when.day-word').length,
     here: document.querySelectorAll('#main .up-row .up-here').length}; })()"""
 
 
@@ -246,7 +247,9 @@ COMING = r"""(() => { const days = [...document.querySelectorAll('#main [data-k=
 # with its day, issue 334), so the rows still line up (DESIGN.md, "A time from another zone").
 # The device's zone is set both ways: taken from the machine, the far zones of Everywhere drew
 # the design's own wider column, 90 and 150px, against the home zone's 56 and 64, and the test
-# failed there with nothing wrong (2026-11-17).
+# failed there with nothing wrong (2026-11-17). Where a row says "End of day" or "All day", the
+# home column is 5rem on every row alike, so the words keep one line: at 56px "End of day" broke
+# over two (the screen review, 2026-11-18).
 @pytest.mark.parametrize("zone", [PERSON_ZONE, "Pacific/Kiritimati"], ids=["home", "far"])
 @pytest.mark.parametrize("vp", [PHONE, WIDE], ids=["phone", "wide"])
 def test_coming_up_is_a_card_a_day_each_row_its_time_what_it_is_and_one_more(run, tmp_path, vp, zone):
@@ -258,7 +261,7 @@ def test_coming_up_is_a_card_a_day_each_row_its_time_what_it_is_and_one_more(run
     times = {tuple(r["when"]) for r in seen["rows"] if r["when"]}
     home = zone == PERSON_ZONE
     assert (seen["here"] == 0) == home, (zone, seen["here"])
-    want = (64 if vp is WIDE else 56) if home else round((10 if vp is WIDE else 8) * seen["rem"])
+    want = (round(5 * seen["rem"]) if seen["word"] else 64 if vp is WIDE else 56) if home else round((10 if vp is WIDE else 8) * seen["rem"])
     assert len(times) == 1 and next(iter(times))[1] == want, (times, want)
     # A title in a card title's size (To do's), semibold; one More, no bare icons beside it.
     for r in seen["rows"]:

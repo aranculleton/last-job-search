@@ -26,6 +26,13 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **On a wide screen a document's download and pencil, and Stop Claude on a card, sit near their words.** On a very wide screen they stood across the card, about 1,000px from what they act on.
+- **On a phone the line under each past job in Your profile is shown in full.** It was cut short ("4 poi..."), though it is what the row is for.
+- **Your profile on a wide screen reads what to fill in, then your experience, then the rest.** Education stood beside "Still to fill in", so it read before your jobs.
+- **Contacts in the side menu shows how many messages you have to send**, as Jobs and Coming up show theirs.
+- **Settings says "Only in the Claude app" beside reading LinkedIn profiles**, where "Open in the Claude app" read as something to do.
+- **On a phone "End of day" stays on one line in Coming up, and a name on a To do list gets all the room its buttons leave.**
+- **On a phone "I heard back" lines up with the card's words when it sits under "Prepare me" and its time**, where it stood further in than under a lone button.
 - **No more holes between words on the Brief.** "Have   you used Looker?" and "Juno,   Wren and 5 more" had a wide gap mid-line where a line broke near a dot. The words now sit a space apart.
 - **Coming up lets you read the next interview's prep.** Its row said "Prep ready" with no way to open it; it now has "Read your prep", as the Brief does.
 - **A job waiting for Claude reads as waiting.** Its title stays beside its dot, with "Waiting for Claude" under it, no empty bar until Claude starts it, no line saying it runs in a chat of its own while it waits, and "Waiting:" over a single job. It says "Claude starts this next" rather than talking about a helper.
