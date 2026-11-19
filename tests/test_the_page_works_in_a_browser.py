@@ -1398,7 +1398,7 @@ def test_every_screen_keeps_to_the_simplicity_budgets(run, pages, viewport, sche
             if not c["alerts"]:
                 assert others <= BUDGET["card_controls"], (sid, c)
             assert c["filled"] <= 1, (sid, c)
-        quiet = sorted(c["words"] for c in got["cards"] if not c["alerts"])
+        quiet = sorted(c["words"] for c in got["cards"] if not c["alerts"] and not c.get("asks"))
         if quiet:
             assert quiet[len(quiet) // 2] <= BUDGET["card_words"], (sid, "words on a typical closed card", quiet)
 

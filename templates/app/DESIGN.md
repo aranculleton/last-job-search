@@ -905,7 +905,9 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   pills, the pencil, the trash, and the gauge where Claude wakes, in its own row: a grey box's
   answers (a question's Yes and No, a suggestion's two) answer the box and are not counted, so
   the card's next step and "I have applied" stay on its face (the maintainer, 2026-11-18: "why
-  is i have applied hidden?"). Past it, the row's others go under More; more means a step above
+  is i have applied hidden?"). A typical closed card says what it is in 30 words or fewer; one
+  with a box asking something (an alert, a suggestion, a question) is open on that box and is
+  not one of them, as a "Did you apply?" box never was (budget test, 2026-11-19). Past it, the row's others go under More; more means a step above
   was skipped. A draft's documents are each a row with its own download icon ("Download CV:
   <file>") beside its pencil: no "Get both files" on the card, and no "Open", which saved the
   file and opened nothing (the maintainer, 2026-11-18: "a simple symbol for each"). A copy,

@@ -505,6 +505,9 @@ function budgetProbe() {
       // card's details: the words' own, never one of the card's actions (the redesign, 2026-11-16).
       folds: cs.filter((b) => b.matches(".pdraft > summary, .read-all")).length,
       alerts: c.querySelectorAll(".alert, .suggest").length,
+      // A box asking a question is open on it, never a typical closed card (DESIGN.md, a card's
+      // budget): counted for the words alone, its controls held to the card's budget as before.
+      asks: c.querySelectorAll(".question").length,
       labels: cs.map((b) => (b.getAttribute("aria-label") || b.textContent || "").replace(/\s+/g, " ").trim().slice(0, 24))};
   });
   return {chrome, screenWords: wordsIn(main, true), screenControls: controls(main, true).length, filled, cards};
