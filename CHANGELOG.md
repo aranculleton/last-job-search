@@ -26,6 +26,15 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **No more holes between words on the Brief.** "Have   you used Looker?" and "Juno,   Wren and 5 more" had a wide gap mid-line where a line broke near a dot. The words now sit a space apart.
+- **Coming up lets you read the next interview's prep.** Its row said "Prep ready" with no way to open it; it now has "Read your prep", as the Brief does.
+- **A job waiting for Claude reads as waiting.** Its title stays beside its dot, with "Waiting for Claude" under it, no empty bar until Claude starts it, no line saying it runs in a chat of its own while it waits, and "Waiting:" over a single job. It says "Claude starts this next" rather than talking about a helper.
+- **The time on a running job starts with a capital letter** ("Under a minute so far · about 7 min left"), and the time left never splits over two lines.
+- **The work button at the top of a phone says what its number is**, such as "2 busy", never a spinner and a bare "2".
+- **Today's interview on the Brief is a box its own size**, never stretched to twice its height on a wide screen.
+- **Messages to send names one employer one way.** "Larkspur Retail" and "Larkspur Retail Ltd" showed as if they were two employers.
+- **A To do card about a person is put off the same way as every other card.** "Send Tamsin your CV" had a trash in its corner, which asked "Not Tamsin?" about the person who referred you; it now has the clock and "Later", and "Not Tamsin?" is under its More.
+- **The Brief's tip about your prep names its button in quotation marks**, and each line on the "Help Claude do more" card ends with a full stop.
 - **An interview you withdrew from, or one that has otherwise ended, is now with your finished interviews in Coming up.** It sat among the ones still to come, still offering "I heard back" and your prep; now it waits under "earlier, finished" with the others, and its card offers nothing more to do.
 - **Contacts uses the whole width of a wide screen.** On a big window each person's card ran the whole width with its message kept to a comfortable line length, so the right half of every card was empty. Where there is room, the cards now stand side by side, in the same order, and a phone or a smaller window keeps one under the other.
 - **A change made by hand to one of the app's own files on your computer no longer stops every update.** Only a chat in the cloud could get past an unsaved change like that, so a copy on your computer with one never updated again. The update puts the app's own files back in any case, so your change is now kept in a folder called .set-aside, where nothing of it is lost, the app's file is put back and the update comes in, saying so once. Unsaved changes to your own files still wait for you, as before.

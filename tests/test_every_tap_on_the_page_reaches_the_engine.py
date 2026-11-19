@@ -227,12 +227,21 @@ def test_a_person_put_in_the_bin_is_never_messaged_again(run, tmp_path):
     assert wren["status"] in ("stopped", "closed"), wren["status"]
 
 
+# Opens the More that holds a To do card's "Not <name>?" (app.js personUnderMore).
+OPEN_WHO = """(() => { const b = document.querySelector('#main [data-k^="notwho:"][aria-label^="Not %s?"]'); if (!b) return 0;
+  const panel = b.closest('.more-panel'), d = panel.closest('details');
+  if (d) d.open = true; else document.querySelector('#main summary[aria-controls="' + panel.id + '"]').click();
+  return 1; })()"""
+
+
 def test_the_bin_on_a_to_do_row_turns_the_employer_down_in_the_engine(run, tmp_path):
     # The bin on a To do row (the maintainer, 2026-10-29: "it didnt go away"): the employer
     # choice is applied by the engine as well as taken off the page.
     where = Search(str(tmp_path / "s"))
     got, rec = _round_trip(run, tmp_path, where, "todobin", [
-        {"hash": "todo", "click": "Not Wren?", "exact": False},
+        # Under its card's More since 2026-11-18, the card's corner saying Later.
+        {"hash": "todo", "eval": OPEN_WHO % "Wren"},
+        {"click": "Not Wren?", "exact": False},
         # The choice is the tap that does it (2026-11-03).
         {"click": "Not interested in Fernhill Freight any more", "exact": True, "within": "dialog"},
     ])

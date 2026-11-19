@@ -814,7 +814,8 @@ def test_progress_moves_with_the_clock_slow_is_not_stalled_and_only_a_missed_che
     # Stages of 60, 300 and 120 s; the second has just started, 60 of 480 s behind it.
     assert a0["now"] == 12
     assert a150["now"] == 43, "150 s into a 300 s stage: (60 + 150) / 480"
-    assert "about" in a150["time"] and "left" in a150["time"]
+    # Capitalised where it starts the line, its time left one piece (2026-11-18).
+    assert "about" in a150["time"].lower() and "left" in a150["time"]
     assert any(s.startswith("step-done") for s in a150["steps"]) and any(s.startswith("step-now") for s in a150["steps"])
     s2 = r["stage2"]
     assert s2["sentence"] == "Scoring 214 postings, 3 of 4 done", "one live sentence, in words"
@@ -857,7 +858,8 @@ def test_a_search_is_timed_by_the_time_left_its_job_sites_gave(run, pages):
     b = r["bar"]
     assert b["status"] == "", "on time: no state word"
     assert b["sentence"] == "Searching 4 job sites, 99 of 162 done"
-    assert "about 12 min left" in b["time"], b["time"]
+    # Its time left kept in one piece, a no-break space between its words (2026-11-18).
+    assert "about 12 min left" in b["time"].replace("\u00a0", " ").lower(), b["time"]
     assert "longer" not in b["time"] and b["warn"] == [] and "Try again" not in b["buttons"]
 
 
@@ -1783,8 +1785,10 @@ def test_everything_booked_is_one_tap_from_any_calendar_and_the_brief_shows_the_
     assert "Time not set" not in r["when"], r["when"]
     # Each interview says whether its prep is ready, on its own row only (never on a test
     # due in the same process), as a chip; the row is its own tap to the prep, and only the
-    # next interview with none carries "Prepare me" (the redesign, phase 2, 2026-11-17).
-    assert r["prep"] == ["up-prep:up-app-copperleaf-payments-recruiter-call-2026-10-30=Prepare me"], r["prep"]
+    # next interview with none carries "Prepare me" (the redesign, phase 2, 2026-11-17), and the
+    # next interview, its prep ready, "Read your prep", as the Brief offers it (2026-11-18).
+    assert r["prep"] == ["up-read:up-app-larkspur-supply-phone-screen-2026-10-28=Read your prep",
+                         "up-prep:up-app-copperleaf-payments-recruiter-call-2026-10-30=Prepare me"], r["prep"]
     assert r["chips"] == ["Prep ready", "No prep yet", "No prep yet"], r["chips"]
     # One count in the nav, the screen and the Brief.
     assert r["nav"].startswith("7") and r["sum"].startswith("7 things booked or due"), (r["nav"], r["sum"])

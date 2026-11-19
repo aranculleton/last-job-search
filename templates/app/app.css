@@ -1308,7 +1308,11 @@ dialog.work-sheet { position: fixed; inset: auto 0 0 0; margin: 0; width: 100%; 
    at the end of the title's line where both fit, and the line under it where they do not,
    never under a title it would have fitted beside; a long state wraps inside its pill. */
 .work-card .wc-head { display: flex; flex-wrap: wrap; align-items: center; column-gap: 8px; row-gap: 4px; }
+/* The title keeps beside its dot, its state wrapping under it: a long title went to a line of
+   its own, the dot alone above it and "Waiting for Claude" on a third line (the screen review,
+   2026-11-18). */
 .work-card .wc-head > .wc-title { flex: 1 1 auto; min-width: 0; }
+.work-card .wc-head > :is(.spin, .dot) + .wc-title { max-width: calc(100% - 24px); }
 .work-card .wc-head > :is(.spin, .dot) { flex: none; }
 .work-card .wc-head > .state-word { margin-left: auto; max-width: 100%; white-space: normal; text-align: start; }
 
@@ -2434,7 +2438,10 @@ html.tips-off .has-tip::after { content: none; }
 .sep-break::before { content: "\A"; white-space: pre; }
 /* Its words start a box of their own: the box keeps the dot's width at its end, so it never
    moves up beside what is before it with no dot between. */
-:has(> .sep-hold:first-child > .sep-lead), :has(> .sep-lead:first-child) { padding-right: 0.7em; }
+/* Never the hold itself: a hold whose dot started a line mid-paragraph kept the dot's width at
+   its own end, a hole between two words ("Have   you used Looker?", the screen review,
+   2026-11-18). */
+:has(> .sep-hold:first-child > .sep-lead), :not(.sep-hold):has(> .sep-lead:first-child) { padding-right: 0.7em; }
 /* Nothing after it on its line: kept, out of sight, so nothing on the line below moves up.
    Drawn in no colour, never hidden: a hidden dot fell out of the line's own words (innerText),
    which Safari's engine read as "Waiting for Claude Saved." (2026-11-12). */
@@ -2965,6 +2972,7 @@ ul.bp-news { gap: 12px; }
 /* Its day and time wrap inside its box: held to one line, a time from another zone ran under
    the calendar beside it and out of the panel at a tablet's width (2026-11-11). */
 .bp-up-row .up-when { font-size: var(--t-sm); color: var(--muted); white-space: normal; }
+.bp-up-row .up-when > .up-prep { display: inline; font-weight: 400; }
 .bp-up-row .up-title { overflow-wrap: anywhere; }
 @media (min-width: 760px) and (pointer: fine), (min-width: 760px) and (pointer: none) {
   .bp-up-row .up-prep > .btn.small { min-height: 24px; padding: 2px 12px; }
@@ -3099,12 +3107,13 @@ ul.bp-news { max-width: 80ch; }
    (the redesign's second round, 2026-11-17). */
 .bpanel:not(.bp-today) > .bp-title .bp-ic { color: var(--muted); background: var(--sunk); }
 .bp-today > .bp-title .bp-count { color: var(--mark-ink); }
-/* A laptop's row gives Today more height than its one thing needs: the thing's white card takes
-   it, never a block of clay tint under them, its words and button from its top as every card's
-   are: at its middle they left 60px of nothing over "Ready to do" (the redesign's second round,
-   2026-11-17). */
+/* A laptop's row gives Today more height than its one thing needs: the thing's white card keeps
+   to what it holds, its words and button from its top as every card's are. Stretched to the
+   row, an interview's box was twice its words' height, an empty half under its button (the
+   screen review, 2026-11-18); at its middle they left 60px of nothing over "Ready to do" (the
+   redesign's second round, 2026-11-17). */
 @media (min-width: 960px) {
-  .brief-grid.is-filled .bp-today > .bp-body > .bp-iv { flex: 1 1 auto; align-content: flex-start; }
+  .brief-grid.is-filled .bp-today > .bp-body > .bp-iv { flex: none; align-content: flex-start; }
 }
 .cal-file { display: grid; gap: 4px; }
 .cal-file .hint { margin: 0; }

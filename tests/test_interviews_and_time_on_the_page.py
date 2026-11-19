@@ -349,6 +349,8 @@ def test_coming_up_reads_your_prep_with_the_pill_to_do_has(run, tmp_path, vp):
     got = _go(run, tmp_path, [{"hash": "interviews", "eval": look}, {"hash": "todo", "eval": (
         "[...document.querySelectorAll('#main [data-item=\"soon:int-larkspur-supply\"] .card-actions .btn')].map((b) => b.textContent.trim())")}], vp=vp)
     rows, todo = got["after"][0]["eval"], got["after"][1]["eval"]
-    assert rows["pills"] == [["Prepare me", False]], rows
+    # The next interview with its prep ready reads it from its row, as the Brief offers it, and
+    # the next with none carries Prepare me (DESIGN.md, Coming up; the screen review, 2026-11-18).
+    assert rows["pills"] == [["Read your prep", False], ["Prepare me", False]], rows
     assert ["Prep ready", "SPAN", True] in rows["ready"] and rows["links"] == 0, rows
     assert "Read your prep" in todo, todo

@@ -137,7 +137,11 @@ def test_your_progress_chart_grows_into_its_room_with_a_cap(run, tmp_path, size)
               steps=[{"hash": "brief", "ready": READY, "eval": CHART}])
     assert not got["errors"], got["errors"]
     r = got["after"][0]["eval"]
-    assert 96 <= r["h"] <= 160 + 1, ("the chart did not take its panel's room, or ran past its cap", size, r)
+    # Every booking on Coming up comes before the chart's height (DESIGN.md, the Brief's room,
+    # 2026-11-18): at 1440 by 900 the two booked this week leave it what is left, still more
+    # than its own 48px, its panel's whole room kept by test_the_brief_uses_its_room.
+    low = 64 if size["height"] < 1000 else 96
+    assert low <= r["h"] <= 160 + 1, ("the chart did not take its panel's room, or ran past its cap", size, r)
 
 
 JOBS = r"""(() => {
@@ -243,3 +247,19 @@ def test_waiting_on_you_says_each_name_whole(run, tmp_path, size):
               steps=[{"hash": "brief", "ready": READY, "eval": NAMES}])
     names = got["after"][0]["eval"]
     assert names and all(cut <= 1 for _t, cut in names), (size, names)
+
+
+# ------------------------------------------------------------------ Today's one thing keeps to its words
+
+IV_BOX = r"""(() => { const iv = document.querySelector('#main .bp-today .bp-iv'); if (!iv) return null;
+  const kids = [...iv.children].filter((c) => c.getClientRects().length), cs = getComputedStyle(iv);
+  const inner = Math.max(...kids.map((c) => c.getBoundingClientRect().bottom)) - Math.min(...kids.map((c) => c.getBoundingClientRect().top));
+  return {h: iv.getBoundingClientRect().height, content: inner + parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom) + parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth)}; })()"""
+
+
+@pytest.mark.parametrize("vp", TALL, ids=["1440", "1920", "2560"])
+def test_todays_interview_box_keeps_to_what_it_holds_in_a_tall_row(run, tmp_path, vp):
+    # At 1440 the interview's white box was stretched to its row, twice its words' height with
+    # an empty half under its button (the screen review, 2026-11-18).
+    got = journeys._go(run, tmp_path, [{"hash": "brief", "wait": 300, "eval": IV_BOX}], vp, clock=T)["after"][0]["eval"]
+    assert got and got["h"] <= got["content"] + 2, got

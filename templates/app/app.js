@@ -4275,11 +4275,20 @@
     const gone = sendList(true).filter((m) => !msgLive(m)).length;
     const late = ds.filter((d) => (Number(d.overdue_days) > 0 || (dayDiff(d.due) !== null && dayDiff(d.due) < 0)) && !selfSetDue(d)).length;
     const notes = left.filter((m) => txt(m.kind) === "first_note").length;
+    // One name for one employer (employerKey), its shortest: "Larkspur Retail" and "Larkspur
+    // Retail Ltd" stood two rows apart as if two employers (the screen review, 2026-11-18).
+    const coName = new Map();
+    for (const m of left) {
+      const p0 = isPerson(txt(m.contact)) ? personById(txt(m.contact)) : null;
+      const e = txt(p0 ? p0.employer : m.employer), k = employerKey(e);
+      if (k && (!coName.has(k) || e.length < coName.get(k).length)) coName.set(k, e);
+    }
+    const coOf = (e) => coName.get(employerKey(e)) || e;
     const row = (m) => {
       const d = ds.find((x) => dueMessage(x) === m) || null;
       const cid = isPerson(txt(m.contact)) ? txt(m.contact) : "";
       const p = cid ? personById(cid) : null;
-      const name = whoAt(p ? p.first_name : m.first_name, p ? p.employer : m.employer);
+      const name = whoAt(p ? p.first_name : m.first_name, coOf(p ? p.employer : m.employer));
       const fs = fixState(m);
       const flag = alertsOf(m).find((a) => todoAlert(a, m));
       const why = fs === "going" ? "Claude is fixing it: " + lc1(txt(arr(obj(m.fix).reasons)[0])) : flag ? txt(plainDates(flag.text)).replace(/\.$/, "") : d ? cap1(dueWho(d)) : SEND_KIND[txt(m.kind)] || "Your message";
@@ -4453,9 +4462,10 @@
   const HELP_START = {"you-finish": "Finish your profile", reading: "Set it up", export: "Add your LinkedIn messages"};
   function helpWhy(i) {
     const k = txt(obj(i).key);
-    return k === "you-finish" ? "Your profile: every " + noun() + " and letter is built from it"
-      : k === "reading" ? "Let Claude read profiles before it writes to people"
-      : k === "export" ? "Your LinkedIn messages keep who you know up to date" : "";
+    // Each a sentence with its full stop, as the lines beside it (the screen review, 2026-11-18).
+    return k === "you-finish" ? "Your profile: every " + noun() + " and letter is built from it."
+      : k === "reading" ? "Let Claude read profiles before it writes to people."
+      : k === "export" ? "Your LinkedIn messages keep who you know up to date." : "";
   }
   function settingUpNow() { const su = obj(M().setup); return !!txt(su.state) && txt(su.state) !== "done"; }
   // Anything on To do can be hidden for a week (the maintainer, 2026-10-29: everything shown
@@ -4587,19 +4597,39 @@
     const p = cid ? personById(cid) : null;
     const what = i.hideTitle || title;
     const hide = () => hideTodo(i.hideKey || i.key, what);
-    // Putting off is not putting away: with no person to choose about, the corner says
-    // "Later" with a clock, and the trash means only that something goes (the review,
-    // 2026-11-10: one trash meant "later", "hide for a week" and "not this person").
-    const x = h("button", {type: "button", class: "btn quiet icon-only small hide-x" + (p ? "" : " later-x"), "data-k": "hide:" + i.key, "data-bin": "1",
-      "aria-label": p ? "Not " + txt(p.first_name) + "? Or later" : i.d ? "Later: " + what : "Hide for a week: " + what, title: p ? "Not " + txt(p.first_name) + "?" : i.d ? "Later" : "Hide for a week",
+    // Putting off is not putting away: the corner says "Later" with a clock, and the trash
+    // means only that something goes (the review, 2026-11-10: one trash meant "later", "hide
+    // for a week" and "not this person"). A card about a person says Later too, its choices
+    // about the person under its More: "Send Tamsin your CV" had the trash where every other
+    // card has Later, and it opened "Not <name>?" about who referred them (the screen review,
+    // 2026-11-18).
+    const x = h("button", {type: "button", class: "btn quiet icon-only small hide-x later-x", "data-k": "hide:" + i.key, "data-bin": "1",
+      "aria-label": i.d ? "Later: " + what : "Hide for a week: " + what, title: i.d ? "Later" : "Hide for a week",
       onclick: () => {
         const later = i.d ? laterChoices(i.ds || i.d) : null;
-        if (p) return askRemovePerson(txt(p.id), txt(p.first_name), txt(p.employer), p.rev, later ? {hide, later} : {hide});
         if (later) return sheet({title: "Later?", intro: "It comes back on To do that day.", choices: later});
         return hide();
-      }}, icon(p ? "bin" : "clock"), p ? null : h("span", {class: "later-word", "aria-hidden": "true"}, "Later"));
+      }}, icon("clock"), h("span", {class: "later-word", "aria-hidden": "true"}, "Later"));
     if (top) top.appendChild(x); else node.insertBefore(x, node.firstChild);
+    if (p) personUnderMore(node, i, p, what);
     return node;
+  }
+  // A To do card's choices about its person ("Not Tamsin?"), the last of its More: in its More
+  // where it has one, else a More of its own at the end of its actions.
+  function personUnderMore(node, i, p, what) {
+    const rm = btn("Not " + txt(p.first_name) + "?", () => askRemovePerson(txt(p.id), txt(p.first_name), txt(p.employer), p.rev, {}),
+      {kind: "quiet", small: true, key: "notwho:" + i.key, aria: "Not " + txt(p.first_name) + "? " + what});
+    const panel = node.querySelector(".more-panel");
+    if (panel) {
+      const row = panel.querySelector(":scope > .more-acts");
+      if (row) row.appendChild(rm); else panel.appendChild(h("div", {class: "more-acts"}, rm));
+      return;
+    }
+    const acts = node.querySelector(".card-actions");
+    const lifted = acts ? acts.querySelector(":scope > [data-more]") : null;
+    if (lifted) lifted.removeAttribute("data-more");
+    const m = more("who:" + i.key, what, [h("div", {class: "more-acts"}, lifted, rm)], true);
+    if (acts) acts.appendChild(m); else node.appendChild(h("div", {class: "card-actions"}, m));
   }
   function renderTodo() {
     const doneN = doneToday().length;
@@ -5850,7 +5880,8 @@
     "A person's name, anywhere, opens everything about them: what was said, what is owed, where they work.",
     "Paste a job link into Add a job you found on Jobs, and Claude scores it against your profile in a couple of minutes.",
     "Not interested in someone or something? The trash on its card puts it away.",
-    "Read your prep opens an interview prep full screen.",
+    // A button is quoted by its name, as it reads on the page (the screen review, 2026-11-18).
+    "\u201cRead your prep\u201d, on an interview, opens its prep full screen.",
     "Got a message from someone? Paste it in Contacts, under Got a message, and Claude drafts the reply.",
     "Edit the brief, above, changes what it covers or which days it comes.",
     "Claude checks everything it writes against your profile, and never sends anything for you.",
@@ -6742,6 +6773,8 @@
     // Everything booked, the one Today leads with included: two interviews in a week showed
     // one (the maintainer, 2026-11-18). Coming up is the calendar; Today is what to do first.
     const upCards = allUp.slice(0, 4);
+    // The one Today leads with is its time and title there, its prep's button being Today's.
+    const onToday = new Set(upCards.filter((u) => !isFree(upKeys(u))).map((u) => u.id));
     upCards.forEach((u) => take(upKeys(u)));
     // People: whose move it is, and what the move is, leaving out who a step above names.
     const ppl = peopleItems().filter((p) => personRank(p) === 0 && !["not_contacted", "closed"].includes(txt(p.status)) && isFree(["p:" + p.id]) && !stoppedNow(p.id, txt(p.employer)))
@@ -6790,7 +6823,7 @@
     // Booked things only: a follow-up 45 days late is To do's, never Coming up's, and the line
     // says what the strip shows (the audit, 2026-11-03).
     put(grid, briefPanel("upcoming", "Coming up", [weekStrip(allUp), upCards.length ? (() => { const seen = new Set(); const lead = (upCards.find((u) => u.kind === "interview") || {}).id;
-      return h("ul", {class: "plain bp-up", "data-fit": "2,2"}, upCards.map((u) => upRow(u, "brief", seen, null, lead))); })()
+      return h("ul", {class: "plain bp-up", "data-fit": "2,2"}, upCards.map((u) => upRow(u, "brief", seen, null, lead, onToday.has(u.id)))); })()
       : h("p", {class: "muted"}, (allUp.length ? "Nothing else booked." : "Nothing booked yet.") + briefWaiting())],
       // "All 1 coming up" said nothing the panel did not: a count only where there is more.
       [navLink("interviews", allUp.length > 1 && allUp.length > upCards.length ? "All " + allUp.length + " coming up" : "Coming up"),
@@ -9996,19 +10029,24 @@
   }
   // A row: when, what (its tap opens it), whether it is ready, and a calendar with a plus to
   // add it to yours. One button a row, never a row of them (the maintainer, 2026-11-02).
-  function upRow(u, where, prepped, nextPrep, leadRow) {
+  function upRow(u, where, prepped, nextPrep, leadRow, onToday) {
     const brief = where === "brief";
     const add = u.pending ? stateWord("Saving", null) : !obj(u.cal).ics ? null : btn("", () => calSheet([u]),
       {kind: "quiet icon-only", small: true, icon: "cal-add", key: (brief ? "bp-cal:" : "cal:") + u.id, aria: "Add to your calendar: " + txt(u.title)});
     const rm = u.own && !brief && !u.pending ? btn("", () => act([{item: txt(u.id), action: "upcoming.remove", rev: txt(u.rev)}], "Taken off: " + txt(u.title)),
       {kind: "quiet icon-only", small: true, icon: "bin", key: "up-rm:" + u.id, aria: "Take it off: " + txt(u.title)}) : null;
-    const prep = brief ? upPrep(u, prepped || new Set(), true, nextPrep, leadRow) : null;
+    const prep = brief && !onToday ? upPrep(u, prepped || new Set(), true, nextPrep, leadRow) : null;
     // Asked for and not confirmed by them yet: said on its row, here and on the Brief.
     const maybe = u.tentative ? stateWord(NOT_CONFIRMED, null) : null;
     // Its prep under its title: a pill on the next interview's row alone (upPrep), the quiet
     // words on the others, so the rows keep their height wherever the panel is drawn.
+    // Its prep's quiet words end its time's line ("Fri 30 Oct · 10:00 · No prep yet"): a line
+    // of their own made each row a line taller, and two rows squeezed the progress chart under
+    // them on a laptop (2026-11-18). The pill keeps its own line.
+    const quiet = prep && !prep.querySelector("button") ? prep : null;
     if (brief) return h("li", {class: "bp-up-row"},
-      h("span", {class: "up-main"}, h("span", {class: "up-when"}, [upDayLabel(u.day), upWhen(u)].filter(Boolean).join(" · ")), h("span", {class: "up-title"}, upGo(u)), maybe, prep), add);
+      h("span", {class: "up-main"}, h("span", {class: "up-when"}, [upDayLabel(u.day), upWhen(u)].filter(Boolean).join(" · "), quiet ? [" · ", quiet] : null),
+        h("span", {class: "up-title"}, upGo(u)), maybe, quiet ? null : prep), add);
     const sub = [UP_WORDS[txt(u.kind)] || "", upNote(u), txt(u.place)].filter(Boolean).join(" \u00b7\u00a0");
     // A row of a day's card (the redesign, phase 2, 2026-11-17): its time in a steady column, what
     // it is in the title's size, what kind and whether its prep is ready on the line under it
@@ -10016,7 +10054,7 @@
     // day and taking it off, never a row of bare icons with gaps where one was missing. The whole
     // row opens it; only the next interview with no prep carries "Prepare me".
     const chip = upChip(u, prepped || new Set());
-    const step = upStep(u, nextPrep);
+    const step = upStep(u, nextPrep, leadRow);
     const menu = u.pending ? null : upMenu(u, [
       obj(u.cal).ics ? upMenuItem("Add to your calendar", () => calSheet([u]), "cal:" + u.id, "Add to your calendar: " + txt(u.title)) : null,
       upDayBtn(u) ? upMenuItem("Change the day", () => { S.upEdit = S.upEdit === u.id ? null : u.id; S.upTime = null; scheduleRender(); }, "up-day:" + u.id, "Change the day: " + txt(u.title)) : null,
@@ -10091,12 +10129,14 @@
     return null;
   }
   // The row's one step: practise on the days before (as To do leads, ivPractiseDay), else the
-  // next interview's prep to make.
-  function upStep(u, nextPrep) {
+  // next interview's prep to make, or to read where it is ready, as the Brief offers it: the
+  // next interview said "Prep ready" with no way to read it (the screen review, 2026-11-18).
+  function upStep(u, nextPrep, lead) {
     const iv = upIv(u);
     if (!iv) return null;
     const p = obj(iv.prep);
     if (p.updated && !p.stale && livePrep(iv) && ivPractiseDay(iv)) return h("span", {class: "up-prep"}, btn("Practise 3 questions", () => practisePrep(iv), {kind: "secondary", small: true, key: "up-drill:" + u.id, aria: "Practise 3 questions for " + txt(iv.company)}));
+    if (lead === u.id && p.updated && !p.stale) return h("span", {class: "up-prep"}, btn("Read your prep", () => openDetail("interview", iv.id), {kind: "secondary", small: true, key: "up-read:" + u.id, aria: "Read your prep for " + txt(iv.company)}));
     if (nextPrep !== u.id) return null;
     return h("span", {class: "up-prep"}, p.updated ? btn("Update my prep", () => askPrep(iv), {kind: "secondary", small: true, key: "up-prep:" + u.id, wakes: "prep", aria: "Update my prep for " + txt(iv.company)})
       : btn("Prepare me", () => askPrep(iv), {kind: "secondary", small: true, key: "up-prep:" + u.id, wakes: "prep", aria: "Prepare me for " + txt(iv.company)}));
@@ -10131,9 +10171,10 @@
     // Each day one card of rows under its day, "Wed 28 Oct", with a "Today" or "Tomorrow"
     // capsule beside it (the redesign, phase 2, 2026-11-17: seven cards under day headers).
     const nextPrep = upNextPrep(shown);
+    const lead = (shown.find((u) => u.kind === "interview") || {}).id;
     const cap = (day) => { const n = dayDiff(day); return n === 0 || n === 1 ? h("span", {class: "day-cap"}, n === 0 ? "Today" : "Tomorrow") : null; };
     return [h("ol", {class: "plain up-days", "data-k": "up-days"}, days.map(([day, rows]) => h("li", {class: "up-day" + dayMark(day)},
-      h("div", {class: "up-day-head"}, h("h3", {class: "group"}, fmtDay(day)), cap(day)), h("ul", {class: "plain up-list"}, rows.map((u) => upRow(u, "", prepped, nextPrep)))))),
+      h("div", {class: "up-day-head"}, h("h3", {class: "group"}, fmtDay(day)), cap(day)), h("ul", {class: "plain up-list"}, rows.map((u) => upRow(u, "", prepped, nextPrep, lead)))))),
       later.length ? h("p", {class: "up-later"}, btn("Show " + later.length + " more, to " + fmtDay(later[later.length - 1].day), () => { S.upLater = true; render(); }, {kind: "secondary", small: true, key: "up-later"})) : null];
   }
   // One way to add anything to Coming up, an interview first: "Add something" and "I have an
@@ -14081,9 +14122,11 @@
   // What really starts it: the chat that answers this page (any other chat open takes no queued
   // work), and with none answering, the next brief, which starts one (the review, 2026-11-11).
   // While Claude is plainly at work the second half is not said: beside a running search it
-  // read as Claude perhaps not answering (the screen review, 2026-11-11).
-  const WAIT_WHEN = "Claude's helper for this page starts it when it next answers; if none is answering, your next brief starts one.";
-  const WAIT_ANSWERING = "Claude's helper for this page starts it when it next answers.";
+  // read as Claude perhaps not answering (the screen review, 2026-11-11). In plain words: "Claude's
+  // helper for this page starts it when it next answers" asked what a helper was (the screen
+  // review, 2026-11-18).
+  const WAIT_WHEN = "Claude starts this next; if no chat is answering, your next brief starts it.";
+  const WAIT_ANSWERING = "Claude starts this next.";
   function waitWhen() { return freshHeartbeat() || workAlive() ? WAIT_ANSWERING : WAIT_WHEN; }
   // What starts waiting work now, in the words for where the page is open, naming only a
   // control that is there: To do's Wake Claude (or its Open Claude, where nothing can hear a
@@ -16512,15 +16555,19 @@
     const stepClock = (picked || waking || ((st === "running" || st === "claimed") && !slow)) && !p.stopping && !(Number(obj(w.count).total) > 0);
     if (now1) put(cardEl, h("p", {class: "wc-now" + (st === "failed" ? " tone-bad" : st === "needs_you" ? " tone-warn" : "")}, now1,
       stepClock ? h("span", {class: "wc-clock muted", "data-step": "1"}, clockText(stepSeconds(ws.v, st === "queued", undefined, p.sentAt))) : null));
-    // Past its estimate, no bar: its clock and "so far" say how long it has run (#238).
-    if (ACTIVE.has(st) && !((st === "running" || st === "claimed") && p.past)) {
+    // Past its estimate, no bar: its clock and "so far" say how long it has run (#238). Nor one
+    // while it waits: an empty 0% bar stood under "Waiting for Claude" (the screen review,
+    // 2026-11-18); it has one once Claude picks it up.
+    if (ACTIVE.has(st) && (st !== "queued" || picked) && !((st === "running" || st === "claimed") && p.past)) {
       put(cardEl, h("div", {class: "bar" + (spinning ? " is-running" : ""), role: "progressbar", "aria-labelledby": titleId, "aria-valuemin": "0", "aria-valuemax": "100",
         "aria-valuenow": String(p.pct), "aria-valuetext": barText(p)}, h("span", {class: "fill", style: "width:" + p.pct + "%"})));
     }
     // A big job says it runs in a chat of its own and waits for no light work, unless it is in
     // line behind other big jobs, which its own line names (issue #238). Above the time line,
-    // so Stop Claude keeps its place at the end of the clock's line.
-    if (ACTIVE.has(st) && st !== "needs_you" && !ws.inLine && !toComputer && !obj(w.computer_session).id && ownChatWords(w, st === "queued"))
+    // so Stop Claude keeps its place at the end of the clock's line. Said once it has started:
+    // "Starts in a chat of its own, so it does not wait for other work" under "Waiting" said
+    // two things at once (the screen review, 2026-11-18).
+    if (ACTIVE.has(st) && st !== "needs_you" && (st !== "queued" || picked) && !ws.inLine && !toComputer && !obj(w.computer_session).id && ownChatWords(w, st === "queued"))
       put(cardEl, h("p", {class: "wc-where small muted", "data-where": "own-chat"}, cap1(ownChatWords(w, st === "queued").replace(/^,\s*/, "")) + ", so it does not wait for other work."));
     put(cardEl, h("p", {class: "wc-time", "data-time": "1"}, ACTIVE.has(st) || TERMINAL.has(st) ? timeText(w, p, stepClock && !!now1 && sameSpan(ws.v, p)) : ""));
     // Started in a chat on their computer (tools/computer.py started): said while it runs, in
@@ -16626,8 +16673,12 @@
     const left = leftWords(p);
     // The step's own clock counts the same time while its step is the whole run: "Getting
     // started · 1m 59s" over "2 min so far" said it twice (the maintainer, 2026-11-04).
-    if (p.lapsed || p.over || p.stageOver || p.past) return same ? "" : so;
-    return same ? left : so + " · " + left;
+    // A line's first word capitalised and its time left one piece: "under a minute so far ·
+    // about 7 min left" began in lower case, its "left" wrapping beside Stop Claude (the screen
+    // review, 2026-11-18).
+    if (p.lapsed || p.over || p.stageOver || p.past) return same ? "" : cap1(so);
+    const held = left.replace(/ /g, "\u00a0");
+    return cap1(same ? held : so + " · " + held);
   }
   // Does the step's clock on this card count the same span as its "so far"? Then one says it.
   function sameSpan(w, p, t) { return Math.abs(stepSeconds(w, p.status === "queued", t, p.sentAt) - p.elapsedS) <= 5; }
@@ -16744,10 +16795,14 @@
     const name = (w) => clipWords(workName(w) || "Work", 60).replace(/[.\s]+$/, "");
     // A resume's files part is said as the resume, making it downloadable, never by its own
     // name (#237).
-    const said = (w, waiting) => { const par = filesParent(w); return par ? name(workDoc(par)) + ", making it downloadable" : name(w) + ownChatWords(w, waiting); };
+    // What waits is never said as in a chat of its own: under "Waiting" it read as two things
+    // at once (the screen review, 2026-11-18).
+    const said = (w, waiting) => { const par = filesParent(w); return par ? name(workDoc(par)) + ", making it downloadable" : name(w) + (waiting ? "" : ownChatWords(w, false)); };
     return h("div", {class: "work-queue small", "data-k": "work-queue", role: "status"},
       run.length ? h("p", {"data-queue": "now"}, h("strong", {}, "Running now: "), run.map(([, w]) => said(w, false)).join("; ") + ".") : null,
-      wait.length ? h("p", {"data-queue": "next"}, h("strong", {}, "Waiting, in this order: "), wait.map(([, w], i) => (wait.length > 1 ? (i + 1) + ". " : "") + said(w, true) + ".").join(" ")) : null);
+      // "In this order" only where there is an order: it headed one item (the screen review,
+      // 2026-11-18).
+      wait.length ? h("p", {"data-queue": "next"}, h("strong", {}, wait.length > 1 ? "Waiting, in this order: " : "Waiting: "), wait.map(([, w], i) => (wait.length > 1 ? (i + 1) + ". " : "") + said(w, true) + ".").join(" ")) : null);
   }
   function workPanel(where) {
     // A resume's files part is a stage of the resume's own card, never a card of its own; one
@@ -16942,7 +16997,10 @@
       going && !asking ? h("span", {class: "spin", "aria-hidden": "true"}) : h("span", {class: "dot tone-" + (asking || slow ? "warn" : !recent.length || act.length ? "plain" : "ok") + (!asking && !slow && act.length ? " is-waiting" : ""), "aria-hidden": "true"}),
       // Where its words would cut the screen's name on a phone, the pill says its count
       // (fitTop), its words kept for a screen reader.
-      h("span", {class: "pill-words"}, words), h("span", {class: "pill-count", "aria-hidden": "true"}, String(asking || going + queued.length || starting + helperGoing || recent.length)),
+      // Its short form keeps a word: a spinner and a bare "2" said nothing (the screen review,
+      // 2026-11-18).
+      h("span", {class: "pill-words"}, words), h("span", {class: "pill-count", "aria-hidden": "true"},
+        asking ? plural(asking, "question", "questions") : going + queued.length ? (going + queued.length) + " busy" : starting + helperGoing ? (starting + helperGoing) + " starting" : recent.length + " done"),
       h("span", {class: "sr-only"}, ": show the work"));
   }
   // A phone's header never cuts the screen's name, its only visible title there: where the

@@ -52,7 +52,9 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   is To do's first card said once. With nothing on To do or booked today, Today is the first
   search. Coming up lists everything booked, the one Today leads with included: a week with
   two interviews showed one, and read as the other missing (the maintainer, 2026-11-18: "i defo
-  have multiple things coming up but only one is showing in brief"). Why: the Brief's Today picked one thing, its
+  have multiple things coming up but only one is showing in brief"). The one Today leads with
+  is its day, time and title there and nothing more: its prep's button is Today's, and twice it
+  made the Brief's first row the tallest and took the room the progress chart grows into. Why: the Brief's Today picked one thing, its
   Next three another and To do a third, and their counts read 4, 1 and 3 over seven messages
   (the redesign's reviews, 2026-11-16). (one-answer test; Today tests)
 - What helps Claude do more (your profile, reading profiles, your LinkedIn messages) is never
@@ -163,12 +165,20 @@ next?" in its first lines, and nothing asks for a decision a default could make.
 - In Claude's work, four or more of one kind waiting, or finished, are one card with their
   count and the first few names; Show lists them. Nobody scrolls past fifty cards. (run test)
 - Over Claude's work, with two or more things going, one short strip says what runs now and
-  what waits, in the order Claude takes it, a big job said as running in a chat of its own, and
-  a big job's card says it does not wait for other work. Why: with several things asked for in
-  a row nobody could tell what was queued, in what order, or why a resume seemed to sit behind
-  small changes (issue #238). Making a resume downloadable is a stage of the resume's own card,
+  what waits, in the order Claude takes it ("Waiting:" for one, "Waiting, in this order:" for
+  more), a big job running said as in a chat of its own, and a big job's card, once Claude picks
+  it up, says it does not wait for other work. Work still waiting has no bar and no own-chat
+  line, its title beside its dot and its state under the title where they do not fit on one
+  line; its time line starts with a capital, its time left one piece ("About 7 min left"). Why:
+  with several things asked for in a row nobody could tell what was queued, in what order, or
+  why a resume seemed to sit behind small changes (issue #238); "Starts in a chat of its own,
+  so it does not wait for other work" under "Waiting, in this order:", over one item and an
+  empty 0% bar, said two things at once (the screen review, 2026-11-18). Waiting work says
+  "Claude starts this next" in plain words, never "Claude's helper". Making a resume downloadable is a stage of the resume's own card,
   "On its way", never a card of its own (#237). (queue test)
-- Claude's work says its count once, in the header's pill: no line under its title repeats
+- Claude's work says its count once, in the header's pill: where its words would cut a phone's
+  screen name it says a short form that keeps a word ("2 busy", "1 question", "1 done"), never a
+  bare number beside a spinner (the screen review, 2026-11-18); no line under its title repeats
   it, and "Nothing is sent." is not said over the cards. Each running or waiting card has its
   title, one short state with its clock ("Waking Claude · 1m 4s", never a chip and a line
   both saying it), its bar (none once it runs past its estimate: its time so far says how long,
@@ -230,7 +240,9 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   send", the person's words rather than "drafts ready to apply"), a short list's rows each in a soft box
   as Coming up's are, the rows a step of the spacing scale further apart up to 24px, and past
   that the pills a step under what they open, the spare room at the panel's foot. Your
-  progress's chart grows into its room, up to 160px. (the maintainer, 2026-11-07: "u see how
+  progress's chart grows into its room, up to 160px, and every booking on Coming up comes
+  before its height: on a laptop where the bookings leave it under 96px it takes what is left,
+  never a booking given way for it (2026-11-18). (the maintainer, 2026-11-07: "u see how
   its bunched at the top? be smart about this"; room tests)
 - **Your progress is jobs and people, chosen for the person.** At most four numbers, picked by
   the engine (`app_model._glance`) from what is true now: applied, interviews, offers;
@@ -454,9 +466,12 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   holding Add to your calendar, Change the day and taking it off: nothing reserves room for a
   tool a row does not have. The whole row opens what it is. Only the next interview whose prep
   is missing carries "Prepare me" on its row (a practice day leads with "Practise 3 questions",
-  as To do does); a row with no time yet has a soft "+ Add the time" under what it is. The
+  as To do does), and the next interview whose prep is ready carries "Read your prep", as the
+  Brief offers it (it said "Prep ready" with no way to read it, the screen review, 2026-11-18); a row with no time yet has a soft "+ Add the time" under what it is. The
   Brief's Coming up says the next interview's prep, ready, as a soft pill under its title, "Read
-  your prep", the others' in the quiet words ("No prep yet"), never underlined words; "Prepare
+  your prep", the others' in the quiet words ("No prep yet") at the end of their time's line,
+  never a line of their own (two rows a line taller each squeezed the progress chart under them on
+  a laptop, 2026-11-18), and never underlined words; "Prepare
   me", with its gauge, is on Coming up's row and To do's card, as beside it on the Brief it
   grew the row after the panel was fitted. Why:
   seven cards under day headers, icons floating mid-card where a missing trash left its slot
@@ -770,11 +785,14 @@ tests, `tests/test_contacts_is_one_page_with_each_persons_draft.py`)
   its help. (the maintainer, 2026-11-05; the no-bin words test)
 
 - One icon puts anything away: the trash, top right of every live card. Never an x.
-- Putting off is not putting away: a To do card whose only choices are later (a dated
-  reminder's Tomorrow or Next week, a week off) says "Later" with a clock in the trash's
-  corner, the word shown; the trash stays where something goes (a person's card, with their
-  choices). Why: one trash meant "later", "hide for a week" and "not this person" (the review,
-  2026-11-10). (room test)
+- Putting off is not putting away: every To do card that is put off (a dated reminder's
+  Tomorrow or Next week, a week off) says "Later" with a clock in its corner, the word shown, a
+  card about a person ("Send Tamsin your CV") too, whose choices about the person ("Not
+  Tamsin?") are under its More; the trash stays where something goes (an interview not going
+  ahead, a person's own card in Contacts). Why: one trash meant "later", "hide for a week" and
+  "not this person" (the review, 2026-11-10), and a Send-CV card's trash in the corner where
+  every other To do card has Later opened "Not <name>?" about the person who referred them (the
+  screen review, 2026-11-18). (room test)
 - One possible answer: done at once, with Undo. Several: a short sheet of buttons, one a
   choice, the one tapped done at once (never a choice and then a second button), and Undo
   putting every part back. (trash tests, design test)

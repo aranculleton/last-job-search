@@ -269,8 +269,11 @@ def test_coming_up_is_a_card_a_day_each_row_its_time_what_it_is_and_one_more(run
     assert screen["items"][:2] == ["Add to your calendar", "Change the day"], screen
     assert rows["up-ev20261020120000"]["items"] == ["Add to your calendar", "Take it off"], rows["up-ev20261020120000"]
     assert rows["up-app-copperleaf-payments-recruiter-call-2026-10-30"]["chip"] == ["No prep yet"]
-    # Only the next interview with no prep carries "Prepare me"; reading a prep is the row's own tap.
-    assert seen["prep"] == ["up-prep:up-app-copperleaf-payments-recruiter-call-2026-10-30=Prepare me"], seen["prep"]
+    # Only the next interview with no prep carries "Prepare me", and the next interview, its prep
+    # ready, "Read your prep", as the Brief offers it: it said "Prep ready" with no way to read
+    # it (the screen review, 2026-11-18). The others' prep is read from the row's own tap.
+    assert seen["prep"] == ["up-read:up-app-larkspur-supply-phone-screen-2026-10-28=Read your prep",
+                            "up-prep:up-app-copperleaf-payments-recruiter-call-2026-10-30=Prepare me"], seen["prep"]
 
 
 def test_a_coming_up_row_opens_what_it_is_from_anywhere_on_it(run, tmp_path):
