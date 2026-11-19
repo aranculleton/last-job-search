@@ -20,6 +20,10 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The tour shows you round the page as it is now.** Its Contacts step sent you to "Messages", a view the new look took away: each person's note waits on their card. And its To do step said the trash puts a card away, where a card is put off with Later.
+
 ## [4.17.0] - 2026-11-19
 
 ### Changed

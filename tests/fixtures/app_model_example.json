@@ -1,19 +1,19 @@
 {
  "model": 1,
  "made_at": "2026-10-25T18:00:00Z",
- "rev": "a598a1b69543",
+ "rev": "574c0c32da5b",
  "app": {
-  "version": "4.16.1",
+  "version": "4.17.0",
   "url": null,
   "update_waiting": null,
   "news": [
-   "Interview preps are easier to use during the call.",
-   "Interview preps read the way you would really say them.",
-   "The chats Claude makes are explained."
+   "Every employer has a card of its own.",
+   "Each of your own job sites gets the time its jobs have earned.",
+   "One strong reason to want a job is no longer outweighed by many small ones. (set up for you)"
   ],
   "privacy": "Only you can open this page unless you share it. It holds first names, employers, your drafts and your setup answers, so keep it unshared.",
   "repo": "https://github.com/aranculleton/last-job-search",
-  "page": 219,
+  "page": 221,
   "not_saved": 0,
   "app_bugs": []
  },
@@ -77,7 +77,7 @@
  ],
  "jobs": {
   "round": "r9",
-  "made_at": "2026-11-19T00:22:05Z",
+  "made_at": "2026-11-19T08:25:12Z",
   "met": false,
   "summary": "3 roles from the last search to look at, 1 of them scoring 75 or more. 3 left out, each with its reason.",
   "rows": [
@@ -1013,7 +1013,7 @@
    "when": "2026-10-28",
    "prep": {
     "path": "documents/applications/thornbury_bank_risk_analyst_thornbury/interview_prep.md",
-    "updated": "2026-11-19T00:22:05Z"
+    "updated": "2026-11-19T08:25:12Z"
    },
    "questions": 2,
    "all_day": true,
@@ -1574,11 +1574,23 @@
   ]
  },
  "updates": {
-  "version": "4.16.1",
-  "newest": "4.16.1",
+  "version": "4.17.0",
+  "newest": "4.17.0",
   "mode": "auto",
   "waiting": null,
   "changed": [
+   {
+    "version": "4.17.0",
+    "date": "2026-11-19",
+    "lines": [
+     "Every employer has a card of its own.",
+     "Each of your own job sites gets the time its jobs have earned.",
+     "One strong reason to want a job is no longer outweighed by many small ones. (set up for you)",
+     "What you want from a search is kept in one record, in your own words. (set up for you)",
+     "Where you search, your pay floor, and the signs of work-life balance and kinds of role you weigh are kept in the same record, in your words. (set up for you)",
+     "Employers nobody has judged are judged inside the search, before you see the list."
+    ]
+   },
    {
     "version": "4.16.1",
     "date": "2026-11-12",
@@ -1590,24 +1602,12 @@
      "A read of your page just made is never called months old.",
      "The morning brief gives an interview's time in your own time."
     ]
-   },
-   {
-    "version": "4.16.0",
-    "date": "2026-11-12",
-    "lines": [
-     "The app's maker hears of its bugs without anyone passing them on.",
-     "In the app maker's own copy, a problem Claude works round is reported then, not only one pointed out.",
-     "When someone offers to refer you, their employer's open roles are checked first.",
-     "A question you ask Claude on your page is answered first.",
-     "Your live interview prep is written to be read during the call, not learned.",
-     "An interview's live prep is easier to use during the call."
-    ]
    }
   ],
   "done": [],
   "pending": [],
   "changelog": "https://github.com/aranculleton/last-job-search/blob/master/CHANGELOG.md",
-  "since": true
+  "since": false
  },
  "applications": [
   {
@@ -1919,7 +1919,7 @@
     "key": "todo",
     "tab": "todo",
     "title": "To do",
-    "text": "What needs you, five at a time, most urgent first: a question, a follow-up that is due, an interview coming up. A card's filled button is its next step; the trash puts it away."
+    "text": "What needs you, five at a time, most urgent first: a question, a follow-up that is due, an interview coming up. A card's filled button is its next step; Later in its corner brings it back another day."
    },
    {
     "key": "jobs",
@@ -1931,7 +1931,7 @@
     "key": "contacts",
     "tab": "contacts",
     "title": "Contacts",
-    "text": "Why people: someone inside who puts your name forward gets you far more interviews than applying cold. Claude finds who to write to and drafts a short note; you send it on LinkedIn yourself. Messages holds the notes ready to send. A name opens everything about that person."
+    "text": "Why people: someone inside who puts your name forward gets you far more interviews than applying cold. Claude finds who to write to and drafts a short note; you send it on LinkedIn yourself. Each person's note waits on their card, ready to copy. A name opens everything about that person."
    },
    {
     "key": "interviews",
