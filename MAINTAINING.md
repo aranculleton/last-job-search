@@ -123,13 +123,13 @@ the app's address in full (`aranculleton/last-job-search`). A touched portal CLI
 
 ### Handing over
 
-`docs/NEXT_BUILDER.md` is written afresh before each cut, in 15 lines or fewer: what the
-release did not test and what is known red, in plain words, no real person in it. It is
-background, never a list of work: no "do first" and no to-do heading. A lasting decision goes
-into this file the day it is made ("Decisions that hold" or its own section), never only into
-the hand-over. With the release out, tell the maintainer in one line the number, the reason,
-what changed for them, what was checked and what was not; recommend a new chat; and in that
-message give the builder prompt whole, in one copyable block. Never start that chat.
+`docs/NEXT_BUILDER.md` is written afresh before each cut, in 15 lines or fewer: what was not
+tested and what is known red; never a list of work: no "do first" and no to-do heading. A
+lasting decision goes here the day it is made. The builder hands over by itself; the maintainer
+never pastes a prompt (2026-11-19): `python3 tools/app_bug.py handover --version --copy <their
+copy> --chat <this chat's id, get_session>` prints the calls, in order: `create_session`; each
+task bound to this chat moved (`create_trigger`, then `delete_trigger`); one line to the
+maintainer; `archive_session` last. A refusal stops the rest: nothing is archived while a task still points here.
 
 
 ## How CI runs
@@ -154,11 +154,12 @@ message give the builder prompt whole, in one copyable block. Never start that c
 
 ## The builder prompt
 
-One chat builds one version. The maintainer starts it by pasting this, with their notes
-under the last line:
+One chat builds one version. The builder before starts it with this, its notes empty
+("Handing over"); the maintainer adds their notes there, or pastes it whole with the place
+for their copy filled in:
 
 ```text
-You are the builder for last-job-search, the public app at github.com/aranculleton/last-job-search. I am its maintainer. My own private copy of the app is attached to this chat: read it only for tools/push_gate.sh's denylist and the times of my scheduled tasks, and never change it.
+You are the builder for last-job-search, the public app at github.com/aranculleton/last-job-search. I am its maintainer. My own private copy of the app is github.com/<my copy, owner/name>: attach it first with add_repo (access read) and clone it as that tool says; read it only for tools/push_gate.sh's denylist and the times of my scheduled tasks, and never change it.
 
 Before anything else, read MAINTAINING.md "Builder" (and "Developer rules" before your first change), docs/NEXT_BUILDER.md (background from the last release, never a list to start on), and templates/app/DESIGN.md before you touch the page. Then get set up, tell me in one line you are ready, and wait for my notes: build nothing until they ask for it, and work from docs/NEXT_BUILDER.md only when they say to.
 
@@ -168,7 +169,7 @@ How we work:
 - Works everywhere: every change reaches a new install and an existing one by itself (a profile upgrade or a build version where an existing person would otherwise miss it), through the day's sync and the brief alone, on a pinned page left open with no chat running, and in a cloud chat and a chat on a computer alike. Rehearse it (tools/rehearse_sync.py) before calling it done.
 - Nothing private and no real person's name in the app, ever; the gate passes before any push.
 - Talk to me in plain words: one recommendation, never a question a sensible default answers.
-- When the release is out, tell me in one line, recommend a new chat for the next version, and in that same message give me this whole prompt again in one copyable block, ready to paste into the new chat.
+- When the release is out, hand over by yourself as MAINTAINING.md "Handing over" says: start the next builder's chat with this prompt, its notes empty, move every scheduled task bound to this chat to it, tell me in one line, and archive this chat. Never ask me to paste anything.
 
 My notes for this version:
 ```

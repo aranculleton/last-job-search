@@ -11,6 +11,7 @@
     python3 tools/app_bug.py woken [--trigger <id>] [--none]   # the builder was poked (or not)
     python3 tools/app_bug.py window <the maintainer's copy>   # may the builder merge now?
     python3 tools/app_bug.py task --copy <owner/name>   # the builder's task, as create_trigger takes it
+    python3 tools/app_bug.py handover --week|--version --copy <owner/name> --chat <this chat's id>
 
 The maintainer asked (2026-11-11) never to carry the app's bugs between chats by hand again,
 and never to hear of them in a chat: a chat in their own copy that meets one files it on the
@@ -83,7 +84,13 @@ BUILDER_CRON = "CRON_TZ=Europe/London 15 23 * * 3"
 # has no repository, no add_repo and no GitHub tools, and stops at once (issue #245).
 BUILDER_CHAT = "<the builder's chat id, from create_session>"
 BUILDER_CHAT_PROMPT = ("This chat runs the app's weekly builder on its schedule, and nothing "
-                       "else. Nothing to do now: reply with the one word Ready.")
+                       "else. If the maintainer sends \"do the maintainer items\" here, run `git "
+                       f"fetch origin master`, read {BUILDER_PROMPT} as it is on origin/master and "
+                       "do what it says of them. Nothing to do now: reply with the one word Ready.")
+# The chat a version's builder hands over to: the builder prompt in MAINTAINING.md, its notes
+# empty, with the maintainer's copy filled in where the prompt leaves a place for it.
+VERSION_TITLE = "App builder: next version"
+COPY_PLACE = "<my copy, owner/name>"
 TOKENS_HOURS = 12                     # the denylist is built again after this, as the push gate's is
 WAKE_HOURS = 1                        # urgent bugs in a burst poke the builder once
 WINDOW = (15, 20)                     # no merge from 15 minutes before to 20 after their tasks
@@ -431,6 +438,59 @@ def task(copy: str) -> dict:
          "why": "the weekly task, firing in that chat"}]}
 
 
+def builder_prompt(copy: str) -> str:
+    """The builder prompt from MAINTAINING.md, its notes empty, the maintainer's copy named."""
+    with open(os.path.join(ROOT, "MAINTAINING.md"), encoding="utf-8") as fh:
+        text = fh.read()
+    block = text.split("## The builder prompt", 1)[1].split("```text", 1)[1].split("```", 1)[0]
+    if COPY_PLACE not in block:
+        raise ValueError(f"MAINTAINING.md's builder prompt has no {COPY_PLACE} to fill")
+    return block.strip().replace(COPY_PLACE, copy) + "\n"
+
+
+def handover(kind: str, copy: str, chat: str) -> dict:
+    """The calls a builder makes, in order, to hand over to a fresh chat by itself (the
+    maintainer, 2026-11-19: never paste a prompt again): create_session, the successor with
+    the app as its source; for every scheduled task bound to this chat (list_triggers,
+    persistent_session_id == `chat`), create_trigger with its own name, schedule and prompt
+    bound to the successor, then delete_trigger the old one; and archive_session this chat
+    last, only once every task has moved. `kind` is "week" (the weekly builder's chat, made
+    as `task` makes it) or "version" (the next version's builder, given the builder prompt
+    with its notes empty). A wake from the copy that holds the old task's id finds it gone
+    and fires the one named BUILDER_TASK instead (`_fire`)."""
+    if not re.fullmatch(r"session_[A-Za-z0-9_-]{4,80}", str(chat or "")):
+        raise ValueError("--chat is this chat's own id (session_...), from get_session")
+    if kind == "week":
+        made = task(copy)["calls"][0]["args"]
+    elif kind == "version":
+        made = task(copy)["calls"][0]["args"]
+        made = dict(made, title=VERSION_TITLE, prompt=builder_prompt(_copy(copy)))
+    else:
+        raise ValueError("kind is week or version")
+    new = "<the new chat's id, from create_session>"
+    return {"calls": [
+        {"tool": "create_session", "args": made,
+         "why": f"the next builder's chat; its id is {new} below. Refused or failed: stop here, "
+                "move nothing and archive nothing, and say so in your one line"},
+        {"tool": "list_triggers", "args": {"limit": 100},
+         "why": f"every scheduled task whose persistent_session_id is {chat}, this chat"},
+        {"tool": "create_trigger", "for_each": "of those tasks",
+         "args": {"name": "<its name>", "cron_expression": "<its cron_expression, if it has one>",
+                  "run_once_at": "<its run_once_at, if it has one and it is still to come>",
+                  "prompt": "<its prompt, word for word>", "persistent_session_id": new,
+                  "initiation": "human_schedule"},
+         "why": "the same task, bound to the new chat; a paused one is made and then paused "
+                "(update_trigger, enabled false). Failed: keep the old one and archive nothing"},
+        {"tool": "delete_trigger", "for_each": "of those tasks, once its copy is made",
+         "args": {"trigger_id": "<the old task's id>"}, "why": "so it fires only once"},
+        {"tool": "archive_session", "args": {"session_id": chat},
+         "why": "last, only when every task moved, after your one line to the maintainer"}]}
+
+
+def _copy(copy: str) -> str:
+    return str(copy or "").strip().removeprefix("https://github.com/").removesuffix(".git").strip("/")
+
+
 # In the maintainer's own copy, every chat the page's helper starts attaches the app as well,
 # first, so what it meets is filed without asking (issue 318: each fresh helper started with the
 # copy alone, and could file nothing until the maintainer granted the app again in that chat).
@@ -775,6 +835,13 @@ def main(argv=None, build=None) -> int:
     m.add_argument("copy", help="the maintainer's own copy, checked out")
     t = sub.add_parser("task", help="the builder's chat and scheduled task, as the two calls that make them")
     t.add_argument("--copy", required=True, help="the maintainer's own copy, as owner/name")
+    h = sub.add_parser("handover", help="after a release or a weekly run: the calls that start the "
+                                        "next builder's chat, move this chat's tasks and archive it")
+    hk = h.add_mutually_exclusive_group(required=True)
+    hk.add_argument("--week", action="store_const", const="week", dest="kind")
+    hk.add_argument("--version", action="store_const", const="version", dest="kind")
+    h.add_argument("--copy", required=True, help="the maintainer's own copy, as owner/name")
+    h.add_argument("--chat", required=True, help="this chat's own id (session_...), from get_session")
     a = ap.parse_args(argv)
     if a.cmd == "window":
         wait, which = window(a.copy)
@@ -790,6 +857,13 @@ def main(argv=None, build=None) -> int:
               "tools/app_bug.py check prints the short comment for it, scanned like a new issue; "
               "in anyone else's, there is no link to a new issue (the app skill's \"Something "
               "looks wrong\").")
+        return 0
+    if a.cmd == "handover":
+        try:
+            print(json.dumps(handover(a.kind, a.copy, a.chat), indent=1))
+        except ValueError as e:
+            print(f"app_bug: {e}")
+            return 3
         return 0
     if a.cmd == "task":
         try:

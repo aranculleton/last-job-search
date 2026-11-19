@@ -30,7 +30,7 @@ report, step 5). The weekly watches ("Claude surfaces to re-check", "Upstream sy
 work too.
 
 **No work, and nothing labelled `fixed-unreleased`: rewrite the report (step 5) to
-"<today>: nothing to fix." and stop**, having read and run nothing else. Only `fixed-unreleased`
+"<today>: nothing to fix.", hand over (step 5.3) and stop**, having read and run nothing else. Only `fixed-unreleased`
 ones: go straight to step 4, the release. This one run takes all the rest, as one batch.
 
 ## 2. Set up
@@ -137,5 +137,16 @@ reply in one line; then they can switch the chat back to Auto.
    Wrong words, display faults and anything with a workaround wait for the week; this last
    look is made once.
 
-No review agent, no other chat started, and no reminder set for yourself. Your final reply is
-the report's line. Then stop.
+3. **Hand over, so every week starts in a lean chat** (the maintainer, 2026-11-19): `get_session`
+   (no id) gives this chat's id; `python3 tools/app_bug.py handover --week --copy <the
+   maintainer's copy> --chat <that id>` prints the calls, made in order: `create_session` (the
+   next weekly chat), then for every scheduled task bound to this chat (`list_triggers`,
+   `persistent_session_id` is this chat's id) `create_trigger` with the same name, schedule and
+   prompt bound to the new chat and `delete_trigger` on the old, then `archive_session` on this
+   chat, last. A call refused stops the rest: nothing is archived while a task still points
+   here, and the report gets " Hand-over failed: <which call>." added. Not when another run
+   holds the batch (step 2.2), and never while a "do the maintainer items" branch waits in
+   this chat unmerged.
+
+No review agent, no other chat started but the one that takes over, and no reminder set for
+yourself. Your final reply is the report's line. Then stop.
