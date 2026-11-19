@@ -1248,7 +1248,7 @@ METHODS: dict[str, dict] = {
             (220, "2026-11-19", True, "a day's card holds its own time column, 5rem only where one of its rows says End of day or All day, so the other days keep their titles' width on a phone"),
             (221, "2026-11-19", True, "a quiet button leading its line is drawn in by its padding, never laid out in, so it never fits back over the gauge on the line above"),
         ),
-        "fingerprint": "f6b25fd6bd8215da",
+        "fingerprint": "1460bd65047e2ffa",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",

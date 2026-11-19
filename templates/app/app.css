@@ -34,6 +34,9 @@
   --target: calc(44px * var(--tz));
   /* The page's own size undone (applySize): 24px * --pz is 24px on the screen. */
   --pz: 1;
+  /* A quiet button's own margin, set by the script on one leading its line (quietFit), so it
+     is drawn in by it as well as its padding. */
+  --q-in: 0px;
   --gap: 12px;
 }
 

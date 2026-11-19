@@ -455,8 +455,10 @@ def test_a_round_says_what_it_searches_with_and_what_changed_since_the_last(
     assert ("turned down, so not asked for this round: searches by name for Kestrel Mutual; "
             "the job sites of Kestrel Mutual") in head
     assert "setting(s) still name what you turned down" in head
-    with open(os.path.join(str(tmp_path / "state"), "documents", "rounds", "searched",
-                           "with.json"), encoding="utf-8") as fh:
+    # Kept beside the rounds' summaries (--summary-dir here), never in the person's own folder
+    # for a round told to keep them elsewhere (the 4.17.0 rehearsal).
+    assert not os.path.exists(os.path.join(str(tmp_path / "state"), "documents", "rounds", "searched"))
+    with open(os.path.join(str(tmp_path / "summ"), "searched", "with.json"), encoding="utf-8") as fh:
         assert set(json.load(fh)) == {"r1", "r2"}
     assert prof
 
