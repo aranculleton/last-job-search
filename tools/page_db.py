@@ -2222,7 +2222,7 @@ def _mark_sends_seen() -> None:
     if not path:
         return
     try:
-        with open(os.path.join(os.path.dirname(path), SENDS_SEEN), "w", encoding="utf-8") as fh:
+        with open(os.path.join(os.path.dirname(path), SENDS_SEEN), "w", encoding="utf-8", newline="\n") as fh:
             fh.write("1\n")
     except OSError:
         pass
