@@ -22,6 +22,7 @@ sys.path.insert(0, os.path.join(ROOT, "tools"))
 import pytest  # noqa: E402
 
 import app  # noqa: E402
+import app_bug  # noqa: E402
 import app_listen  # noqa: E402
 import app_setup  # noqa: E402
 import computer  # noqa: E402
@@ -108,3 +109,11 @@ def test_a_chat_with_the_app_attached_beside_the_copy_is_judged_on_the_copy(firs
     now = dt.datetime(2026, 11, 10, 12, 0, tzinfo=dt.timezone.utc)
     assert tidy.retire(d["id"], d, repo, set(), now, set()) == ("archive", d["title"])
     assert routines._copy_of(d) == repo
+
+
+def test_a_helper_refused_the_attach_holds_what_it_meets_instead_of_going_without():
+    # Issue 360: Auto's own check refused the attach in a fresh helper ("Unauthorized Access"),
+    # and it carried on filing nothing. Refused, it holds each bug for the next chat to file.
+    line = app_bug.ATTACH_APP
+    assert "Refused" in line and "--hold" in line and "never going without it" in line
+    assert "carry on without it" not in line

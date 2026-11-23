@@ -26,6 +26,8 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **An email reply you logged as sent no longer teaches a false rule.** Its draft's "Subject:" line was read as words you cut, and every later email draft would have lost its subject; a rule already learned that way is no longer followed (issue 357).
+- **A save in the background no longer wakes your chat.** Each one left the chat following its save on GitHub, with nothing for you; the chat now stops that at once (issue 359).
 - **The tour shows you round the page as it is now.** Its Contacts step sent you to "Messages", a view the new look took away: each person's note waits on their card. And its To do step said the trash puts a card away, where a card is put off with Later.
 
 ## [4.17.0] - 2026-11-19
