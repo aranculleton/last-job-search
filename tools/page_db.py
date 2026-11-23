@@ -2144,8 +2144,6 @@ SEEN_MAX = 4000
 # Beside each write's body file: the dump folders that kept a batch holding it (keep_landed),
 # so the hook, which sees only the writes, knows where to say they landed.
 KEPT_IN = ".kept-in.json"
-_REFUSED = re.compile(r"refus|conflict|version mismatch|is_error|not found|denied|fail",
-                      re.IGNORECASE)
 
 
 def _sig(e: dict) -> str:
@@ -2184,11 +2182,12 @@ def keep_sent_event(event: dict) -> int:
     given = event.get("tool_input") if isinstance(event.get("tool_input"), dict) else {}
     if str(given.get("action") or "") != "batch":
         return 0
-    said: list = []
-    _strings(event.get("tool_response"), said)
     resp = event.get("tool_response")
-    if (isinstance(resp, dict) and (resp.get("is_error") or resp.get("error"))) or \
-            _REFUSED.search("\n".join(said)):
+    # Only the response's own error flag counts as a refusal: a word search over the reply
+    # read a record holding "failed" or "refused" as a refusal, and a batch that landed would
+    # have been put back and sent again. A refusal missed here is what happened before issue
+    # 358 was fixed: the batch kept as landed, put right by note_version on the refusal.
+    if isinstance(resp, dict) and (resp.get("is_error") or resp.get("error")):
         return 0
     writes: list = []
     _writes_in(given, writes)
@@ -2209,7 +2208,32 @@ def keep_sent_event(event: dict) -> int:
                 json.dump(list(dict.fromkeys(had + sigs))[-SEEN_MAX:], fh, indent=0)
         except OSError:
             pass
+    if dumps and sigs:
+        _mark_sends_seen()
     return len(sigs) if dumps else 0
+
+
+SENDS_SEEN = "ljs-sends-seen"
+
+
+def _mark_sends_seen() -> None:
+    """This copy's hook has recognised a send the store took: what replace_unsent relies on."""
+    path = _known_path()
+    if not path:
+        return
+    try:
+        with open(os.path.join(os.path.dirname(path), SENDS_SEEN), "w", encoding="utf-8") as fh:
+            fh.write("1\n")
+    except OSError:
+        pass
+
+
+def sends_seen() -> bool:
+    """Has the hook ever recognised a send here? Until it has, no unsent batch is put back: a
+    send the hook cannot read (another shape of event) would otherwise make every update sent
+    be put back and made again, worse than issue 358 itself."""
+    path = _known_path()
+    return bool(path) and os.path.isfile(os.path.join(os.path.dirname(path), SENDS_SEEN))
 
 
 def unconfirmed(dump_dir: str) -> list:
@@ -2231,7 +2255,7 @@ def replace_unsent(dump_dir: str, by: str) -> list[str]:
     own unsent batch (issue 358). Only where this chat's hook keeps what it sees (the folder's
     read was kept by it, kept_by_hook): with no hook no send is ever seen, and every update
     sent would be made again. Returns the records put back."""
-    if not dump_dir or not kept_by_hook(dump_dir):
+    if not dump_dir or not kept_by_hook(dump_dir) or not sends_seen():
         return []
     sent = _sent(dump_dir)
     tail = unconfirmed(dump_dir)

@@ -31,6 +31,16 @@ import test_the_page_helper_stays_thin as T  # noqa: E402
 from test_the_page_helper_stays_thin import read, wake  # noqa: E402
 
 
+@pytest.fixture(autouse=True)
+def versions(tmp_path, monkeypatch):
+    """The copy's own record of what its hook has seen, kept in a folder of the test's."""
+    monkeypatch.setenv("LJS_VERSIONS", str(tmp_path / "git" / page_db.KNOWN_VERSIONS))
+    os.makedirs(tmp_path / "git", exist_ok=True)
+    page_db._KNOWN_PATH.clear()
+    yield
+    page_db._KNOWN_PATH.clear()
+
+
 @pytest.fixture
 def ring(tmp_path, monkeypatch):
     yield from T.ring.__wrapped__(tmp_path, monkeypatch)
@@ -55,6 +65,7 @@ def _send(r, got):
 
 
 def test_an_update_built_again_unsent_keeps_every_change_pinned_to_the_read(ring):
+    page_db._mark_sends_seen()          # this copy's hook has recognised a send before
     d, _ = read(ring, "r1")
     wake(ring, d)
     _, first = _view(ring, d, "v1")
@@ -108,6 +119,7 @@ def test_a_refused_send_is_never_taken_as_sent(tmp_path):
     d = str(tmp_path / "dump")
     os.makedirs(d)
     page_db.mark_listed(d, 0, hook=True)
+    page_db._mark_sends_seen()
     w = page_db.Writes(str(tmp_path / "a"), db=page_db.load(d))
     w.add("set", "work", "one", {"kind": "draft", "status": "running"})
     b = w.save("view")
@@ -120,3 +132,36 @@ def test_a_refused_send_is_never_taken_as_sent(tmp_path):
     assert len(page_db.unconfirmed(d)) == 1
     assert page_db.replace_unsent(d, "view") == ["work/one"]
     assert "one" not in page_db.load(d)["work"]
+
+
+def _one_kept(tmp_path, body):
+    d = str(tmp_path / "dump")
+    os.makedirs(d)
+    page_db.mark_listed(d, 0, hook=True)
+    w = page_db.Writes(str(tmp_path / "a"), db=page_db.load(d))
+    w.add("set", "work", "one", body)
+    b = w.save("view")
+    page_db.keep_landed(d, b, by="view")
+    with open(b[0], encoding="utf-8") as fh:
+        return d, json.load(fh)
+
+
+def test_until_the_hook_has_recognised_a_send_nothing_is_put_back(tmp_path):
+    # A send event in a shape the hook cannot read would otherwise make every update sent be
+    # put back and made again: until one is recognised, a rebuild works as before the fix.
+    d, _ = _one_kept(tmp_path, {"kind": "draft", "status": "running"})
+    assert not page_db.sends_seen()
+    assert page_db.replace_unsent(d, "view") == []
+    assert "one" in page_db.load(d)["work"]
+
+
+def test_a_landed_batch_whose_words_say_failed_is_still_taken_as_sent(tmp_path):
+    # Only the response's own error flag is a refusal: a record holding "failed" or "refused"
+    # in its words, echoed back, never makes a batch that landed look unsent.
+    d, writes = _one_kept(tmp_path, {"kind": "draft", "status": "failed",
+                                     "said": "the first try was refused"})
+    page_db.keep_sent_event({"tool_name": "ArtifactData",
+                             "tool_input": {"action": "batch", "writes": writes},
+                             "tool_response": {"results": [{"doc_id": "one",
+                                                             "status": "failed, refused"}]}})
+    assert page_db.sends_seen() and page_db.unconfirmed(d) == []
