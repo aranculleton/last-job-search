@@ -223,3 +223,16 @@ def test_an_email_logged_without_its_subject_line_teaches_no_edit(here, capsys):
                       draft="Subject: RE: Coffee next week\n\n" + body)
     e = [r for r in learned.load() if r.get("kind") == "edit"]
     assert len(e) == 1 and "Subject" not in e[0]["rule"]
+
+
+def test_a_subject_only_edit_learned_before_the_fix_is_never_followed(here):
+    # An existing install already holds the false rule from issue 357: it is read as nothing.
+    body = "Hi Ana, Thursday at ten works well. See you then."
+    rows = learned.load() + [{"date": "2026-11-23", "area": "messages", "kind": "edit",
+                              "said": "edited the draft before sending",
+                              "rule": 'write it the way they edited it: cut "Subject: RE: Coffee"',
+                              "status": "active", "draft": "Subject: RE: Coffee\n\n" + body,
+                              "sent": body}]
+    learned._save(rows)
+    assert "Subject: RE: Coffee" not in learned.brief("messages")
+    assert not [r for r in learned.entries("messages") if r.get("kind") == "edit"]

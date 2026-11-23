@@ -420,10 +420,22 @@ def _app_file(applied: str) -> str:
     return ""
 
 
+def _subject_only_edit(r: dict) -> bool:
+    """An edit learned before issue 357 was fixed from an email draft's "Subject: ..." line
+    left off the words that went: no edit of theirs, so never followed (an existing install
+    keeps it on file, read as nothing)."""
+    if r.get("kind") != "edit":
+        return False
+    draft, sent = str(r.get("draft") or "").lstrip(), str(r.get("sent") or "").lstrip()
+    if not draft.startswith("Subject:") or sent.startswith("Subject:"):
+        return False
+    return " ".join(draft.partition("\n")[2].split()) == " ".join(sent.split())
+
+
 def entries(area: str | None = None) -> list[dict]:
     """The active entries, oldest first, for one area or all of them."""
     return [r for r in load() if r.get("status", "active") == "active"
-            and (area is None or r.get("area") == area)]
+            and (area is None or r.get("area") == area) and not _subject_only_edit(r)]
 
 
 def record(area: str, said: str, rule: str, applied_to=(), never_say=(),
