@@ -411,6 +411,8 @@ JSON_NAMES = {
     ".people_seen.json": "where an earlier people search found nobody in a place, by employer and date, so the next run searches likely employers first (candidates.order); expires after 30 days, and either side's copy is a hint, never a record",
     "tools/land.py: .json": "a changed file's own name, read only to check it parses before a data-only save lands (land.data_check); never written",
     ".sent.json": "each view batch's records as they stood before it was sent, in the view's own folder, so a refused save can be put back and made again (page_db.keep_landed); never committed",
+    ".sent-seen.json": "each write the app's hook saw the page take, in the dump's own scratch folder, so a rebuilt update puts back only what never went (page_db.keep_sent_event, issue 358); never committed",
+    ".kept-in.json": "beside a batch's body files, the dump folders that kept it as landed, so the hook knows where to say it went (page_db.keep_landed); never committed",
     ".refused.json": "the record a page save was refused for, in the view's own folder, read once by the next run; never committed",
     ".finished.json": "each finish made from a page dump, with its batches, in the dump's own scratch folder, so the same finish run again gives the same batch (page_db.finished_here); never committed",
     "merged.json": "what a tweak round's own merges left, in that round's folder in the chat's scratch folder, so a second pass on the round starts from its own result (tweak.ROUND_RESULTS); never committed",
