@@ -27,6 +27,7 @@ make sense to somebody whose repo just received it.
 ### Fixed
 
 - **The tour shows you round the page as it is now.** Its Contacts step sent you to "Messages", a view the new look took away: each person's note waits on their card. And its To do step said the trash puts a card away, where a card is put off with Later.
+- **A page update made again before the first was sent keeps every change.** Your page could miss most of an update, and the rest could be turned away, when Claude rebuilt it before sending: the first, never sent, was taken as already on your page. Now only an update seen to arrive counts (issue 358).
 
 ## [4.17.0] - 2026-11-19
 

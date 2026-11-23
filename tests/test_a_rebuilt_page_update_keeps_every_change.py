@@ -46,21 +46,12 @@ def _view(r, d, out):
     return got, {f"{e['collection']}/{e['doc_id']}": e.get("if_version") for e in entries}
 
 
-def _send(r, got, hook=True):
-    """The store takes each batch; the app's hook sees each one that landed, as Claude Code
-    hands it over after the call (`learned.py hook`, PostToolUse on ArtifactData), unless
-    `hook` is False: a chat started before its settings registered the hook."""
+def _send(r, got):
+    """The store takes each batch, and the app's hook sees each one that landed, as Claude
+    Code hands it over after the call (fake_db.apply: `learned.py hook`, PostToolUse on
+    ArtifactData)."""
     import fake_db
-    for b in got["batches"]:
-        if not fake_db.apply(r.db, b):
-            return False
-        if hook:
-            with open(b, encoding="utf-8") as fh:
-                writes = json.load(fh)
-            page_db.keep_sent_event({"tool_name": "ArtifactData",
-                                     "tool_input": {"action": "batch", "writes": writes},
-                                     "tool_response": "ok"})
-    return True
+    return all(fake_db.apply(r.db, b) for b in got["batches"])
 
 
 def test_an_update_built_again_unsent_keeps_every_change_pinned_to_the_read(ring):
