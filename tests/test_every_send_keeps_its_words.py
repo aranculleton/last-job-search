@@ -208,3 +208,18 @@ def test_nothing_is_ever_recorded_into_the_example_person(monkeypatch):
         learned.record("voice", "x", "y")
     person._modules.clear()
     person._data.clear()
+
+
+def test_an_email_logged_without_its_subject_line_teaches_no_edit(here, capsys):
+    # Issue 357: an email reply drafted with "Subject: RE: ..." first, logged with its body
+    # alone, recorded the rule 'cut "Subject: RE: ..."' for every later email draft.
+    body = ("Hi Ana, thanks for getting back to me. Thursday at ten works well, and I will "
+            "bring the notes from our last call.")
+    state._learn_edit("ana_rook", body, draft="Subject: RE: Coffee next week\n\n" + body)
+    assert not [r for r in learned.load() if r.get("kind") == "edit"]
+    assert "learned from the edit" not in capsys.readouterr().out
+    # A real change to the words still teaches, with the subject left out of the rule.
+    state._learn_edit("ana_rook", body.replace("ten", "eleven"),
+                      draft="Subject: RE: Coffee next week\n\n" + body)
+    e = [r for r in learned.load() if r.get("kind") == "edit"]
+    assert len(e) == 1 and "Subject" not in e[0]["rule"]
