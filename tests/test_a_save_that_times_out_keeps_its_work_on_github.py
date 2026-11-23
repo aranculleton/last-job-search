@@ -167,3 +167,21 @@ def test_a_detached_save_still_lands_the_same_way(copy, tmp_path):
     assert code == 0
     assert done.get("head") == "claude/finding-jobs"
     assert git(chat, "rev-parse", "HEAD").stdout == git(origin, "rev-parse", "master").stdout
+
+
+def test_a_save_merged_in_the_background_tells_the_chat_to_unsubscribe(copy, tmp_path):
+    """Issue 359: the pull request a background save opens through gh api still subscribed the
+    page's chat, and each event woke it. The chat's next read is told the one call that ends it."""
+    origin, chat, _other = copy
+    write(chat, "profile/notes.md", "third\n")
+
+    def finish(root, ready):
+        git(root, "push", "-q", "origin", "HEAD:refs/heads/master")
+        return True, "41"
+
+    assert land.run_detached(str(chat), "Notes", check=GREEN, sleep=lambda s: None,
+                             finish=finish) == 0
+    said = land.github_waiting(str(chat))
+    assert "unsubscribe_pr_activity" in said and "pullNumber 41" in said
+    assert "say nothing" in said
+    assert land.github_waiting(str(chat)) == ""          # said once

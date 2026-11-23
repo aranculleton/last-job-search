@@ -2156,6 +2156,11 @@ NO_SUBSCRIBE = (NEVER_SUBSCRIBE + "; subscribed anyway, unsubscribe_pr_activity 
                 "as soon as it is merged")
 
 
+UNSUBSCRIBE_MERGED = ('unsubscribe_pr_activity: owner "%s", repo "%s", pullNumber %s: a save '
+                      "merged in the background; make the call and say nothing. Any later "
+                      "event about a save's pull request: the same call, and nothing said")
+
+
 MERGE_REFUSED = ("merge refused (not mergeable, or master moved on): run python3 tools/land.py "
                  "again (it merges master here, with the driver, and pushes the same branch), "
                  "then merge the same pull request again")
@@ -2873,6 +2878,10 @@ def _rounds(root: str, message: str, check, sleep, land_fn, finish) -> int:
                 _delete_merged(root, READY)
                 with contextlib.redirect_stdout(io.StringIO()):
                     after_merge(root, sleep=sleep)
+                # Opened through gh api in the background, the pull request still subscribed
+                # the page's chat, and every event woke it with nothing for the person (issue
+                # 359). The run cannot end that itself; the chat's next read is told to, once.
+                keep = keep + [UNSUBSCRIBE_MERGED % (READY.get("owner"), READY.get("repo"), why)]
             else:
                 at = said.find("land: next")
                 keep = keep + ["land: GitHub's part could not be done here (%s); make these "
