@@ -4984,6 +4984,11 @@ def _learn_edit(cid: str, sent_text: str, draft: str | None = None) -> None:
         draft = _draft_of(cid)
         if draft is None:
             return
+    # An email draft's first line "Subject: ..." is not part of the words that went: a send
+    # logged with its body alone is no edit (issue 357: "cut \"Subject: RE: ...\"" was learned
+    # as a rule, and would have stripped the subject from every later email draft).
+    if split_subject(draft)[0] and not split_subject(sent_text)[0]:
+        draft = split_subject(draft)[1]
     try:
         import learned
         e = learned.record_edit(draft, sent_text, where=f"to {cid}")

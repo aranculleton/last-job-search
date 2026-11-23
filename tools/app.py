@@ -582,6 +582,11 @@ def cmd_view(a) -> int:
                     more, a.dump, url, "this same command")] if more else []) + ([
                     page_reads.say_late(late, a.dump, url)] if late else [])}), end="")
             return 2
+    if a.dump:
+        # An update an earlier view built over this folder and no send was seen for (the
+        # app's hook, page_db.keep_sent_event) is put back first: built again, it carries
+        # every change, pinned to the versions last read (issue 358).
+        page_db.replace_unsent(a.dump, "view")
     late_batches: list = []
     late_lines: list = []
     if planned and end and page_reads.late_read(a.dump):
@@ -845,7 +850,12 @@ def cmd_view(a) -> int:
     fixes: list = []
     if a.dump:
         try:
-            fixes = self_fixes(db, model, os.path.join(a.out_dir, "self"), now, dump_dir=a.dump,
+            # Kept in the folder with the rest of the update where it keeps them (keep_landed,
+            # which a rebuild unsent puts back), never as landed the moment it is built: built
+            # again before the first was sent, the files item was taken as on the page and
+            # left out (issue 358).
+            fixes = self_fixes(db, model, os.path.join(a.out_dir, "self"), now,
+                               dump_dir="" if planned else a.dump,
                                work=getattr(a, "work", "") or "")
             batches = list(batches) + fixes
         except Exception:  # noqa: BLE001  nothing to read it against: nothing queued
@@ -898,7 +908,7 @@ def cmd_view(a) -> int:
     if planned:
         # The folder, and the copy this checkout keeps, as they will be once the batches are
         # sent: the next wake pins to the versions they leave, with no screen read.
-        page_db.keep_landed(a.dump, batches)
+        page_db.keep_landed(a.dump, batches, by="view")
         page_reads.absorb(a.dump)
     if late_lines:
         lines = list(late_lines) + list(lines or [])
@@ -1048,7 +1058,7 @@ MARKS_CLAIM = ("view: {n} mark{s} the person made on the page (applied, sent, se
 
 
 def taps_now(dump: str, chat: str, now, out_dir: str, only=None, said: str = "taps made while "
-             "the work ran", claim_line: str = LATE_CLAIM) -> dict:
+             "the work ran", claim_line: str = LATE_CLAIM, by: str = "") -> dict:
     """The pending taps in `dump` (or those in `only`), claimed and applied as a wake applies
     them: {"claim": True, "batches", "lines"} when one changes the copy and its claim must be
     accepted first (the same command is run again once it is), else {"batches", "lines"}
@@ -1075,7 +1085,7 @@ def taps_now(dump: str, chat: str, now, out_dir: str, only=None, said: str = "ta
             are="are" if n != 1 else "is")]}
     got = app_actions.apply_dir(dump, chat, now, os.path.join(out_dir, "apply"),
                                 only=[t[0] for t in todo])
-    page_db.keep_landed(dump, got["batches"], skip=("actions",))
+    page_db.keep_landed(dump, got["batches"], skip=("actions",), by=by)
     batches = _one_batch(list(claim) + list(got["batches"]), os.path.join(out_dir, "send"))
     counts = [f"{len(got[k])} {w}" for k, w in (("ok", "applied"), ("stale", "changed since "
               "they saw it"), ("conflict", "could not be done"), ("again", "applied before"))
@@ -1105,7 +1115,7 @@ def marks_first(dump: str, chat: str, now, out_dir: str, work: str = "") -> dict
     if not marks or not app_listen.draws_screens(db, chat, work, now)[0]:
         return {}
     return taps_now(dump, chat, now, out_dir, only=marks, said="marks kept first",
-                    claim_line=MARKS_CLAIM)
+                    claim_line=MARKS_CLAIM, by="view")
 
 
 def late_taps(dump: str, chat: str, now, out_dir: str) -> dict:
@@ -1116,7 +1126,7 @@ def late_taps(dump: str, chat: str, now, out_dir: str) -> dict:
     import app_listen
     import page_reads
     chat = app_listen.this_chat(chat)
-    got = taps_now(dump, chat, now, out_dir)
+    got = taps_now(dump, chat, now, out_dir, by="view")
     if got.get("claim"):
         return got
     batches, lines = got["batches"], got["lines"]

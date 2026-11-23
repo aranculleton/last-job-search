@@ -74,9 +74,17 @@ FAKE_DB = textwrap.dedent('''
                 os.makedirs(os.path.dirname(p), exist_ok=True)
                 json.dump({"data": data, "version": (old["version"] + 1) if old else 1},
                           open(p, "w", encoding="utf-8"))
-            return True
         finally:
             os.rmdir(os.path.join(db, ".lock"))
+        # Taken: Claude Code hands the call to the app's hook (learned.py hook, PostToolUse
+        # on ArtifactData), which keeps the writes as landed (page_db.keep_sent_event).
+        try:
+            import page_db
+        except ImportError:
+            return True
+        page_db.keep_sent_event({"tool_name": "ArtifactData", "tool_response": "ok",
+                                 "tool_input": {"action": "batch", "writes": batch}})
+        return True
 ''')
 
 # One chat: read the page's database, ask app.py whether it answers, wait until the other

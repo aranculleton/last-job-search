@@ -420,10 +420,22 @@ def _app_file(applied: str) -> str:
     return ""
 
 
+def _subject_only_edit(r: dict) -> bool:
+    """An edit learned before issue 357 was fixed from an email draft's "Subject: ..." line
+    left off the words that went: no edit of theirs, so never followed (an existing install
+    keeps it on file, read as nothing)."""
+    if r.get("kind") != "edit":
+        return False
+    draft, sent = str(r.get("draft") or "").lstrip(), str(r.get("sent") or "").lstrip()
+    if not draft.startswith("Subject:") or sent.startswith("Subject:"):
+        return False
+    return " ".join(draft.partition("\n")[2].split()) == " ".join(sent.split())
+
+
 def entries(area: str | None = None) -> list[dict]:
     """The active entries, oldest first, for one area or all of them."""
     return [r for r in load() if r.get("status", "active") == "active"
-            and (area is None or r.get("area") == area)]
+            and (area is None or r.get("area") == area) and not _subject_only_edit(r)]
 
 
 def record(area: str, said: str, rule: str, applied_to=(), never_say=(),
@@ -2936,8 +2948,11 @@ def _cli_hook() -> int:
             # PostToolUse (where a copy's settings do not, chats run app.py versions after each read:
             # page_db.hook_keeps_versions): each record's version, as the read listed it, kept
             # in the file it saved (page_db.keep_listed). Says nothing, holds nothing.
+            # After a batch the store took: its writes kept as landed in the folders that
+            # took them as landed before they were sent (page_db.keep_sent_event, issue 358).
             import page_db
             page_db.keep_listed_event(event)
+            page_db.keep_sent_event(event)
             return 0
         if _starter(event):
             return 0

@@ -304,6 +304,7 @@ def keep_listed(text: str, out_dir: str, hook: bool = False) -> int:
     # of 2026-11-10, D15). A file is rewritten only where its own stamp says another number,
     # so the copy this checkout keeps of the page (page_reads.absorb) still carries it.
     index: dict = {}
+    read_keys: list[str] = []
     for version, path in found:
         real = os.path.realpath(path if os.path.isabs(path) else os.path.join(root, path))
         if not real.startswith(root + os.sep) or not os.path.isfile(real):
@@ -312,6 +313,7 @@ def keep_listed(text: str, out_dir: str, hook: bool = False) -> int:
         if not isinstance(got, dict):
             continue
         index[_index_key(root, real)] = int(version)
+        read_keys.append(_index_key(root, real).replace("@", "~"))
         n += 1
         if _version_of(got)[1] == int(version):
             continue
@@ -326,6 +328,7 @@ def keep_listed(text: str, out_dir: str, hook: bool = False) -> int:
             continue
     if n:
         mark_listed(root, n, hook, index)
+        _forget_read(root, read_keys)
     return n
 
 
@@ -2075,8 +2078,14 @@ def _before(dump_dir: str, n: int, coll: str, doc_id: str, names) -> None:
         return
     os.makedirs(os.path.dirname(keep), exist_ok=True)
     raw = next((_read_json(p) for p in names if os.path.isfile(p)), None)
+    got = {"file": raw} if raw is not None else {"none": True}
+    # The version the read listed for it, put back with the file: left at the number this
+    # batch moved it to, the record read back as one no read confirmed (issue 358).
+    listed = listed_versions(dump_dir).get(_index_key(dump_dir, names[0]))
+    if listed is not None:
+        got["listed"] = listed
     with open(keep, "w", encoding="utf-8", newline="\n") as fh:
-        json.dump({"file": raw} if raw is not None else {"none": True}, fh, ensure_ascii=False)
+        json.dump(got, fh, ensure_ascii=False)
 
 
 def put_back(dump_dir: str, ref: str) -> list[str]:
@@ -2089,6 +2098,11 @@ def put_back(dump_dir: str, ref: str) -> list[str]:
                if ref in (sent[i].get("records") or [])), None)
     if at is None:
         return []
+    return _put_back_from(dump_dir, sent, at)
+
+
+def _put_back_from(dump_dir: str, sent: list, at: int) -> list[str]:
+    """Every batch from `sent[at]` on put back as `put_back` puts them back."""
     back: list[str] = []
     for got in reversed(sent[at:]):
         n = str(got.get("n"))
@@ -2109,20 +2123,183 @@ def put_back(dump_dir: str, ref: str) -> list[str]:
                 with open(names[0], "w", encoding="utf-8", newline="\n") as fh:
                     json.dump(kept.get("file"), fh, ensure_ascii=False, indent=1)
                     fh.write("\n")
+            index = _index_key(dump_dir, names[0])
+            if isinstance(kept.get("listed"), int):
+                index_versions(dump_dir, {index: kept["listed"]})
+            elif index in listed_versions(dump_dir):
+                index_versions(dump_dir, {}, drop=[index])
             back.append(key)
         shutil.rmtree(os.path.join(dump_dir, SENT_DIR, n), ignore_errors=True)
     _keep_sent(dump_dir, sent[:at])
     return list(dict.fromkeys(back))
 
 
-def keep_landed(dump_dir: str, batches, skip=()) -> None:
+# Writes the app's hook saw land (PostToolUse on ArtifactData `batch`, keep_sent_event), in
+# the dump folder whose kept batches they belong to: what `view` takes as the page's state
+# moves only once a batch is seen on the page. Taken as landed when it was built, a page
+# update built again before the first was sent found its own unsent screens already there,
+# made two writes of sixteen and pinned meta/now one higher each time (issue 358).
+SEEN = ".sent-seen.json"
+SEEN_MAX = 4000
+# Beside each write's body file: the dump folders that kept a batch holding it (keep_landed),
+# so the hook, which sees only the writes, knows where to say they landed.
+KEPT_IN = ".kept-in.json"
+
+
+def _sig(e: dict) -> str:
+    """One write, as sent: its op, record, pinned version and the body it carries."""
+    import hashlib
+    body = ""
+    path = str(e.get("file_path") or "")
+    if path:
+        try:
+            with open(path, "rb") as fh:
+                body = hashlib.sha1(fh.read()).hexdigest()
+        except OSError:
+            body = "?"
+    return " ".join([str(e.get("op") or ""), f"{e.get('collection')}/{e.get('doc_id')}",
+                     str(e.get("if_version")), body])
+
+
+def _writes_in(obj, out: list) -> None:
+    if isinstance(obj, dict):
+        if obj.get("collection") and obj.get("doc_id"):
+            out.append(obj)
+            return
+        for v in obj.values():
+            _writes_in(v, out)
+    elif isinstance(obj, (list, tuple)):
+        for v in obj:
+            _writes_in(v, out)
+
+
+def keep_sent_event(event: dict) -> int:
+    """The hook's half for a send: an ArtifactData `batch` the store took, its writes kept as
+    landed in every dump folder that kept a batch holding them (keep_landed). A refusal, or
+    any other call: nothing. Returns how many writes were kept as seen."""
+    if not isinstance(event, dict) or str(event.get("tool_name") or "") != "ArtifactData":
+        return 0
+    given = event.get("tool_input") if isinstance(event.get("tool_input"), dict) else {}
+    if str(given.get("action") or "") != "batch":
+        return 0
+    resp = event.get("tool_response")
+    # Only the response's own error flag counts as a refusal: a word search over the reply
+    # read a record holding "failed" or "refused" as a refusal, and a batch that landed would
+    # have been put back and sent again. A refusal missed here is what happened before issue
+    # 358 was fixed: the batch kept as landed, put right by note_version on the refusal.
+    if isinstance(resp, dict) and (resp.get("is_error") or resp.get("error")):
+        return 0
+    writes: list = []
+    _writes_in(given, writes)
+    dumps: list = []
+    for e in writes:
+        path = str(e.get("file_path") or "")
+        if path:
+            got = _read_json(os.path.join(os.path.dirname(path), KEPT_IN))
+            dumps += [d for d in (got if isinstance(got, list) else []) if isinstance(d, str)]
+    sigs = [_sig(e) for e in writes]
+    for d in dict.fromkeys(dumps):
+        if not os.path.isdir(d):
+            continue
+        had = _read_json(os.path.join(d, SEEN))
+        had = had if isinstance(had, list) else []
+        try:
+            with open(os.path.join(d, SEEN), "w", encoding="utf-8", newline="\n") as fh:
+                json.dump(list(dict.fromkeys(had + sigs))[-SEEN_MAX:], fh, indent=0)
+        except OSError:
+            pass
+    if dumps and sigs:
+        _mark_sends_seen()
+    return len(sigs) if dumps else 0
+
+
+SENDS_SEEN = "ljs-sends-seen"
+
+
+def _mark_sends_seen() -> None:
+    """This copy's hook has recognised a send the store took: what replace_unsent relies on."""
+    path = _known_path()
+    if not path:
+        return
+    try:
+        with open(os.path.join(os.path.dirname(path), SENDS_SEEN), "w", encoding="utf-8", newline="\n") as fh:
+            fh.write("1\n")
+    except OSError:
+        pass
+
+
+def sends_seen() -> bool:
+    """Has the hook ever recognised a send here? Until it has, no unsent batch is put back: a
+    send the hook cannot read (another shape of event) would otherwise make every update sent
+    be put back and made again, worse than issue 358 itself."""
+    path = _known_path()
+    return bool(path) and os.path.isfile(os.path.join(os.path.dirname(path), SENDS_SEEN))
+
+
+def unconfirmed(dump_dir: str) -> list:
+    """The batches this folder took as landed that no send was seen for: those after the last
+    one the hook saw land, since batches go in order and a refused one stops the rest."""
+    sent = _sent(dump_dir)
+    got = _read_json(os.path.join(dump_dir, SEEN))
+    seen = set(got) if isinstance(got, list) else set()
+    last = max([i for i, s in enumerate(sent)
+                if isinstance(s.get("sigs"), list) and s["sigs"]
+                and all(x in seen for x in s["sigs"])] + [-1])
+    return sent[last + 1:]
+
+
+def replace_unsent(dump_dir: str, by: str) -> list[str]:
+    """Before a command `by` builds again over `dump_dir`: a batch an earlier run of it kept
+    as landed and that no send was seen for is put back, with every one kept after it, so the
+    new build carries every change and is pinned to the versions last read, never past its
+    own unsent batch (issue 358). Only where this chat's hook keeps what it sees (the folder's
+    read was kept by it, kept_by_hook): with no hook no send is ever seen, and every update
+    sent would be made again. Returns the records put back."""
+    if not dump_dir or not kept_by_hook(dump_dir) or not sends_seen():
+        return []
+    sent = _sent(dump_dir)
+    tail = unconfirmed(dump_dir)
+    start = len(sent) - len(tail)
+    at = next((start + i for i, s in enumerate(tail) if s.get("by") == by), None)
+    if at is None:
+        return []
+    return _put_back_from(dump_dir, sent, at)
+
+
+def _forget_read(dump_dir: str, keys) -> None:
+    """A read laid these records into the folder as the page holds them: no kept batch puts
+    them back over it any more."""
+    keys = set(keys)
+    sent = _sent(dump_dir)
+    if not keys or not sent:
+        return
+    changed = False
+    for s in sent:
+        recs = s.get("records") or []
+        left = [r for r in recs if r not in keys]
+        if len(left) != len(recs):
+            s["records"] = left
+            changed = True
+    if changed:
+        _keep_sent(dump_dir, sent)
+
+
+def keep_landed(dump_dir: str, batches, skip=(), by: str = "") -> None:
     """The dump as it will be once `batches` land, so the next command over the same folder
     pins to the versions they leave and sees what they made (a work item a tap queued, a
     claim already taken), with no second read. Collections in `skip` are left as read: a
     tap's claim takes the person's words off the page, and the dump keeps them for `apply`.
-    A refused batch is put back by `note_version` (`put_back`), never left as landed."""
+    A refused batch is put back by `note_version` (`put_back`), never left as landed; one
+    kept `by` a command and never seen sent is put back when that command builds again over
+    the folder (`replace_unsent`)."""
     sent = _sent(dump_dir)
     for path in batches or ():
+        sigs: list[str] = []
+        for e in _read_json(path) or []:
+            sigs.append(_sig(e))
+            body = str(e.get("file_path") or "")
+            if body:
+                _kept_in(os.path.dirname(body), dump_dir)
         n = max([int(s.get("n") or 0) for s in sent] + [0]) + 1
         records: list[str] = []
         for e in _read_json(path) or []:
@@ -2153,9 +2330,24 @@ def keep_landed(dump_dir: str, batches, skip=()) -> None:
                 body = _merged(old, body)
             _keep_dump(dump_dir, coll, doc_id, body, version)
         if records:
-            sent.append({"n": n, "batch": os.path.abspath(path), "records": records})
+            sent.append({"n": n, "batch": os.path.abspath(path), "records": records,
+                         "sigs": sigs, **({"by": by} if by else {})})
     if batches:
         _keep_sent(dump_dir, sent)
+
+
+def _kept_in(body_dir: str, dump_dir: str) -> None:
+    mark = os.path.join(body_dir, KEPT_IN)
+    had = _read_json(mark)
+    had = had if isinstance(had, list) else []
+    d = os.path.abspath(dump_dir)
+    if d in had:
+        return
+    try:
+        with open(mark, "w", encoding="utf-8", newline="\n") as fh:
+            json.dump(had + [d], fh)
+    except OSError:
+        pass
 
 
 def note_version(dump_dir: str, ref: str, version: int) -> str:
