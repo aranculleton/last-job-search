@@ -110,7 +110,7 @@ def test_a_case_handed_out_is_a_copy():
 
 
 def _run(*args):
-    return subprocess.run([sys.executable, TOOL, *args], capture_output=True, text=True,
+    return subprocess.run([sys.executable, TOOL, *args], capture_output=True, text=True, encoding="utf-8",
                           timeout=60)
 
 
