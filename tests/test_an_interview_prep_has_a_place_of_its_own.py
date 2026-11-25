@@ -131,6 +131,8 @@ def test_a_follow_up_with_its_own_follow_ups_is_drawn_at_every_depth(run, tmp_pa
 
 def test_a_prep_the_engine_could_not_read_is_parted_by_its_own_headings(run, tmp_path):
     def unread(iv):
+        # A prep the engine could not read has no round built from it either (issue 367).
+        iv.pop("round", None)
         iv["prep_read"] = None
         iv["one_screen"] = None
         iv["prep_text"] = ("# Prep: Larkspur Retail\n\n## Format\n\nTwenty minutes on video with the recruiter.\n\n"

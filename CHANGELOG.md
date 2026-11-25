@@ -20,6 +20,15 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Added
+
+- **Your interview has a screen of its own that gets you ready.** Read your prep now opens on the round: how long to go, where and who, today's step of your plan, how ready you are in a sentence with the one thing to do next, then who you meet and what each is likely to ask about, the format and your cheat sheet, before the questions (issue 367).
+- **An interview in person comes with a plan for the day.** Getting there, what to bring and wear, the day's times, the last five minutes and the whiteboard, with anything not known yet said so, and Confirm the plan asks Claude to check it and fill in what is missing (issue 367).
+- **Practise with flashcards.** Practise shows each likely question, then its trigger word, points and follow-ups once you have said your answer, with a 90-second clock you start yourself; mark it Got it, Shaky or Missed and it comes back in 1, 3, 7 or 14 days, missed cards first. Filter the cards by part or by who is likely to ask (issue 367).
+- **Your stories against the questions they answer.** Each story is a card with its trigger word, and a grid shows which question is its home and where it is a backup; on a phone it is a list a story (issue 367).
+- **A numbers card with a drill.** Every number you may want to say, with what it is; Drill hides them so you can say each before you show it (issue 367).
+- **Cases to work through out loud, where you sit on the project, and a plan to the day.** Each case has its steps, its numbers drawn as bars and its picture, and Done keeps that you worked through it; Mock interview with Claude plays the person you meet. The project's steps mark the ones you lead, and the plan marks today (issue 367).
+
 ### Changed
 
 - **Read your prep opens your interview prep in a place of its own.** On an employer's card, an interview's card, To do, Coming up or the Brief, it opens the prep full screen, starting on the one-screen summary with each likely question one tap away and a bar at the top that goes straight to each part; the cards link to it instead of holding it at their foot, and a follow-up's own follow-ups show under it. Your page gets it by itself with its next update (issue 365).
@@ -35,6 +44,7 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **A table in your interview prep reads as a table.** A prep holding a table showed its raw lines of pipes on your page; it is now a table, and on a phone each row is stacked with every cell under its column's name (issue 368).
 - **Deeper interview prep reaches your page.** A question a chat adds to your prep, and the follow-ups written under it, now show on your page with the rest, and the follow-ups are no longer read as part of the answer above them. Technical questions in a prep now come with the follow-ups an interviewer digs into, two deep, and a modelling answer is prepared from the model and method your profile records rather than the language it was written in (issue 362).
 - **A corrected interview answer is never hidden behind an older live prep.** When an answer in your prep changes after the live interview screen was made, your page shows the prep as corrected until the live screen is made again from it, and the chat is told to do that. Technical questions on the live screen now go four or five follow-ups deep, as a technical interviewer does, and a modelling answer must name the model your profile records (issue 363).
 - **An interview prep is for the next round, and stays short.** Built for a new round, it leaves out the answers you wrote only for the round already held (kept apart, never lost, and Claude brings any back you ask for), puts first the questions you found hard last time, and is not ready while it is longer than a prep should be. Booking the next round now reminds the chat to record what was hard and build the prep for that round only (issue 364).
