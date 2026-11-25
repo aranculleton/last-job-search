@@ -13045,7 +13045,7 @@
     // and the live prep one tap from it where there is one.
     const rd = ivRound(iv);
     const cards = rd && rd.cards.length && !offer;
-    const acts = [cards ? btn("Practise", () => openPractise(iv), {kind: "primary", small: true, key: "pv-cards:" + iv.id, aria: "Practise: " + plural(rd.cards.length, "card", "cards") + " for " + txt(iv.company)}) : null,
+    const acts = [cards ? btn("Practise", () => openPractise(iv), {kind: "primary", small: true, key: "pv-cards:" + iv.id}) : null,
       busy ? btn("See its progress", openWork, {small: true, key: "pv-work:" + iv.id})
       : offer ? null : btn("Practise with Claude", () => { closeDetail(true); startMock(iv); }, {kind: cards ? "secondary" : "primary", small: true, key: "pv-mock:" + iv.id, wakes: "talk"}),
     rd && livePrep(iv) ? btn("Read it as you'll say it", () => openDetail("interview", iv.id), {kind: "quiet", small: true, key: "pv-live:" + iv.id}) : null,
@@ -13137,6 +13137,9 @@
     return any ? rd : null;
   }
   function practiseId(iv) { return "practise~" + txt(iv.id); }
+  // A part of the round that redraws itself in place (the prep's sheet is drawn once): its
+  // children made again through put, so a list or a null is never written as words.
+  function refill(el) { el.replaceChildren(); return put(el, ...Array.prototype.slice.call(arguments, 1)); }
   // How ready they are, said as a sentence over the one next step (the engine's numbers).
   function rdReadyWords(score) {
     return score < 35 ? "You've only just started getting ready" : score < 65 ? "You're about halfway ready" : score < 85 ? "You're nearly ready" : "You're ready";
@@ -13192,7 +13195,7 @@
     const ask = () => askCard({kind: "interview", id: txt(iv.id), label},
       "Please confirm the plan for my " + lc1(stageName(iv)) + " with " + txt(iv.company) + (dayOf(iv.when) ? " on " + fmtDay(dayOf(iv.when)) : "") +
       ": the address, the way in, the floor, the travel, when to arrive and what to bring and wear. Fill in anything that is not known yet, and tell me what you could not find.", th)
-      .then((ok) => { if (ok) { const box = document.querySelector('[data-k="rd-talk:' + seg(iv.id) + '"]'); if (box) box.replaceChildren(rdTalk(iv)); } });
+      .then((ok) => { if (ok) { const box = document.querySelector('[data-k="rd-talk:' + seg(iv.id) + '"]'); if (box) refill(box, rdTalk(iv)); } });
     return h("div", {class: "rd-day"},
       h("p", {class: "rd-confirmed"}, confirmed ? stateWord("Confirmed", "ok") : stateWord("Not confirmed yet", "plain"),
         " ", confirmed ? "This plan is checked." : "Claude can check it and fill in what is missing."),
@@ -13250,7 +13253,7 @@
     const key = "rd-drill:" + iv.id;
     const draw = () => {
       const drill = openState.get(key) === true;
-      wrap.replaceChildren(
+      refill(wrap,
         h("p", {class: "small muted"}, drill ? "Say each number before you show it." : "Every number you may want to say, with what it is."),
         h("dl", {class: "rd-num-list"}, rd.numbers.map((n, i) => h("div", {class: "rd-num"},
           h("dt", {class: "rd-num-v", tabindex: "-1"}, drill && openState.get(key + ":" + i) !== true
@@ -13277,7 +13280,7 @@
       const el = h("article", {class: "rd-case", id: pvId(iv, "case", c.id)});
       const draw = () => {
         const done = rdCaseDone(iv, c);
-        el.replaceChildren(
+        refill(el,
           h("div", {class: "rd-case-top"}, h("h4", {class: "rd-story-t"}, c.title), c.type ? stateWord(c.type, "plain") : null),
           c.prompt && c.prompt !== c.title ? h("p", {class: "rd-prompt"}, isoDays(c.prompt)) : null,
           c.steps.length ? [h("p", {class: "lp-lbl"}, "Work it out loud"), h("ol", {class: "rd-list"}, c.steps.map((s) => h("li", {}, isoDays(s))))] : null,
@@ -13369,7 +13372,7 @@
       if (st.i >= st.queue.length) {
         if (st.timer) { clearInterval(st.timer); st.timer = null; }
         const t = st.tally;
-        root.replaceChildren(h("section", {class: "rd-flash rd-flash-end"},
+        refill(root, h("section", {class: "rd-flash rd-flash-end"},
           h("h3", {class: "rd-flash-q", tabindex: "-1"}, "That's all " + plural(st.queue.length, "card", "cards") + "."),
           h("p", {}, [t.got + " got", t.shaky + " shaky", t.missed + " missed"].join(" · ") + ". Each comes back when it is due."),
           h("div", {class: "card-actions"}, btn("Start again", () => { st.queue = practiseOrder(iv, rd); st.i = 0; st.shown = false; st.tally = {got: 0, shaky: 0, missed: 0}; st.t0 = now(); draw(); }, {kind: "primary", small: true, key: "rd-again:" + iv.id}),
@@ -13391,14 +13394,14 @@
         draw();
       };
       const follow = pvFollows(c.follow, 1);
-      root.replaceChildren(
+      refill(root,
         h("div", {class: "rd-flash-top"},
           h("p", {class: "small muted"}, "Card " + (st.i + 1) + " of " + st.queue.length + " · ", status),
           h("p", {class: "rd-clock small", "aria-label": "Time for this answer"}, h("span", {class: "rd-clock-n", "aria-hidden": "true"}, "1:30"),
             h("span", {class: "muted rd-clock-over", hidden: true}, " Time's up: finish your thought."))),
         h("section", {class: "rd-flash", "data-card": c.id, "aria-label": "Card " + (st.i + 1)},
           h("h3", {class: "rd-flash-q", tabindex: "-1"}, c.q),
-          !st.shown ? h("div", {class: "card-actions"}, btn("Show the answer", () => { st.shown = true; draw(); const b = root.querySelector('[data-k="rd-mark:got"]'); if (b) b.focus(); }, {kind: "primary", small: true, key: "rd-show:" + iv.id, aria: "Show the answer, once you have said yours"}))
+          !st.shown ? h("div", {class: "card-actions"}, btn("Show the answer", () => { st.shown = true; draw(); const b = root.querySelector('[data-k="rd-mark:got"]'); if (b) b.focus(); }, {kind: "primary", small: true, key: "rd-show:" + iv.id}))
             : [c.trigger ? h("p", {class: "rd-trigger"}, h("span", {class: "muted"}, "Trigger word: "), h("strong", {}, c.trigger)) : null,
               c.bullets.length ? h("ul", {class: "pg-list"}, c.bullets.map((b) => h("li", {}, isoDays(b)))) : null,
               follow ? [h("p", {class: "lp-kids-h"}, "They may ask next"), follow] : null,
