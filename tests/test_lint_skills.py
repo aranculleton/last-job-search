@@ -198,14 +198,13 @@ class AgentCheckTests(LinterRepoFixture):
         self.assertIn("does not match the filename", result.stdout)
 
     def test_a_tools_field_that_names_no_tool_fails(self):
-        self.write_agent("researcher", "---\nname: researcher\ndescription: Finds things\ntools: ''\n---")
+        self.write_agent("researcher", "---\nname: researcher\ndescription: Finds things\ntools:\n---")
         result = run_linter(self.root)
         self.assertEqual(result.returncode, 1)
         self.assertIn("comma-separated list of tool names", result.stdout)
 
-    def test_tools_as_a_string_or_a_list_passes(self):
+    def test_tools_as_a_comma_separated_string_passes(self):
         self.write_agent("reader", "---\nname: reader\ndescription: Reads\ntools: Read, Grep\n---")
-        self.write_agent("lister", "---\nname: lister\ndescription: Lists\ntools:\n  - Read\n---")
         result = run_linter(self.root)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 

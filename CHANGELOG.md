@@ -20,6 +20,10 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Added
+
+- **Claude reads everything you asked, and checks its answer, before it replies.** For any request bigger than a quick question, a small helper first reads every message you sent on the task, not just the last, and lists what you want; the experts you ask for are really run; and a second helper checks the answer against that list, sending it back to be fixed if anything is missing, generic or not on your page. Your copy gets both with its next update (issue 370).
+
 ### Changed
 
 - **Read your prep opens your interview prep in a place of its own.** On an employer's card, an interview's card, To do, Coming up or the Brief, it opens the prep full screen, starting on the one-screen summary with each likely question one tap away and a bar at the top that goes straight to each part; the cards link to it instead of holding it at their foot, and a follow-up's own follow-ups show under it. Your page gets it by itself with its next update (issue 365).

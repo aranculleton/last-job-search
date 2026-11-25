@@ -433,8 +433,9 @@ METHODS: dict[str, dict] = {
             (117, "2026-11-17", False, "RUNBOOK says where the person searches and their pay floor and cut line change through tools/wants.py set, the words for a work-life sign or a kind of role through wants.py words, and a no that only ranks down is written with --soft only where they say so; nothing made changes"),
             (118, "2026-11-17", False, "a page build looks for each application's folder once, where Applications, its stages and the campaign chats each looked again (issue 336); the same folder is found, so nothing made changes"),
             (119, "2026-11-17", False, "the page's colours are redone in templates/app/palettes.py, which this method's templates pattern also reads; nothing a draft prints changes"),
+            (120, "2026-11-25", False, "RUNBOOK says a request bigger than a one-line question is read whole by the request-interpreter agent first and the reply checked by the result-checker agent before it is sent (issue 370); nothing made changes"),
         ),
-        "fingerprint": "43f2e50edbbb6715",
+        "fingerprint": "62270e162cefdc3f",
     },
     "interview": {
         # Only a process with a round still to come is prepared again: a prep for a round
