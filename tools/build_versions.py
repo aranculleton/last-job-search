@@ -512,8 +512,9 @@ METHODS: dict[str, dict] = {
             (60, "2026-11-25", True, "a question added to a prep under Your answers, and the follow-ups written under any answer, reach the page, the follow-ups no longer read as part of the answer above (issue 362); a technical question's prep carries the follow-ups an interviewer digs into, two deep, and a modelling answer is said from the model and method the profile records; each prep for a round still ahead is made again to carry them"),
             (61, "2026-11-25", False, "a live prep keeps what the prep's answers said when it was written, and while one has changed since, the page shows the prep itself and the chat drawing the page is told to make the live one again; one saved before is judged by when each file was saved; a technical question's follow-ups go four or five deep, and a modelling answer names the model the profile records (issue 363); a live prep already made is shown as it is until then"),
             (62, "2026-11-25", False, "a prep built for a new round leaves out the answers written only for the round held, kept apart beside it in earlier_answers.md, puts first the questions found hard there (asked --landed no or partly), and fails its check over MAX_PACK_CHARS characters; book says to record what was hard and build for the round booked only (issue 364); the rerun of version 60 makes each prep ahead again"),
+            (63, "2026-11-25", False, "a mock interview plays the named interviewer, asks one question at a time, digs at least three follow-ups deep on technical answers, gives no praise during it and ends with a short scorecard whose marks are kept for the next round's pack; timed spoken practice is 90 seconds an answer, with a pasted transcript checked for filler, hedging and overruns; a case round practises from a library of cases for the kind of employer (issue 367); nothing made before needs making again"),
         ),
-        "fingerprint": "5d30cd3fc50d6f15",
+        "fingerprint": "1c457834477f6452",
     },
     "research": {
         "by": "upgrade", "priority": 3, "applies": "live_applications", "time": "~5 min each",
@@ -1280,6 +1281,8 @@ KEEPS_NOTHING: dict[str, str] = {
                         "nothing kept in a person's copy",
     "plugin/*": "the optional front door on a computer: finds or makes the person's copy and "
                 "hands over to it, and keeps nothing of its own",
+    "tools/interview_cases.py": "a fixed library of practice cases printed on request; "
+                                "writes nothing",
     "tools/dates.py": "reads a date; every tool that keeps something is versioned where it keeps it",
     "tools/holds.py": "says what the person's rules hold back today and when each ends, worked "
                       "out afresh from their files on every page build; keeps nothing",

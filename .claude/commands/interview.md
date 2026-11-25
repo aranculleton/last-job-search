@@ -209,6 +209,36 @@ python3 tools/interview_pack.py rework --company "<Company>" --role "<Role>" --s
   --question "<the question>" --note "<what to change>"
 ```
 
+### Mock interview as a named interviewer
+
+When the person asks for a mock, or the page's Practise with Claude asks for one naming an interviewer, play that interviewer. Take who they are from the interview's record (`outcome.md`, the `--with` it was booked with) and the pack's **Who you are meeting** section, and the questions from the live prep for that round, in its order. Say in one line who you are playing and which round, then stay in the part:
+
+- **One question at a time.** Ask it, wait for the whole answer, then the next. Never two at once.
+- **Dig at least three follow-ups deep on every technical answer**, the way that interviewer would: why that model or method, what else was tried, how the data was split and checked, what went wrong, how it is watched now, who signed it off. Go deeper where the answer is thin.
+- **No praise during the mock.** No "great answer", "good", "perfect" or nods of approval between questions: a real interviewer gives none, and it hides what landed. A neutral "thanks" and the next question.
+- **A case round** takes a case from the practice library for this kind of employer: `python3 tools/interview_cases.py for "<the pack's employer type, or what the employer does>"`, then `show <id>`. Read out its prompt only; the steps are for the scorecard.
+
+When the questions are done, or the person says stop, end with **the scorecard**, short and in this shape:
+
+```
+Scorecard: <interviewer>, <round>
+1. <question>: got it / shaky / missed - <one line why>
+2. ...
+Overall: <one or two plain lines>
+Practise next: <thing one>; <thing two>
+```
+
+Each line names what they said or left out, never a mark out of ten and never a verdict on the hire. Then keep every mark, in the same turn, so the next round's pack starts from them (got it is `yes`, shaky `partly`, missed `no`):
+
+```bash
+python3 tools/interview_pack.py asked --company "<Company>" --role "<Role>" --stage "<Stage>" \
+  --question "<the question>" --landed yes|partly|no --note "<the one line why>"
+```
+
+### Timed spoken practice
+
+For practising out loud: one question at a time, **90 seconds per answer**. Say the question, and ask them to answer aloud with a timer on their phone. The app never records or transcribes anything. If they paste a transcript of what they said (their phone's own voice notes can make one), first run `python3 tools/learned.py brief voice` and flag, quoting their exact words: filler (um, like, you know, basically), hedging (I think maybe, sort of, kind of, I guess) and any phrase their own rules list; and an overrun, at about 150 spoken words a minute, so roughly 225 words is 90 seconds. Then one line on what to cut, and the next question.
+
 ---
 
 ## Step 5: Close the Loop

@@ -237,7 +237,7 @@ CASES: tuple[dict, ...] = (
         "numbers": ["+0.4 points, +10%", "z = 2.0", "95% range 0 to 0.8 points",
                     "About $200,000 a month at the middle"],
         "visual": "\n".join([
-            "         Users   Converted",
+            "         users   converted",
             "Control  20,000  4.0%",
             "New      20,000  4.4%",
             "Lift     +0.4 points (+10%)",
@@ -306,7 +306,7 @@ CASES: tuple[dict, ...] = (
         "numbers": ["20% of blocks are fraud", "$46,000 a day at 0.8",
                     "$52,600 at 0.9, $50,500 at 0.7"],
         "visual": "\n".join([
-            "Cut  Block Fraud Wrong Miss Cost",
+            "cut  block fraud wrong miss cost",
             "0.7  4,000  450  3,550   50 $50.5k",
             "0.8  2,000  400  1,600  100 $46.0k",
             "0.9    800  340    460  160 $52.6k",

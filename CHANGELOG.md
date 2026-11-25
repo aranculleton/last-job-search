@@ -20,6 +20,12 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Added
+
+- **Practice cases for a case round.** Claude picks cases that fit the kind of employer (operations: a bottleneck, capacity, how busy a fleet is, a backlog; data: a metric that fell, an A/B test, a forecast that missed; finance; and general ones like market sizing), each worked out loud with the numbers said as you go and a small sketch to draw (issue 367).
+- **A mock interview with the person you will meet.** Ask for a mock, or press Practise with Claude, and Claude plays that interviewer: one question at a time, follow-ups at least three deep on technical answers, no praise until the end, then a short scorecard (got it, shaky or missed for each question, and the two things to practise next) that the prep for your next round starts from (issue 367).
+- **Timed practice out loud.** 90 seconds an answer; paste what you said, from your phone's voice notes for example, and Claude points out filler, hedging and answers that ran long, using your own rules. Nothing is recorded by the app (issue 367).
+
 ### Changed
 
 - **Read your prep opens your interview prep in a place of its own.** On an employer's card, an interview's card, To do, Coming up or the Brief, it opens the prep full screen, starting on the one-screen summary with each likely question one tap away and a bar at the top that goes straight to each part; the cards link to it instead of holding it at their foot, and a follow-up's own follow-ups show under it. Your page gets it by itself with its next update (issue 365).
