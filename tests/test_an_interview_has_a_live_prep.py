@@ -738,7 +738,7 @@ def test_several_interviews_back_to_back_are_timed_as_the_day(monkeypatch):
     ("Excellent communication skills", "Give me an example of your communication skills at work."),
     ("Inventory optimization", "Tell me about your experience with inventory optimization."),
     ("Strong stakeholder management", "Tell me about your experience with stakeholder management."),
-    ("5+ years of experience in analytics", "Tell me about your experience with analytics."),
+    ("5+ years of experience in analytics", "Walk me through your experience in analytics."),
     ("Ability to work under pressure", "Tell me about a time you had to work under pressure."),
     ("Solid knowledge of Python and SQL", "Tell me about your experience with Python and SQL."),
     ("Demand forecasting", "Tell me about your experience with demand forecasting."),
