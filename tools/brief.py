@@ -1124,7 +1124,15 @@ def _gather(today: dt.date, write: bool) -> dict:
     qs = queries(today, live_names, watch)
     wide = wider(today, live_names, watch, qs)
     searches = numbered(qs, wide, watch, today)
+    # Each round booked from today on, in one plain line: how ready, and the one thing to do
+    # next (issue 367), from the person's practice on the page as this copy last read it.
+    try:
+        import interview_round
+        ready = interview_round.brief_lines(tracker, today)
+    except Exception:  # noqa: BLE001  never a brief lost to a round that cannot be read
+        ready = []
     b = {
+        "readiness": ready,
         "date": iso, "weekday": today.strftime("%A"), "since": since.isoformat(),
         "counts": {"owed": len(live), **{k: v for k, v in counts.items() if k != "processes"}},
         "since_counts": since_counts, "lead": lead,
@@ -1692,10 +1700,11 @@ def message_lines(b: dict, owed_max: int = 4) -> list[str]:
     asks = len((b.get("sync") or {}).get("questions") or [])
     asked = ["", "%d question%s wait%s for you on your page." % (
         asks, "" if asks == 1 else "s", "s" if asks == 1 else "")] if asks else []
+    ready = list(b.get("readiness") or [])
     if b.get("page"):
-        return [headline(b), b["lead"]] + ([b["back"]] if b.get("back") else []) + asked + [
-            "", "Your page: " + b["url"]]
-    out = [headline(b), b["lead"], "", "Owed"]
+        return [headline(b), b["lead"]] + ready + ([b["back"]] if b.get("back") else []) + \
+            asked + ["", "Your page: " + b["url"]]
+    out = [headline(b), b["lead"]] + ready + ["", "Owed"]
     owed = b["owed"]
     out += ["- " + o["text"] for o in owed[:owed_max]] or ["Nothing owed"]
     if len(owed) > owed_max:
@@ -2159,7 +2168,10 @@ def record_text(b: dict, news: list[str] | None = None) -> str:
     """documents/briefs/<date>.md: the same layout every time, so the briefs read as one record."""
     out = ["# Brief, %s (%s)" % (b["date"], b["weekday"]), "",
            "Since %s. Gathered by tools/brief.py; the news by the news reader." % b["since"], "",
-           "## Where the search is", "", headline(b), "", b["lead"], "", "## Owed", ""]
+           "## Where the search is", "", headline(b), "", b["lead"], ""]
+    if b.get("readiness"):
+        out += ["- " + r for r in b["readiness"]] + [""]
+    out += ["## Owed", ""]
     owed = b["owed"]
     if not owed:
         out.append("Nothing owed.")

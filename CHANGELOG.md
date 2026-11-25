@@ -25,6 +25,14 @@ make sense to somebody whose repo just received it.
 - **Read your prep opens your interview prep in a place of its own.** On an employer's card, an interview's card, To do, Coming up or the Brief, it opens the prep full screen, starting on the one-screen summary with each likely question one tap away and a bar at the top that goes straight to each part; the cards link to it instead of holding it at their foot, and a follow-up's own follow-ups show under it. Your page gets it by itself with its next update (issue 365).
 - **The app's builder hands over to its next chat by itself.** After each release, and after each weekly run, the chat that built it starts the next one, moves its scheduled tasks there and puts itself away, so the maintainer never pastes a prompt. Nothing in your own copy changes.
 
+### Added
+
+- **Practise each interview round with answer cards that come back when you need them.** Every likely question is a card with what to say, from your own answers and stories; mark it got, shaky or missed, and it comes back after 1, 3, 7 or 14 days. Your page gets it by itself with its next update (issue 367).
+- **A one-screen cheat sheet, your stories and every number from your profile, for each round.** Who you are meeting and what each is likely to dig into, six to eight stories with where each comes from in your profile, and the numbers to drill until you can say them without looking (issue 367).
+- **Technical answers are prepared three follow-ups deep.** The third asks about the model or method your profile records for the work; where it records none, the prep asks you which it was instead of guessing (issue 367).
+- **An interview in person gets an "On the day" plan.** Where to go, when to arrive, what to bring and wear, a whiteboard or paper case, the day in order with time zones, the last five minutes and the debrief after; what only you know is asked once and kept (issue 367).
+- **How ready you are, round by round.** Your page and the morning brief say how ready you are for each interview still to come and the one most useful thing to do next, and the next round's prep starts from the answers you were shaky on (issue 367).
+
 ### Fixed
 
 - **Deeper interview prep reaches your page.** A question a chat adds to your prep, and the follow-ups written under it, now show on your page with the rest, and the follow-ups are no longer read as part of the answer above them. Technical questions in a prep now come with the follow-ups an interviewer digs into, two deep, and a modelling answer is prepared from the model and method your profile records rather than the language it was written in (issue 362).

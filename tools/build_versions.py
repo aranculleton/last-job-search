@@ -447,7 +447,7 @@ METHODS: dict[str, dict] = {
                "1, said in a plain line): that pack is done, so record the version once the "
                "others are rebuilt",
         "files": (".claude/commands/interview.md", "tools/interview_pack.py",
-                  "tools/interview_live.py"),
+                  "tools/interview_live.py", "tools/interview_round.py"),
         "versions": (
             _first(),
             (2, "2026-10-15", False, "reads what the person has taught it (tools/learned.py) before drafting, flags the phrases they never want, their wording replaces the defaults, and every output is shown in the reply"),
@@ -512,6 +512,7 @@ METHODS: dict[str, dict] = {
             (60, "2026-11-25", True, "a question added to a prep under Your answers, and the follow-ups written under any answer, reach the page, the follow-ups no longer read as part of the answer above (issue 362); a technical question's prep carries the follow-ups an interviewer digs into, two deep, and a modelling answer is said from the model and method the profile records; each prep for a round still ahead is made again to carry them"),
             (61, "2026-11-25", False, "a live prep keeps what the prep's answers said when it was written, and while one has changed since, the page shows the prep itself and the chat drawing the page is told to make the live one again; one saved before is judged by when each file was saved; a technical question's follow-ups go four or five deep, and a modelling answer names the model the profile records (issue 363); a live prep already made is shown as it is until then"),
             (62, "2026-11-25", False, "a prep built for a new round leaves out the answers written only for the round held, kept apart beside it in earlier_answers.md, puts first the questions found hard there (asked --landed no or partly), and fails its check over MAX_PACK_CHARS characters; book says to record what was hard and build for the round booked only (issue 364); the rerun of version 60 makes each prep ahead again"),
+            (63, "2026-11-25", True, "each round still to come is practised on the page: who you meet and what they dig into, a one-screen cheat sheet, your stories and every number from your profile, answer cards with follow-ups three deep on every technical question (the third about the method your profile records, or a FILL IN asking for it), marks that bring a card back after 1, 3, 7 or 14 days, and how ready you are; a round in person gains On the day (interview_pack.py logistics records the address and the rest); the next pack starts from the cards you were shaky on; issue 367"),
         ),
         "fingerprint": "5d30cd3fc50d6f15",
     },
