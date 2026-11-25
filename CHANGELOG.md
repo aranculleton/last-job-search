@@ -22,7 +22,7 @@ make sense to somebody whose repo just received it.
 
 ### Changed
 
-- **Your interview prep has a place of its own.** Read your prep, on an employer's card, an interview's card, To do, Coming up or the Brief, now opens the prep full screen, starting on the one-screen summary with each likely question one tap away and a bar at the top that goes straight to each part; the cards link to it instead of holding it at their foot, and a follow-up's own follow-ups show under it. Your page gets it by itself with its next update (issue 365).
+- **Read your prep opens your interview prep in a place of its own.** On an employer's card, an interview's card, To do, Coming up or the Brief, it opens the prep full screen, starting on the one-screen summary with each likely question one tap away and a bar at the top that goes straight to each part; the cards link to it instead of holding it at their foot, and a follow-up's own follow-ups show under it. Your page gets it by itself with its next update (issue 365).
 - **The app's builder hands over to its next chat by itself.** After each release, and after each weekly run, the chat that built it starts the next one, moves its scheduled tasks there and puts itself away, so the maintainer never pastes a prompt. Nothing in your own copy changes.
 
 ### Fixed
