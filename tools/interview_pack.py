@@ -616,7 +616,10 @@ def _answer_for(question, answers, names=(), company="", fits=None) -> dict | No
             top = max(top, score)
         if top >= 0.5:
             hits.append((bool(fits(a)) if fits else True, top, a))
-    return max(hits, key=lambda h: (h[0], h[1]))[2] if hits else None
+    # One that fits, or none: where every match works against this employer, there is no
+    # prepared answer, and Claude asks the person first (issue 369).
+    hits = [h for h in hits if h[0]]
+    return max(hits, key=lambda h: h[1])[2] if hits else None
 
 
 # The questions only the person can answer: why they are leaving, why each move, why this
@@ -2044,6 +2047,8 @@ def answer_for(item, ctx) -> dict:
                                 if isinstance(e, dict)]
     prepared = _answer_for(q, ctx["answers"], names, ctx["company"],
                            fits=lambda a: not against_employer(a, ctx))
+    # The one left out, to say why: never offered (issue 369).
+    unfit = None if prepared else _answer_for(q, ctx["answers"], names, ctx["company"])
     kind = motive(q, ctx["company"])
     why_us = kind == "why_us"
     if item.get("framing"):
@@ -2143,12 +2148,11 @@ def answer_for(item, ctx) -> dict:
         lines.append("Use a hook from The company, never a generic line.")
     # A stock answer that is not for this employer, or still a template, is never printed
     # as an answer: printed with a warning under it, it read as the thing to say.
-    careful = against_employer(prepared, ctx) if prepared else ""
-    if prepared and careful:
+    careful = against_employer(unfit, ctx) if unfit else ""
+    if careful:
         lines.append("Your stock answer to this is left out for %s: %s (source: %s). Say your "
-                     "real reasons for %s." % (ctx["company"], careful, prepared["source"],
+                     "real reasons for %s." % (ctx["company"], careful, unfit["source"],
                                                ctx["company"]))
-        prepared = None
     elif prepared and prepared.get("fill_in"):
         lines.append("Your stock answer to this still has a gap to fill (\"%s\"): fill it in "
                      "with Claude, and the next prep uses it." % prepared["fill_in"])
@@ -5007,7 +5011,8 @@ def say_these(ctx, answered, written=None) -> list:
         _q, notice = _form_value(ctx, r"notice")
         if not notice:
             prepared = _answer_for("What is your notice period?", ctx["answers"],
-                                   [ctx["company"]], ctx["company"])
+                                   [ctx["company"]], ctx["company"],
+                                   fits=lambda a: not against_employer(a, ctx))
             notice = _text((prepared or {}).get("answer"))
         if notice:
             basics.append("notice: %s" % _sentence(notice, 60).rstrip(".").lower())

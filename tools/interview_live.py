@@ -1167,7 +1167,10 @@ def private_notes(ctx) -> dict:
     pay, _lines = P.money(ctx)
     notice = ""
     for a in ctx.get("answers") or []:
-        if re.search(r"\bnotice\b", a.get("question") or "", re.I) and not a.get("fill_in"):
+        # One that works against this employer is on the list not to say, never the notice
+        # to say (issue 369).
+        if re.search(r"\bnotice\b", a.get("question") or "", re.I) and not a.get("fill_in") \
+                and not P.against_employer(a, ctx):
             notice = _t(a["answer"])
     if not notice:
         _q, said = P._form_value(ctx, r"notice")

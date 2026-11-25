@@ -94,3 +94,36 @@ def test_outcome_md_resolved_ends_the_interview_the_tracker_still_calls_live(tmp
     assert got["tracker_status"] == "interview"
     said = app.live_behind_lines({"interviews": [got]})
     assert any("outcome.md says withdrawn" in s for s in said), said
+
+
+# ---------------------------------------------------------------- 3. a stock answer not for them
+
+NOTICE = {"question": "What is your notice period?", "alternatives": ["What is your notice period?"],
+          "use_for": [], "answer": "Three months, and I would rather not leave early.",
+          "source": "profile/answers.md", "suits": ("bank",), "not_for": (), "fill_in": "",
+          "confirm": False}
+
+
+def _fits(a):
+    return not a.get("suits")
+
+
+def test_a_stock_answer_that_works_against_them_is_never_offered():
+    assert P._answer_for("What is your notice period?", [NOTICE], fits=_fits) is None
+    assert P._answer_for("What is your notice period?", [NOTICE]) is NOTICE
+    # One that fits is still taken over one that does not.
+    other = dict(NOTICE, suits=(), answer="One month.")
+    assert P._answer_for("What is your notice period?", [NOTICE, other], fits=_fits) is other
+
+
+@pytest.mark.usefixtures("app_fixture")
+def test_the_live_preps_notice_never_comes_from_an_answer_not_for_them(monkeypatch):
+    ctx = _ctx()
+    ctx["answers"] = [NOTICE]
+    monkeypatch.setattr(P, "employer_type", lambda _ctx: "consulting")
+    assert P.against_employer(NOTICE, ctx)
+    assert "Three months" not in L.private_notes(ctx)["notice"]
+    item = {"question": "What is your notice period?", "source": "the posting"}
+    got = P.answer_for(item, ctx)
+    text = "\n".join(got["lines"])
+    assert "left out for" in text and "Prepared: Three months" not in text
