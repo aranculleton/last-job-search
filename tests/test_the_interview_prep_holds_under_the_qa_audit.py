@@ -124,6 +124,15 @@ def test_a_new_day_interviewer_or_length_takes_the_old_live_prep_off_the_page():
         assert lines and said in lines[0]
 
 
+# ---------------------------------------------------------------- 11. a zone word nobody can place
+
+def test_a_zone_word_the_app_cannot_place_is_refused_never_read_as_home_time():
+    assert P.zone_name("IST") == ""
+    assert P.zone_name("XYZ") == ""
+    assert P.zone_name("EST") == "EST"
+    assert P.zone_name("Europe/London") == "Europe/London"
+
+
 # ---------------------------------------------------------------- 3. a stock answer not for them
 
 NOTICE = {"question": "What is your notice period?", "alternatives": ["What is your notice period?"],

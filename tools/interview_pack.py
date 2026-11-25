@@ -1113,7 +1113,9 @@ def zone_name(zone) -> str:
         except Exception:  # noqa: BLE001  not a zone this machine knows
             return ""
     if re.fullmatch(r"[A-Za-z]{2,5}", z):
-        return z.upper()
+        # Only a word the app can place: any other ("IST" is India, Ireland or Israel) was kept
+        # and then read in the person's own zone (issue 369).
+        return z.upper() if z.upper() in person.ZONE_WORDS else ""
     # Words a person writes ("Toronto time", "Eastern", "Pacific Time"), kept as the zone's
     # own name: they gave no time at all before (the audit, 2026-11-03).
     return person.zone_in(z)
