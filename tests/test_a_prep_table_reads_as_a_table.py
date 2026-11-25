@@ -60,7 +60,7 @@ TABLE = ("(() => { const t = document.querySelector('dialog .prep-table'); if (!
          " return {head: [...t.querySelectorAll('thead th')].map((x) => x.textContent),"
          " rows: [...t.querySelectorAll('tbody tr')].map((r) => [...r.querySelectorAll('td')].map((x) => x.textContent)),"
          " stacked: getComputedStyle(td).display === 'block' && getComputedStyle(th).display === 'none',"
-         " label: getComputedStyle(td, '::before').content,"
+         " label: td.getAttribute('data-label') || '', before: getComputedStyle(td, '::before').content,"
          " text: document.querySelector('dialog.detail').innerText, scroll: b.scrollWidth - b.clientWidth}; })()")
 
 
@@ -75,7 +75,9 @@ def test_a_markdown_table_in_a_prep_is_a_table(run, tmp_path, vp, how):
     assert "|---|" not in t["text"] and "| Story |" not in t["text"]
     assert "Use each story once." in t["text"]
     if vp is PHONE:
-        assert t["stacked"] and "Story" in t["label"], t
+        # Chrome gives the ::before content resolved, Firefox as "attr(data-label)": the label is
+        # the cell's own, and something is drawn before it (Firefox, 2026-11-25).
+        assert t["stacked"] and "Story" in t["label"] and t["before"] not in ("none", "normal", ""), t
     else:
         assert not t["stacked"], t
     assert t["scroll"] <= 0, "nothing wider than the screen"
