@@ -187,3 +187,27 @@ def test_a_stage_ticked_done_by_hand_keeps_its_day_who_and_length(word):
     assert s["done"] and s["date"] == "2026-11-23" and s["time"] == "16:00"
     assert s["zone"] == "Europe/London" and s["minutes"] == 60
     assert s["with"] == "the head of planning" and not s["scheduled"]
+
+
+# ---------------------------------------------------------------- 6. a checklist line is not a stage
+
+NOTE = ("Round 2: the recruiter said it will be a case study with a partner and a senior "
+        "manager, about an hour, on the pricing work they are doing for a retail client, and to "
+        "bring a laptop in case they ask for a quick model")
+
+
+def test_a_note_in_the_checklist_is_never_a_stage_and_one_round_is_one_line():
+    import what_works
+    text = ("## Interview stages reached\n\n"
+            "- [x] Phone screen (2026-11-02, with the recruiter)\n"
+            "- [x] Paused until the hiring manager knew the headcount\n"
+            "- [ ] Round 2 (scheduled 2026-12-01 10:00 Europe/London, with a partner)\n"
+            "- [ ] %s\n"
+            "- [ ] Offer received\n" % NOTE)
+    stages = what_works.outcome_stages(text, "2026-11-25")
+    assert [s["label"] for s in stages] == ["Phone screen", "Round 2", "Offer received"]
+    r2 = stages[1]
+    assert r2["date"] == "2026-12-01" and r2["notes"] == [NOTE]
+    # The furthest step reached is the screen, never a technical round held.
+    assert [s["step"] for s in stages if s["done"]] == ["screen"]
+

@@ -685,6 +685,11 @@ def outcome_stages(text: str, today: str = "") -> list[dict]:
         text_ = hit.group(2)
         when = _STAGE_WHEN.search(text_)
         offer = None if when else _STAGE_OFFERED.search(text_)
+        # A box that names no round is a note, never a stage: "Paused until they knew"
+        # ticked read as a technical interview held (issue 369).
+        named = text_[:(when or offer).start()] if (when or offer) else text_
+        if not _ROUND_WORD.search(named) or _NOTE_START.match(named):
+            continue
         if offer:
             label = text_[:offer.start()].strip()
             out.append({"label": label, "step": stage_step(label),
@@ -709,7 +714,57 @@ def outcome_stages(text: str, today: str = "") -> list[dict]:
                     "place": " ".join((when.group("place") or "").split()) if when else "",
                     # Asked for, and not confirmed by them yet (2026-11-05): "not confirmed yet".
                     "tentative": bool(when and when.group("tentative"))})
-    return out or _heading_stages(whole, today or dt.date.today().isoformat())
+    return _one_line_a_round(out) or _heading_stages(whole, today or dt.date.today().isoformat())
+
+
+# The words a stage's name uses for a round of a hiring process (outcome_stages): a box with
+# none of them is a note someone ticked.
+_ROUND_WORD = re.compile(
+    r"\b(?:interview\w*|screen\w*|round|stage|call|chat|conversation|meeting|meet|test\w*|"
+    r"assess\w*|case|panel|final|offer\w*|present\w*|take[- ]?home|exercise|on-?site|"
+    r"technical|coding|assignment|task|challenge|superday|loop|intro\w*|recruiter|hr|"
+    r"talent|hiring manager|culture|fit|workshop|visit|debrief|discussion|session|"
+    r"questionnaire|quiz|pairing|whiteboard|homework|reference\w*|"
+    r"background check|portfolio|demo)\b", re.I)
+# A box that opens on what happened or what to do is a note, whatever it names: "Paused until
+# the hiring manager knew", "Waiting to hear from the recruiter".
+_NOTE_START = re.compile(
+    r"\s*(?:paused|on hold|hold|waiting|waited|wait|heard|sent|emailed|chased|followed up|"
+    r"follow up|asked|told|need|needs|note|todo|to do|remember|withdr\w+|declined|rejected|"
+    r"ghosted|pending|thank\w*)\b", re.I)
+_ORDINAL_WORDS = ((r"first|initial|1st|one", "1"), (r"second|2nd|two", "2"),
+                  (r"third|3rd|three", "3"), (r"fourth|4th|four", "4"))
+
+
+def _round_of(label) -> str:
+    """Which round a stage's name says ("round 2", "final"), or "": interview_pack._round_key,
+    read here without the pack."""
+    t = str(label or "").lower()
+    for words, n in _ORDINAL_WORDS:
+        t = re.sub(r"\b(?:%s)\b" % words, n, t)
+    m = re.search(r"\b(?:round|stage)\s*(\d+)\b|\b(\d+)\s*(?:round|stage)\b", t)
+    if m:
+        return "round " + (m.group(1) or m.group(2))
+    return "final" if re.search(r"\bfinal\b", t) else ""
+
+
+def _one_line_a_round(stages: list) -> list:
+    """Two lines for one round made one: a line written by hand under a booked round, with no
+    day of its own ("Round 2: they said a case with a partner, about an hour, ..."), read as
+    a second round still to come, with its whole note as its name (issue 369). The line with a
+    day is the round; the other's words are kept as its `notes`."""
+    out = []
+    for s in stages:
+        key = _round_of(s["label"])
+        twin = next((o for o in out if key and _round_of(o["label"]) == key
+                     and not (o["date"] and s["date"]) and o["done"] == s["done"]), None)
+        if twin is None:
+            out.append(s)
+            continue
+        keep, note = (s, twin) if s["date"] and not twin["date"] else (twin, s)
+        keep = dict(keep, notes=list(twin.get("notes") or []) + [note["label"]])
+        out[out.index(twin)] = keep
+    return out
 
 
 # outcome.md's own **Status:** word, as the tracker spells the same end (documents/README.md,
