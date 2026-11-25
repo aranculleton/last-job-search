@@ -2170,6 +2170,16 @@ def answer_for(item, ctx) -> dict:
         lines.insert(0, ask)
     if story:
         lines.append("Story: %s (%s; source: %s)" % (story["title"], how, story["source"]))
+        if technical(q):
+            star = " ".join(_text(v) for v in story["star"].values())
+            found = recorded_methods(star)
+            if found:
+                lines.append("%s %s (source: %s). Name them, never only the language it was "
+                             "written in." % (METHOD_MARK, ", ".join(found), story["source"]))
+            elif _LANGUAGE_ONLY.search(star):
+                lines.append("%s, only the language it was written in: say which model it was "
+                             "and how you checked it, and tell Claude so the profile records it, "
+                             "or ask Claude for a draft to confirm." % NO_METHOD_MARK)
     elif mapped:
         lines.append("Matched to \"%s\", which is not one of your stories: check its title."
                      % mapped)
@@ -4377,8 +4387,162 @@ OLD_ANSWERS_INTRO = ("What you will say goes under each question, as sentences. 
 
 
 def spoken(body) -> list:
-    """The lines of an answer the person will say: their own words with every note out."""
-    return prep.spoken_lines(_own_words(body))
+    """The lines of an answer the person will say: their own words with every note out, and
+    never the follow-ups written under it (`follow_ups`), which are answers of their own."""
+    return prep.spoken_lines(split_follow(_own_words(body))[0])
+
+
+# A follow-up written under an answer, as a chat writes one when the person asks for deeper
+# prep: `**If they follow up: "Why that model?"**`, its answer on the lines under it, and one
+# asked after it indented two spaces a level deeper. Added hours before an interview, these
+# never reached the page, and their lines were read as part of the answer above (issue 362).
+_FOLLOW_LINE = re.compile(
+    r"^(?P<indent>[ \t]*)(?:[-*+][ \t]+)?If (?:they|the interviewer|he|she) "
+    r"(?:follows? up|asks?|press(?:es)?|push(?:es)?|probes?|digs?)\b[^:\"“]*:[ \t]*"
+    r"(?:[\"“](?P<quoted>[^\"”]+)[\"”]|(?P<bare>[^\"“”]+?\?))[ \t]*(?P<rest>.*)$", re.I)
+FOLLOW_MARK = "**If they follow up: \"%s\"**"
+
+
+def follow_line(line):
+    """(depth from 1, the question, the words on the same line) for a follow-up's line, else
+    None."""
+    m = _FOLLOW_LINE.match(str(line or "").replace("**", "").replace("__", ""))
+    if not m:
+        return None
+    indent = len(m.group("indent").expandtabs(2))
+    q = (m.group("quoted") or m.group("bare") or "").strip()
+    return (indent // 2 + 1, q, m.group("rest").strip(" :")) if q else None
+
+
+def split_follow(lines) -> tuple:
+    """(the answer's own lines, its follow-ups as [{q, lines, follow}]) for an answer block: a
+    follow-up's lines run to the next follow-up, at any depth, each under the nearest one above
+    it that is less deep."""
+    head, roots, stack = [], [], []
+    for ln in lines or ():
+        got = follow_line(ln)
+        if got:
+            depth, q, rest = got
+            node = {"q": q, "lines": [rest] if rest else [], "follow": [], "depth": depth}
+            while stack and stack[-1]["depth"] >= depth:
+                stack.pop()
+            (stack[-1]["follow"] if stack else roots).append(node)
+            stack.append(node)
+        elif stack:
+            stack[-1]["lines"].append(ln.strip() if ln.strip() else "")
+        else:
+            head.append(ln)
+    return head, roots
+
+
+def follow_ups(body) -> list:
+    """The follow-ups written under an answer, as the page shows them: [{question, answer,
+    draft, follow}], `answer` None while one is unwritten, `follow` the ones asked after it."""
+    def said(node):
+        words = [prep.uncue(x).strip() for x in prep.spoken_lines(node["lines"]) if x.strip()]
+        return {"question": _plain(node["q"]), "answer": " ".join(words) or None,
+                "draft": prep.drafted(node["lines"]), "follow": [said(f) for f in node["follow"]]}
+    return [said(f) for f in split_follow(_own_words(body))[1]]
+
+
+def _follow_said(body) -> list:
+    """[(question, [lines said])] for every follow-up under an answer, at any depth: what the
+    checks read as the person's own words, as they read the answer above."""
+    out = []
+
+    def walk(nodes):
+        for n in nodes:
+            out.append((n["q"], prep.spoken_lines(n["lines"])))
+            walk(n["follow"])
+    walk(split_follow(_own_words(body))[1])
+    return out
+
+
+# Likely follow-ups to a technical or modelling answer, the likeliest first, each with the one
+# asked after it: what a technical interviewer digs into (issue 362: model choice, class
+# imbalance, overfitting, monitoring after launch, sign-off). Written under each technical
+# question of a pack as follow-ups to answer, never as words to say.
+TECH_FOLLOW = (
+    (r"\bwhy\b|choos|chose|approach|model", "Why that model, and not a simpler one?",
+     "What did you compare it against, and how?"),
+    (r"validat|check|test|accura|error|overfit|work", "How did you know it wasn't overfitting?",
+     "How did you split the data, and why that way?"),
+    (r"product|deploy|launch|live|monitor|pipeline", "How was it monitored after launch?",
+     "What would have made you retrain it?"),
+    (r"imbalanc|rare|fraud|risk|default|churn|classif|rank", "How did you handle the rare cases, "
+     "the class imbalance?", "How did you pick the cut-off?"),
+    (r"stakeholder|business|sign|decision|trust", "Who signed it off, and what did they need "
+     "to see?", "What did you do when they pushed back?"),
+)
+TECH_FOLLOW_N = 3
+_TECHNICAL_Q = re.compile(r"\bmodel|forecast|predict|machine learning|validat|algorithm|"
+                          r"check the result|"
+                          r"statistic|overfit|\bfeatures?\b|a/b test|experiment|\bsql\b|"
+                          r"\bpython\b|pipeline|data quality|\bdeploy|production", re.I)
+
+
+def technical(question) -> bool:
+    """Is this a question a technical interviewer digs into, a layer at a time?"""
+    return bool(_TECHNICAL_Q.search(_text(question)))
+
+
+def tech_follow_lines(question) -> list:
+    """The follow-ups to prepare under a technical question, two deep: the likeliest for what
+    it asks first, as lines of the document (`FOLLOW_MARK`), each answered under it."""
+    q = _text(question)
+    ranked = sorted(TECH_FOLLOW, key=lambda t: not re.search(t[0], q, re.I))[:TECH_FOLLOW_N]
+    out = []
+    for _rx, first, second in ranked:
+        out += [FOLLOW_MARK % first, "  " + FOLLOW_MARK % second]
+    return out
+
+
+# The model and the method a modelling story was done with, as a profile records them: an
+# answer names these, never only the language it was written in (issue 362, "in SQL and
+# Python" said for a risk model the profile records as gradient-boosted trees).
+_METHODS = re.compile(
+    r"\b(?:(?:logistic|linear|ridge|lasso|poisson|quantile|multiple)\s+regression|regression|"
+    r"XGBoost|LightGBM|CatBoost|gradient[- ]boost(?:ed|ing)?(?:\s+trees?)?|random forests?|"
+    r"decision trees?|neural (?:net|network)s?|deep learning|S?ARIMA|exponential smoothing|"
+    r"Holt-Winters|Prophet|k-means|clustering|survival analys[ie]s|Bayesian|Monte Carlo|SHAP|"
+    r"cross[- ]validation|backtest(?:ing|s)?|hold-?out|A/B tests?|difference[- ]in[- ]differences|"
+    r"propensity|uplift|scorecards?|isolation forest|naive Bayes|transformers?|elasticity|"
+    r"linear programming|MAPE|RMSE|AUC)\b", re.I)
+_LANGUAGE_ONLY = re.compile(r"\b(?:in|with|using)\s+(?:Python|SQL|R|Excel)\b"
+                            r"(?:,?\s+(?:and|&)\s+(?:Python|SQL|R|Excel)\b)?", re.I)
+METHOD_MARK = "The model and method your profile records for it:"
+NO_METHOD_MARK = "Your profile records no model or method for this story"
+_NUMBER = re.compile(r"\d[\d,.]*\s?(?:%|k|K|M|B|bn|x)?")
+
+
+def methods_in(text) -> list:
+    """The models and methods a text names, each once, as it names them."""
+    out = []
+    for m in _METHODS.finditer(_text(text)):
+        if m.group(0).lower() not in {x.lower() for x in out}:
+            out.append(m.group(0))
+    return out
+
+
+def recorded_methods(star_text, profile_text=None) -> list:
+    """The models and methods the profile records for one story: those its own words name, and
+    those of a profile line about the same work (one sharing a figure with it)."""
+    found = methods_in(star_text)
+    if profile_text is None:
+        profile_text = _read(person.file("candidate_profile", "01-candidate-profile.md"))
+    figures = {n.strip() for n in _NUMBER.findall(_text(star_text)) if len(n.strip()) > 1}
+    for ln in str(profile_text or "").splitlines():
+        if figures & {n.strip() for n in _NUMBER.findall(ln)}:
+            found += [x for x in methods_in(ln) if x.lower() not in {f.lower() for f in found}]
+    return found
+
+
+def language_only(text, methods=()) -> bool:
+    """Does an answer say what a model was written in and none of the models or methods it
+    was done with?"""
+    t = _text(text)
+    named = methods_in(t) or [m for m in methods if m.lower() in t.lower()]
+    return bool(_LANGUAGE_ONLY.search(t)) and not named
 
 
 def _restates(body, checking, hear) -> bool:
@@ -4418,20 +4582,34 @@ def answer_lines(ctx, answered) -> list:
         if spoken(body):
             out += body
         else:
-            # Notes kept, and still to write: the marker and what to say it from.
+            # Notes kept, and still to write: the marker and what to say it from, the model
+            # and method a modelling story was done with among them wherever it falls.
             out.append(TO_WRITE)
-            out += ["- From: %s" % plain_sources(re.sub(r"^Say: ", "", ln))
-                    for ln in a["lines"][:ANSWER_NOTES]]
+            froms = a["lines"][:ANSWER_NOTES] + [ln for ln in a["lines"][ANSWER_NOTES:]
+                                                 if ln.startswith((METHOD_MARK, NO_METHOD_MARK))]
+            out += ["- From: %s" % plain_sources(re.sub(r"^Say: ", "", ln)) for ln in froms]
             out += ([""] + body) if body else []
+        # A technical question has the follow-ups an interviewer digs into beneath it, two
+        # deep, each to answer under its own line; once written (or any written by hand),
+        # they are the person's and are kept as they are.
+        if technical(q["question"]) and not split_follow(body)[1]:
+            out += [""] + tech_follow_lines(q["question"])
         out.append("")
     # An answer written for a question this stage does not list (an earlier stage's, one the
     # person added, one reworded since) is never dropped: it follows, as they wrote it.
     asked = {what_works._norm(q["question"]) for q, _a in answered}
     for key, (q, body) in kept.items():
         mine = _own_words(body)
-        if key not in asked and mine:
+        if key not in asked and (written_answer(body) or any(
+                ln.strip() and not follow_line(ln) for ln in mine)):
             out += ["### %s" % q] + mine + [""]
     return out
+
+
+def written_answer(body) -> bool:
+    """Has anything under a question been written to say: its answer, or a follow-up's?"""
+    return bool(" ".join(spoken(body)).strip()) or any(
+        " ".join(said).strip() for _q, said in _follow_said(body))
 
 
 def check(path) -> list:
@@ -4488,6 +4666,16 @@ def check(path) -> list:
     # to confirm, and listed as one.
     said = [(q, body) for q, body in list(blocks.values()) + list(elsewhere.values())
             if not drafted(body) and " ".join(spoken(body)).strip()]
+    # The follow-ups written under an answer are said as the person's own too, and read the
+    # same way: the place this employer heard, and every number the profile's.
+    for q, body in list(blocks.values()) + list(elsewhere.values()):
+        for fq, lines in _follow_said(body):
+            if not " ".join(lines).strip() or drafted(lines):
+                continue
+            where = places_told.clash(" ".join(lines), company) if company else ""
+            if where:
+                out.append(("%s, then \"%s\"" % (q, fq), where))
+            said.append(("%s, then \"%s\"" % (q, fq), lines))
     out += _ungrounded_numbers(text, said)
     # A gap to fill anywhere in the document, under any heading: "[FILL IN: the hardest
     # moment]" sat in an answer under a story's heading, which no question block reads.
@@ -5683,7 +5871,20 @@ def practice(text) -> dict:
         mine = (written.get(what_works._norm(q)) or ("", []))[1]
         said = [prep.uncue(x).strip() for x in spoken(mine) if x.strip()]
         qs.append({"question": q, "why": _plain(why) or None,
-                   "answer": " ".join(said) or None, "draft": prep.drafted(mine)})
+                   "answer": " ".join(said) or None, "draft": prep.drafted(split_follow(mine)[0]),
+                   "follow": follow_ups(mine), "added": False})
+    # A question written under Your answers that Likely questions does not list (one a chat
+    # added for deeper prep, an earlier round's, one reworded) is practised and shown too:
+    # only the listed ones reached the page (issue 362).
+    listed = {what_works._norm(x["question"]) for x in qs}
+    for key, (q, mine) in written.items():
+        if key in listed or not (written_answer(mine) or split_follow(_own_words(mine))[1]):
+            continue
+        listed.add(key)
+        said = [prep.uncue(x).strip() for x in spoken(mine) if x.strip()]
+        qs.append({"question": _plain(q), "why": None, "answer": " ".join(said) or None,
+                   "draft": prep.drafted(split_follow(mine)[0]), "follow": follow_ups(mine),
+                   "added": True})
     return {"questions": qs, "reworked": rework_lines(text),
             "bands": list(BANDS), "min_quote_words": MIN_QUOTE_WORDS}
 
@@ -5924,10 +6125,13 @@ def _doc_parts(text) -> list:
 def reading(text, company="") -> dict | None:
     """The prep as the page reads it, in plain words, from any version of the document:
     {glance {assessing, hear, say [text], ask [text], money, careful [text], hooks [{text,
-    link}]}, questions [{question, why, answer, draft, cue, checking, notes [text]}],
+    link}]}, questions [{question, why, answer, draft, cue, checking, notes [text], follow
+    [{question, answer, draft, follow}], added}],
     sections [{key, title, items}], live}. `answer` is what the person wrote to say, `draft`
     true only where that answer still carries a draft's mark, `cue` what to answer with
-    while it is unwritten. None for an empty document."""
+    while it is unwritten, `follow` the follow-ups written under it at every depth, `added`
+    true for a question written under Your answers that Likely questions does not list. None
+    for an empty document."""
     text = str(text or "")
     if not text.strip():
         return None
@@ -5990,7 +6194,7 @@ def reading(text, company="") -> dict | None:
         questions.append({"question": q["question"], "why": plain(q["why"] or "") or None,
                           "answer": q["answer"], "draft": bool(q["answer"]) and q["draft"],
                           "cue": cue, "checking": checks.get(key) or None,
-                          "notes": notes})
+                          "notes": notes, "follow": q["follow"], "added": q["added"]})
     sections = []
     order = [t for t in READ_ORDER if t in found] + [t for t, _ls in parts if t not in READ_ORDER
                                                      and t not in _READ_ELSEWHERE]

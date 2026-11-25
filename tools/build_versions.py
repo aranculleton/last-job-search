@@ -509,8 +509,9 @@ METHODS: dict[str, dict] = {
             (57, "2026-11-11", False, "each answer in a live prep shows its points first and the script under them unless you say you would rather have the script first, and a change to that setting reaches the page without the prep being made again"),
             (58, "2026-11-12", False, "a live prep reads as you would say it: an answer ends where it ends, never on a line added to lead into a follow-up, and its points are whole phrases in your own words that may sum the script up, never pieces cut from it; the introduction is said once, as the answer to Tell me about yourself; the questions to ask them are a short reason and then the question, with nothing pasted in brackets; and a question about the work in a mixed round is asked in its coding part, never in the story part or the hello; a prep already made is kept as it is"),
             (59, "2026-11-16", False, "booking an interview's day (interview_pack.py book or process) adds it to the application's tracker notes too, so a note saying the day was still to choose is never the last word (issue 274); booked-days, an instant profile upgrade, puts right a tracker an older version left so; no prep changes"),
+            (60, "2026-11-25", True, "a question added to a prep under Your answers, and the follow-ups written under any answer, reach the page, the follow-ups no longer read as part of the answer above (issue 362); a technical question's prep carries the follow-ups an interviewer digs into, two deep, and a modelling answer is said from the model and method the profile records; each prep for a round still ahead is made again to carry them"),
         ),
-        "fingerprint": "59cc176ca7e5cd21",
+        "fingerprint": "f5d7628c4eca5ab3",
     },
     "research": {
         "by": "upgrade", "priority": 3, "applies": "live_applications", "time": "~5 min each",
