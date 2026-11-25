@@ -340,6 +340,55 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   depth. A prep the engine could not read into parts is parted by its own headings, its
   one-screen summary first and the questions under its questions heading listed there.
   (prep place test)
+- **An interview's round is the prep's own screen** (issue 367: a prep to read was not a way to
+  get ready), drawn from the engine's `round` on the interview and laid out as the round guide
+  the maintainer set as the model. Read your prep opens it wherever there is a round, a live
+  prep included, and an interview's card holding a live prep opens it with "Open your round";
+  the round's head offers the live prep back as "Read it as you'll say it". Its head: the day,
+  then how long to go in large type ("Tomorrow", "3 days to go"), where and who, today's step of
+  the plan ("Today: ..."), how ready they are as one plain sentence ("You're about halfway
+  ready (55 out of 100).") over its one next step and a quiet line of what was done, then
+  Practise, its one filled button, with Practise with Claude beside it. The one-screen summary
+  leads with who they meet (each with what is known of them and what they are likely to ask
+  about), the format and the cheat sheet, then Before you go in and the likely questions as
+  before. The parts, a chip each and only where the round has something: On the day (in person
+  only, before the questions), Questions, Stories, Numbers, Cases, Your part, Plan, then the
+  prep's own parts. **On the day** says getting there, bring and wear, the day's times, the last
+  five minutes and the whiteboard, each in its own soft box; a fact the engine does not have is
+  "Not known yet" in the quiet grey, never filled in, and a box with nothing to say about the
+  last five minutes or the whiteboard is not drawn. "Confirmed" or "Not confirmed yet" says
+  where the plan stands, and Confirm the plan asks Claude under the interview's own thread (the
+  `talk` work a card's question is), its answer under it; the page writes nothing to the plan
+  itself. **Stories** are soft cards (title, trigger word, points) over a grid of a story a row
+  and a likely question a column, the story's home a filled dot and its backups a ring, the key
+  said once over it; under 760px the grid is a list a story, its home named. **Numbers** are a
+  value and what it is a row; Drill hides every value behind its own Show, and Show them all
+  puts them back. **Cases**: the prompt in large type, its steps a row of numbered soft steps
+  that wrap, its numbers drawn as bars against the line of what is needed (the shortest in the
+  clay), its picture as written in a monospaced box that scrolls inside itself, and Done, which
+  keeps the day it was worked through; Mock interview with Claude plays the person they meet
+  most likely to set one, named in its label. **Your part** is the project's steps in a row, the
+  ones the person leads in the soft clay with "You lead". **Plan** is a day a row, today in the
+  soft clay with "Today", the days gone by grey. **Practise** opens the flashcards full screen
+  at their own address (`#interviews/practise~<interview>/open`): a row of filters by part and
+  by who asks (a card anyone may ask is in every interviewer's set), the card's place and how it
+  stands, a 90-second clock that waits for "Start the clock", counts down and never stops
+  anything, the question in large type, Show the answer, then the trigger word, the points and
+  the follow-ups, and "How did it go?" over Got it (filled), Shaky and Missed. Missed cards come
+  back first, then the ones due, then shaky, then new, then the rest. Each mark is written to
+  the page's `practice` records under the card's id, with every mark and the day it is next due:
+  1, 3, 7 and 14 days, Got it a step on, Shaky the same step, Missed back to 1 (app.js
+  `practiseDue`, the page's one copy of the engine's rule). Nothing is recorded but the mark,
+  and the screen says so. (round screen test)
+- A prep's hint names the day the prep was made for (the engine's `prep.for_day`), never the
+  round's day now; where the read-aloud prep is held back, one plain line says why: the round
+  changed since it was made (`live_moved`, what changed, its days in words) or it is being
+  checked again (`live_unfit`), and this is the prep until Claude makes it again (issue 369).
+  (round screen test)
+- A table in a prep is a table wherever a prep is drawn, read from the prep's own Markdown or
+  from the lines of a part the engine read, never its raw "|---|" lines; under 600px each row
+  is stacked, every cell under its column's name and an empty cell left out (issue 368).
+  (prep table test)
 - A job's fit is one ring wherever a fit is shown (a job's card, the Brief's jobs, a sheet's
   rows; app.js `fitRing`, app.css `.fit-ring`): its number in the ink inside, drawn as far round
   as the fit goes, green for a strong fit and grey below it (the muted grey for good, the edge

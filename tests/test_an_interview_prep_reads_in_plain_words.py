@@ -456,7 +456,9 @@ def test_the_prep_on_a_phone_is_the_minutes_before_then_every_part_in_view(run, 
     # the bar to each and nothing folded (issue 365: a fold a part, under the card, was a scroll
     # and a tap away minutes before a call).
     assert r["glanceFont"] > r["bodyFont"]
-    assert r["folds"][0] == "Likely questions" and "Stories" in r["folds"]
+    # The prep's own Stories part is the round's story bank since issue 367 ("Your stories",
+    # its chip still "Stories"), each story with the questions it answers.
+    assert r["folds"][0] == "Likely questions" and "Your stories" in r["folds"] and "Stories" in r["chips"]
     assert r["openAtFirst"] == 0 and r["chips"][:2] == ["On one screen", "Questions"]
     # Everything, nothing to open: plain words, "Draft" above the one answer that is
     # one, and no link but an employer's own page.

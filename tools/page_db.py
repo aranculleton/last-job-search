@@ -37,7 +37,7 @@ if _HERE not in sys.path:
     sys.path.insert(0, _HERE)
 
 COLLECTIONS = ("actions", "receipts", "work", "chats", "locks", "talk", "meta", "view",
-               "reach", "addr")
+               "reach", "addr", "practice")
 
 # Where each record lives in the store. The code names a record by what it is (`view`,
 # `meta/listener`); the store keeps the ones only chats write under names of 4.3's own, so

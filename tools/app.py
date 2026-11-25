@@ -121,6 +121,14 @@ def _build(today, now, **kw):
     return with_page_parts(model), got
 
 
+def _practice_docs(db: dict) -> list | None:
+    """The page's practice records from a read, or None where the read holds none (the model
+    then takes what this copy kept from the page's last read)."""
+    import interview_round
+    got = (db or {}).get("practice") or {}
+    return interview_round.docs_from(got) if got else None
+
+
 def computer_seen(db: dict, now) -> dict | None:
     """The computer's state from the page's database (tools/computer.py), or None where it
     cannot be read: the page then shows what it showed before (computer.seen)."""
@@ -549,6 +557,19 @@ def live_behind_lines(model) -> list:
         if iv.get("live_behind"):
             out.append("The live prep for %s: %s." % (iv.get("company") or "", interview_live.BEHIND % (
                 iv.get("company") or "", iv.get("role") or "", iv.get("next_stage") or "")))
+        if iv.get("tracker_status"):
+            out.append("%s, %s: its outcome.md says %s and the tracker still says %s: set the "
+                       "tracker's status to match, as /outcome Step 4 does." % (
+                           iv.get("company") or "", iv.get("role") or "", iv.get("status") or "",
+                           iv["tracker_status"]))
+        if iv.get("live_moved"):
+            out.append("The live prep for %s: %s." % (iv.get("company") or "", interview_live.MOVED % (
+                iv["live_moved"], iv.get("company") or "", iv.get("role") or "",
+                iv.get("next_stage") or "")))
+        if iv.get("live_unfit"):
+            out.append("The live prep for %s: %s." % (iv.get("company") or "", interview_live.UNFIT % (
+                "its checks grew stricter since it was written", iv.get("company") or "",
+                iv.get("role") or "")))
     return out
 
 
@@ -695,7 +716,9 @@ def cmd_view(a) -> int:
                       work_time=page_db.work_times(db, now) if db else None,
                       # A message Claude's own change held is on hold on every screen.
                       held_work=app_model.held_by_work(db.get("work")) if db else None,
-                      computer=computer_seen(db or {}, now), unsaved=unsaved)
+                      computer=computer_seen(db or {}, now), unsaved=unsaved,
+                      # The person's practice marks (issue 367), when this read holds them.
+                      practice=_practice_docs(db))
     w = page_db.Writes(a.out_dir)
     for doc_id, version in unsaved_gone:
         w.add("delete", "meta", doc_id, if_version=version)
@@ -2751,7 +2774,8 @@ VIEW_AGAIN = "LJS_VIEW_AGAIN"
 WAKE_SAID = "LJS_WAKE_SYNC_SAID"
 # What a wake reads, once: steps 1 to 3's records, and the page's view (`screen`), `meta` and
 # `addr`, so step 5's `app.py view` needs no second read.
-WAKE_READS = ("actions", "receipts", "work", "beats", "holds", "meta", "screen", "addr")
+WAKE_READS = ("actions", "receipts", "work", "beats", "holds", "meta", "screen", "addr",
+              "practice")
 # What each batch is, as `wake` says it beside the batch. Batches that may be refused
 # together are sent as one, which the store takes whole or not at all: a refusal then means
 # another chat took the page or holds something claimed in it, and a new read and wake leave

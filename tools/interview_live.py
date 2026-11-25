@@ -1167,7 +1167,10 @@ def private_notes(ctx) -> dict:
     pay, _lines = P.money(ctx)
     notice = ""
     for a in ctx.get("answers") or []:
-        if re.search(r"\bnotice\b", a.get("question") or "", re.I) and not a.get("fill_in"):
+        # One that works against this employer is on the list not to say, never the notice
+        # to say (issue 369).
+        if re.search(r"\bnotice\b", a.get("question") or "", re.I) and not a.get("fill_in") \
+                and not P.against_employer(a, ctx):
             notice = _t(a["answer"])
     if not notice:
         _q, said = P._form_value(ctx, r"notice")
@@ -2438,6 +2441,40 @@ def kind_changed(folder, stage="") -> str:
     return now if now and _norm(now) != _norm(doc.get("format")) else ""
 
 
+def details_changed(folder, stage) -> str:
+    """What the round's record now says that the live prep saved for it was not made for, in
+    plain words ("" when nothing): its day, who it is with or how long it runs. A round moved,
+    or a new interviewer named, kept the prep for the old plan on the page, and its hint named
+    the new day (issue 369). `stage` is the round as outcome_stages reads it."""
+    import interview_pack as P
+    doc = load(folder)
+    stage = stage or {}
+    if not doc:
+        return ""
+    label = _t(stage.get("label"))
+    if label and _t(doc.get("stage")) and not P._same_round(doc["stage"], label):
+        return ""
+    out = []
+    was, now = _t(doc.get("date")), _t(stage.get("date"))
+    if was and now and was != now:
+        out.append("its day moved from %s to %s" % (was, now))
+    was, now = _t(doc.get("with")), _t(stage.get("with"))
+    if now and _norm(was) != _norm(now):
+        out.append("it is now with %s" % now)
+    try:
+        was, now = int(doc.get("minutes") or 0), int(stage.get("minutes") or 0)
+    except (TypeError, ValueError):
+        was = now = 0
+    if was and now and was != now:
+        out.append("it now runs %d minutes, not %d" % (now, was))
+    return "; ".join(out)
+
+
+MOVED = ("the round's record changed since it was written (%s), so the page shows the prep itself "
+         "until it is built again: python3 tools/interview_pack.py live \"%s\" --role \"%s\" "
+         "--stage \"%s\" --write")
+
+
 def path_for(folder) -> str:
     return os.path.join(folder, LIVE)
 
@@ -2457,6 +2494,64 @@ def ready(doc) -> bool:
             and isinstance(doc.get("parts"), list) and bool(doc["parts"])
             and isinstance(doc.get("questions"), list)
             and (doc.get("checked") or {}).get("problems") == 0)
+
+
+_CHECK_FILES = ("interview_live.py", "check_claims.py", "check_numbers.py", "told.py")
+_MARK = []
+_RECHECKED = {}
+
+
+def checks_mark() -> str:
+    """The checks a live prep is written under, as one short fingerprint of the code that runs
+    them: a prep stamped with another was passed by older checks, and is checked again before
+    it is shown (issue 369)."""
+    if not _MARK:
+        import hashlib
+        h = hashlib.sha1()
+        here = os.path.dirname(os.path.abspath(__file__))
+        for name in _CHECK_FILES:
+            try:
+                with open(os.path.join(here, name), "rb") as fh:
+                    h.update(fh.read().replace(b"\r\n", b"\n"))
+            except OSError:
+                h.update(name.encode("utf-8"))
+        _MARK.append(h.hexdigest()[:16])
+    return _MARK[0]
+
+
+def recheck(folder, doc=None) -> list:
+    """[(where, what to fix)] a saved live prep fails under the checks as they are now; empty
+    when it passes, or was written under these very checks. A prep kept once its checks passed
+    was shown for good, even after the checks grew stricter and it no longer passed them
+    (issue 369): the stamp records the checks it passed, and any other is checked again here,
+    from the records, as `live-check` does."""
+    doc = doc if doc is not None else load(folder)
+    if not doc or (doc.get("checked") or {}).get("checks") == checks_mark():
+        return []
+    try:
+        st = os.stat(path_for(folder))
+        key = (os.path.abspath(folder), st.st_mtime_ns, st.st_size)
+    except OSError:
+        key = None
+    if key and key in _RECHECKED:
+        return list(_RECHECKED[key])
+    import interview_pack as P
+    try:
+        ctx = P.gather(_t(doc.get("company")), _t(doc.get("role")), _t(doc.get("stage")),
+                       format_=_t(doc.get("format")))
+    except (LookupError, OSError, ValueError):
+        return []
+    if os.path.abspath(ctx.get("folder") or "") != os.path.abspath(folder):
+        return []
+    found = problems(merge(build(ctx), doc), ctx)
+    if key:
+        _RECHECKED[key] = list(found)
+    return found
+
+
+UNFIT = ("it no longer passes the checks it is held to (%s), so the page shows the prep itself "
+         "until it is fixed: python3 tools/interview_pack.py live-check \"%s\" --role \"%s\" says "
+         "what to change, then live --fill <your words file> --write")
 
 
 def prep_signature(folder) -> str:
@@ -2509,7 +2604,7 @@ def write(ctx, filled) -> tuple:
     if found:
         return "", found
     doc["checked"] = {"on": ctx.get("today") or dt.date.today().isoformat(), "problems": 0,
-                      "drafts": len(drafts(doc))}
+                      "drafts": len(drafts(doc)), "checks": checks_mark()}
     # What the living document's answers said when this was written from them: the page and
     # every check can tell when one has changed since (`behind`).
     doc["prep_sig"] = prep_signature(ctx["folder"])

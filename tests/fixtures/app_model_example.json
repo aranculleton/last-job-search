@@ -1,7 +1,7 @@
 {
  "model": 1,
  "made_at": "2026-10-25T18:00:00Z",
- "rev": "64254ad14a50",
+ "rev": "4ad255f04abb",
  "app": {
   "version": "4.17.0",
   "url": null,
@@ -13,7 +13,7 @@
   ],
   "privacy": "Only you can open this page unless you share it. It holds first names, employers, your drafts and your setup answers, so keep it unshared.",
   "repo": "https://github.com/aranculleton/last-job-search",
-  "page": 222,
+  "page": 224,
   "not_saved": 0,
   "app_bugs": []
  },
@@ -77,7 +77,7 @@
  ],
  "jobs": {
   "round": "r9",
-  "made_at": "2026-11-25T10:17:31Z",
+  "made_at": "2026-11-25T17:35:34Z",
   "met": false,
   "summary": "3 roles from the last search to look at, 1 of them scoring 75 or more. 3 left out, each with its reason.",
   "rows": [
@@ -1013,7 +1013,7 @@
    "when": "2026-10-28",
    "prep": {
     "path": "documents/applications/thornbury_bank_risk_analyst_thornbury/interview_prep.md",
-    "updated": "2026-11-25T10:17:31Z"
+    "updated": "2026-11-25T17:35:34Z"
    },
    "questions": 2,
    "all_day": true,
@@ -1105,6 +1105,410 @@
     "min_quote_words": 3
    },
    "live": null,
+   "round": {
+    "who": [
+     {
+      "name": "the head of risk",
+      "role": "the head of risk",
+      "probes": [
+       "Judgement and why: what you would do in their first months, and why you",
+       "Wants to hear judgement and commercial sense: what you would do, why, and what it would change for them",
+       "In this round: whether they would hire you over the others, and why now"
+      ],
+      "kind": "senior",
+      "about": null
+     }
+    ],
+    "format": null,
+    "in_person": false,
+    "cheat_sheet": [
+     "You meet: the head of risk",
+     "Lead with: The forecast that freed safety stock; Ending a daily reconciliation; One report in place of eleven spreadsheets",
+     "Numbers to land: 2,400 SKUs, 6 distribution centres, 22% to 14%, £1.1M, 9%"
+    ],
+    "stories": [
+     {
+      "id": "story-6a3c5889",
+      "title": "The forecast that freed safety stock",
+      "trigger": "14%",
+      "bullets": [
+       "Situation: forecast error at 22% across 2,400 SKUs and six distribution centres, and planners covering the gap with extra safety stock.",
+       "Task: a weekly demand forecast the planners would trust.",
+       "What you did: rebuilt it in Python and SQL with promotions and seasonality as features, and tracked error by distribution centre so the planners could see where it held.",
+       "Result: error down to 14%, about £1.1M of safety stock released."
+      ],
+      "source": "Senior Operations Analyst at Brindle & Hart Logistics: Built weekly demand-forecasting models in Python and SQL across 2,400 SKUs and 6…",
+      "questions": [
+       "int-thornbury_bank_risk_analyst~q8b1a502b17"
+      ],
+      "home": "int-thornbury_bank_risk_analyst~q8b1a502b17"
+     },
+     {
+      "id": "story-72c2b049",
+      "title": "Ending a daily reconciliation",
+      "trigger": "the daily two-hour reconciliation ended",
+      "bullets": [
+       "Situation: every morning someone spent two hours reconciling the warehouse-management data feed against the reports built on it.",
+       "Task: remove the manual step rather than keep absorbing it.",
+       "What you did: rebuilt the feed as dbt models with data-quality tests, so a bad load failed loudly instead of surfacing in a report.",
+       "Result: the daily two-hour reconciliation ended."
+      ],
+      "source": "Senior Operations Analyst at Brindle & Hart Logistics: Rebuilt the warehouse-management data feed as dbt models with data-quality tests, ending…",
+      "questions": [
+       "int-thornbury_bank_risk_analyst~qb94f86a409"
+      ],
+      "home": "int-thornbury_bank_risk_analyst~qb94f86a409"
+     },
+     {
+      "id": "story-e93d7e46",
+      "title": "One report in place of eleven spreadsheets",
+      "trigger": "30+ operations managers",
+      "bullets": [
+       "Situation: 30+ operations managers read service levels from eleven spreadsheets, and the numbers disagreed.",
+       "Task: one definition of service level and one place to read it.",
+       "What you did: built the Power BI service-level reporting, agreed the definitions with the managers, and retired the spreadsheets as each team moved over.",
+       "Result: one report used by 30+ operations managers, in place of eleven spreadsheets."
+      ],
+      "source": "Senior Operations Analyst at Brindle & Hart Logistics: Owned the Power BI service-level reporting used by 30+ operations managers, replacing…",
+      "questions": [],
+      "home": null
+     },
+     {
+      "id": "story-477b1f2c",
+      "title": "Chilled-line write-offs",
+      "trigger": "18% over two",
+      "bullets": [
+       "Situation: at Oakmere Foods, chilled lines were losing stock to expiry, and ordering took no account of shelf life.",
+       "Task: turn how shelf life and order patterns interact into a change the buyers could make.",
+       "What you did: modelled shelf-life and order patterns for the chilled lines and gave the buyers specific order changes rather than a general finding.",
+       "Result: write-offs fell 18% over two quarters."
+      ],
+      "source": "Supply Chain Data Analyst at Oakmere Foods: Modelled shelf-life and order patterns for chilled lines; write-offs fell 18% over two…",
+      "questions": [],
+      "home": null
+     },
+     {
+      "id": "story-510710cd",
+      "title": "Segmented 140 suppliers by on-time-in-full performance and cost to…",
+      "trigger": "140 suppliers",
+      "bullets": [
+       "Result: Segmented 140 suppliers by on-time-in-full performance and cost to serve",
+       "FILL IN: what was the situation before, and who needed it?",
+       "FILL IN: what did you do yourself, step by step?"
+      ],
+      "source": "Supply Chain Data Analyst at Oakmere Foods: Segmented 140 suppliers by on-time-in-full performance and cost to serve",
+      "questions": [],
+      "home": null
+     },
+     {
+      "id": "story-4eb008a1",
+      "title": "Ran a replenishment-rules pilot in 12 stores against matched controls",
+      "trigger": "12 stores",
+      "bullets": [
+       "Result: Ran a replenishment-rules pilot in 12 stores against matched controls",
+       "FILL IN: what was the situation before, and who needed it?",
+       "FILL IN: what did you do yourself, step by step?"
+      ],
+      "source": "Supply Chain Data Analyst at Oakmere Foods: Ran a replenishment-rules pilot in 12 stores against matched controls",
+      "questions": [],
+      "home": null
+     }
+    ],
+    "numbers": [
+     {
+      "value": "2,400 SKUs",
+      "what": "Built weekly demand-forecasting models in Python and SQL across 2,400 SKUs and 6 distribution centres, cutting forecast error from 22% to…",
+      "source": "Senior Operations Analyst at Brindle & Hart Logistics"
+     },
+     {
+      "value": "6 distribution centres",
+      "what": "Built weekly demand-forecasting models in Python and SQL across 2,400 SKUs and 6 distribution centres, cutting forecast error from 22% to…",
+      "source": "Senior Operations Analyst at Brindle & Hart Logistics"
+     },
+     {
+      "value": "22% to 14%",
+      "what": "Built weekly demand-forecasting models in Python and SQL across 2,400 SKUs and 6 distribution centres, cutting forecast error from 22% to…",
+      "source": "Senior Operations Analyst at Brindle & Hart Logistics"
+     },
+     {
+      "value": "£1.1M",
+      "what": "Built weekly demand-forecasting models in Python and SQL across 2,400 SKUs and 6 distribution centres, cutting forecast error from 22% to…",
+      "source": "Senior Operations Analyst at Brindle & Hart Logistics"
+     },
+     {
+      "value": "9%",
+      "what": "Designed a route-consolidation model that removed 9% of weekly van miles",
+      "source": "Senior Operations Analyst at Brindle & Hart Logistics"
+     },
+     {
+      "value": "30+ operations managers",
+      "what": "Owned the Power BI service-level reporting used by 30+ operations managers, replacing eleven spreadsheets",
+      "source": "Senior Operations Analyst at Brindle & Hart Logistics"
+     },
+     {
+      "value": "18%",
+      "what": "Modelled shelf-life and order patterns for chilled lines; write-offs fell 18% over two quarters",
+      "source": "Supply Chain Data Analyst at Oakmere Foods"
+     },
+     {
+      "value": "140 suppliers",
+      "what": "Segmented 140 suppliers by on-time-in-full performance and cost to serve",
+      "source": "Supply Chain Data Analyst at Oakmere Foods"
+     },
+     {
+      "value": "12 stores",
+      "what": "Ran a replenishment-rules pilot in 12 stores against matched controls",
+      "source": "Supply Chain Data Analyst at Oakmere Foods"
+     }
+    ],
+    "cards": [
+     {
+      "id": "int-thornbury_bank_risk_analyst~q8b1a502b17",
+      "q": "Tell me about a forecast you built",
+      "trigger": "The forecast that freed safety stock",
+      "bullets": [
+       "Situation: forecast error at 22% across 2,400 SKUs and six distribution centres, and planners covering the gap with extra safety stock.",
+       "Task: a weekly demand forecast the planners would trust.",
+       "What you did: rebuilt it in Python and SQL with promotions and seasonality as features, and tracked error by distribution centre so the planners could see where it held.",
+       "Result: error down to 14%, about £1.1M of safety stock released."
+      ],
+      "follow": [
+       {
+        "question": "Why that model, and not a simpler one?",
+        "answer": null,
+        "follow": [
+         {
+          "question": "What did you compare it against, and how?",
+          "answer": null,
+          "follow": [
+           {
+            "question": "Where does the method go wrong, and when would you not use it?",
+            "answer": "FILL IN: which model or method did you use for this, and what did you compare it against?",
+            "follow": []
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "question": "How did you know it wasn't overfitting?",
+        "answer": null,
+        "follow": [
+         {
+          "question": "How did you split the data, and why that way?",
+          "answer": null,
+          "follow": [
+           {
+            "question": "Which metric did you judge the method by, and why that one and not another?",
+            "answer": "FILL IN: which model or method did you use for this, and what did you compare it against?",
+            "follow": []
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "question": "How was it monitored after launch?",
+        "answer": null,
+        "follow": [
+         {
+          "question": "What would have made you retrain it?",
+          "answer": null,
+          "follow": [
+           {
+            "question": "What change in the data would break the method first, and how would you see it?",
+            "answer": "FILL IN: which model or method did you use for this, and what did you compare it against?",
+            "follow": []
+           }
+          ]
+         }
+        ]
+       }
+      ],
+      "section": "Likely questions",
+      "why": "screen",
+      "story": "story-6a3c5889",
+      "last": null,
+      "due": null,
+      "who": "the head of risk"
+     },
+     {
+      "id": "int-thornbury_bank_risk_analyst~qb94f86a409",
+      "q": "How do you check your data",
+      "trigger": "Ending a daily reconciliation",
+      "bullets": [
+       "Situation: every morning someone spent two hours reconciling the warehouse-management data feed against the reports built on it.",
+       "Task: remove the manual step rather than keep absorbing it.",
+       "What you did: rebuilt the feed as dbt models with data-quality tests, so a bad load failed loudly instead of surfacing in a report.",
+       "Result: the daily two-hour reconciliation ended."
+      ],
+      "follow": [],
+      "section": "Likely questions",
+      "why": "screen",
+      "story": "story-72c2b049",
+      "last": null,
+      "due": null,
+      "who": "the head of risk"
+     }
+    ],
+    "logistics": null,
+    "cases": [
+     {
+      "id": "fin-fraud-threshold",
+      "title": "Fraud threshold: block less or more",
+      "type": "finance",
+      "prompt": "A card issuer blocks any payment with a fraud score above 0.8. That blocks 2,000 payments a day, 400 of them fraud, and customers are complaining. Would you move the threshold?",
+      "steps": [
+       "First precision: 400 of 2,000 blocks are fraud, 20%. So 1,600 good customers a day are blocked.",
+       "Put a cost on both mistakes. Say missed fraud loses $300 on average, and a wrong block costs about $10 in calls and annoyed customers.",
+       "Today, with 500 frauds a day: 1,600 wrong blocks at $10 is $16,000, plus 100 missed frauds at $300 is $30,000. $46,000 a day.",
+       "At 0.9: 800 blocks, 340 fraud, 460 wrong, 160 missed. $4,600 plus $48,000 is $52,600. Worse.",
+       "At 0.7: 4,000 blocks, 450 fraud, 3,550 wrong, 50 missed. $35,500 plus $15,000 is $50,500. Also worse.",
+       "So 0.8 is about right. The better fix is the action, not the threshold: for scores from 0.8 to 0.9, send a text to confirm instead of blocking.",
+       "If a text check costs $2 instead of $10, the wrong-block cost falls a lot. I'd test it on a share of customers and watch fraud losses and complaints."
+      ],
+      "numbers": [
+       "20% of blocks are fraud",
+       "$46,000 a day at 0.8",
+       "$52,600 at 0.9, $50,500 at 0.7"
+      ],
+      "visual": "cut block fraud wrong miss cost\n0.7 4,000 450 3,550 50 $50.5k\n0.8 2,000 400 1,600 100 $46.0k\n0.9 800 340 460 160 $52.6k\nWrong $10 each, missed $300"
+     },
+     {
+      "id": "fin-approval-rate",
+      "title": "Approval rate: down from 60% to 50%",
+      "type": "finance",
+      "prompt": "A lender's approval rate on personal loans fell from 60% to 50% in a month, with applications flat at 10,000. Why, and is it a problem?",
+      "steps": [
+       "First the definition: approved over applications decided, and whether the lending rules or the model changed this month.",
+       "Say nothing changed in the rules. Then I'd split by where applications come from: direct, and through comparison sites.",
+       "Direct approves 70% and comparison sites 30%, and neither rate moved.",
+       "Last month: 7,500 direct at 70% is 5,250, plus 2,500 from comparison sites at 30% is 750. 6,000 approved, 60%.",
+       "This month: 5,000 direct at 70% is 3,500, plus 5,000 at 30% is 1,500. 5,000 approved, 50%.",
+       "So it's the mix, not the decisions: half the applications now come from comparison sites. 1,000 fewer loans a month.",
+       "Is it a problem? Not for credit quality. But I'd ask marketing why direct fell, and check what comparison-site applications cost per loan made."
+      ],
+      "numbers": [
+       "70% direct, 30% comparison sites, both unchanged",
+       "Mix went from 75/25 to 50/50",
+       "1,000 fewer loans a month"
+      ],
+      "visual": "Before After\nDirect 7,500 x 70% 5,000 x 70%\nSites 2,500 x 30% 5,000 x 30%\nApproved 6,000 (60%) 5,000 (50%)\nSame rates, new mix"
+     },
+     {
+      "id": "data-forecast-error",
+      "title": "Forecast error: the team stopped trusting it",
+      "type": "analytics",
+      "prompt": "Our demand forecast was 12% off last month and the operations team has stopped using it. How would you find what's wrong and fix it?",
+      "steps": [
+       "First, which way it was off. Say we forecast 8,800 and sold 10,000: 1,200 under, 12% of what we sold.",
+       "Then the last six months: -8, -10, -11, -9, -10 and -12%. Always under, averaging -10%. That's bias, not noise; noise would swing both ways.",
+       "Bias means something real is missing from the model. I'd split the error by region and product.",
+       "Say the older regions are within 2%, and a region opened this year is missing from the training data altogether, about 1,000 units a month.",
+       "Fix: add the new region and a calendar of promotions, then test it on the last six months as if live. Say the average error falls from 10% to 3%.",
+       "Win the team back: give a range, not one number, say 80% of months land within 5%, and share a weekly chart of forecast against actual."
+      ],
+      "numbers": [
+       "12% under last month",
+       "-10% on average over six months",
+       "About 1,000 units a month missing",
+       "10% error down to 3%"
+      ],
+      "visual": "Error by month\nJan -8% ########\nFeb -10% ##########\nMar -11% ###########\nApr -9% #########\nMay -10% ##########\nJun -12% ############\nAlways under: bias, not noise"
+     },
+     {
+      "id": "gen-profit-decline",
+      "title": "Profit down while sales grew",
+      "type": "general",
+      "prompt": "A coffee chain's revenue grew 5% this year, but profit fell 20%. What happened?",
+      "steps": [
+       "Profit is revenue minus costs. Say revenue went from $100M to $105M and profit from $10M to $8M, so costs went from $90M to $97M, up about 8%.",
+       "Split the costs: goods sold went 30 to 31.5, still 30% of revenue, so normal. Rent 25 to 25.5, small.",
+       "Staff went from 35 to 40, up 14%. That's where the money went.",
+       "Split staff: a 6% pay rise is about 2.1. The other 2.9 came from opening later in the evening.",
+       "Did the evenings pay? Say evening sales brought in about $1M of the $5M growth, for $2.9M of staff. They lose about $1.9M.",
+       "I'd recommend keeping evenings only where they cover their staff, which takes back most of the profit, and checking store by store."
+      ],
+      "numbers": [
+       "Costs up $7M on revenue up $5M",
+       "Staff up 14%",
+       "Evenings: $1M sales for $2.9M staff"
+      ],
+      "visual": "Profit = Revenue - Costs\n 10>8 100>105 90>97\nCosts ($M)\n Goods 30.0>31.5 same share\n Staff 35.0>40.0 +14% <-\n Rent 25.0>25.5"
+     },
+     {
+      "id": "gen-market-sizing",
+      "title": "Market sizing: home car chargers",
+      "type": "general",
+      "prompt": "How many home chargers for electric cars could be sold each year in a country of 40 million people?",
+      "steps": [
+       "I'll go from households, since a charger is fitted to a home. 40 million people at 2.5 per home is 16 million households.",
+       "Only homes with a driveway or garage can fit one; say 60%, so 9.6 million.",
+       "People fit a charger when they get the car. Say a household buys a car every 8 years: 9.6 million over 8 is 1.2 million a year.",
+       "Say 20% of those choose electric: 240,000 a year.",
+       "Say 70% of them fit a charger: about 168,000 a year. At $1,000 each, about $170M.",
+       "Sanity check from the other side: 2 million cars sold a year, 20% electric is 400,000, and about 40% of buyers fitting one at home is 160,000. Close.",
+       "So about 170,000 a year, growing with the electric share, which is the number I'd test hardest."
+      ],
+      "numbers": [
+       "16 million households",
+       "1.2 million car buyers a year",
+       "About 168,000 chargers, about $170M"
+      ],
+      "visual": "40M people / 2.5 a home\n = 16M households\n x 60% with a driveway\n = 9.6M\n / 8 years between cars\n = 1.2M a year\n x 20% choose electric\n = 240k\n x 70% fit a charger\n = 168k a year (~$170M)"
+     },
+     {
+      "id": "gen-prioritisation",
+      "title": "Prioritisation: five asks, one quarter",
+      "type": "general",
+      "prompt": "Five teams have each asked you for a piece of work, and you have 8 weeks this quarter. How do you choose?",
+      "steps": [
+       "First the quarter's goal. Say it's keeping customers, so value means how much a piece of work helps that.",
+       "Score each for value out of 10 and weeks of effort: a churn model 8 and 3; a pricing test 9 and 6; a data quality fix 6 and 2; a dashboard rebuild 4 and 5; an automated report 3 and 1.",
+       "Value per week: data fix 3.0, report 3.0, churn model 2.7, pricing test 1.5, dashboard 0.8.",
+       "Fill the 8 weeks: data fix, churn model and report is 6 weeks for 17 points. The pricing test plus the data fix is 8 weeks for only 15.",
+       "Check what depends on what: the churn model needs the data fix first, so that order holds.",
+       "Keep the 2 spare weeks for what breaks, and tell the dashboard and pricing teams no for now, with when it could be next quarter."
+      ],
+      "numbers": [
+       "8 weeks to spend",
+       "Data fix, churn model, report: 6 weeks, 17 points",
+       "Pricing test and data fix: 8 weeks, 15 points"
+      ],
+      "visual": "Value\n high | Pricing | Churn, Data\n | |\n low | Dashbd | Report\n +----------+------------\n slow quick"
+     }
+    ],
+    "readiness": {
+     "score": 0,
+     "practised": [
+      0,
+      2
+     ],
+     "cases_done": 0,
+     "mocks_done": 0,
+     "logistics_confirmed": false,
+     "next": "Go through your 2 answer cards once"
+    },
+    "plan": [
+     {
+      "day": "2026-10-25",
+      "focus": "Go through all 2 answer cards once, out loud"
+     },
+     {
+      "day": "2026-10-26",
+      "focus": "Tell your stories out loud: The forecast that freed safety stock; Ending a daily reconciliation; One report in place of eleven spreadsheets"
+     },
+     {
+      "day": "2026-10-27",
+      "focus": "Light: the cheat sheet and the cards due, then rest"
+     },
+     {
+      "day": "2026-10-28",
+      "focus": "The interview: read your cheat sheet once, then go"
+     }
+    ],
+    "project": null
+   },
    "sent_files": [
     {
      "kind": "resume",

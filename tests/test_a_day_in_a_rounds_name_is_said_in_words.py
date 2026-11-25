@@ -7,6 +7,10 @@ keeping the name as written in `next_stage`, which is what an action names the r
 the page says any such day in words too, whatever wrote it (the extremes of
 tests/test_no_words_are_drawn_over_other_words_or_buttons.py, the drawing probe's "date").
 Every person and employer here is invented (tests/app_state.py, the sample page model).
+
+The round here was "Paused 2026-10-20" until issue 369 made a box that opens on what happened
+("Paused", "Waiting") a note rather than a round (what_works.outcome_stages, _NOTE_START): the
+day in a round's name is pinned with a name that is a round.
 """
 from __future__ import annotations
 
@@ -31,9 +35,9 @@ def search(tmp_path):
 
 def test_a_round_named_with_a_day_is_titled_with_the_day_in_words(search):
     app = next(a for a in search.model()["applications"] if a["id"] == LARKSPUR)
-    aid = search.act("outcome.interview", LARKSPUR, rev=app["rev"], value={"stage": "Paused 2026-10-20", "on": ""})
+    aid = search.act("outcome.interview", LARKSPUR, rev=app["rev"], value={"stage": "Second interview 2026-10-20", "on": ""})
     assert search.apply()["ok"] == [aid], search.receipt(aid)
     (iv,) = [i for i in search.model()["interviews"] if i["company"] == "Larkspur Retail"]
-    assert iv["stage_title"] == "Paused Tue 20 Oct", iv
+    assert iv["stage_title"] == "Second interview Tue 20 Oct", iv
     # What an action names the round by is kept as it was written.
-    assert iv["next_stage"] == "Paused 2026-10-20", iv
+    assert iv["next_stage"] == "Second interview 2026-10-20", iv

@@ -45,6 +45,9 @@ three hooks, the money line, what not to say), then the detail.
     python3 tools/interview_pack.py live "<Company>" [--role R] [--stage S] --out F
     python3 tools/interview_pack.py live "<Company>" [--role R] [--stage S] --fill F --write
     python3 tools/interview_pack.py live-check "<Company>" [--role R]
+    python3 tools/interview_pack.py logistics "<Company>" [--role R] [--stage S]
+            [--address A] [--entrance E] [--floor F] [--travel T] [--arrive-by 9:15]
+            [--bring "..."] [--wear W] [--time-zone Z] [--step AT WHAT] [--confirmed]
 
 The live prep (tools/interview_live.py) is the same interview in the order it runs, for
 the minutes before and for practice: the engine builds its parts, questions, stories and
@@ -102,7 +105,7 @@ STORIES_FILE = "07-interview-prep.md"
 EVALUATION = person.file("evaluation", "04-job-evaluation.md")
 
 SECTIONS = ("On one screen", "Your answers", "What they have been told", "Who you are meeting",
-            "The format", "Likely questions", "Stories", "What the paper says", "Gaps and honest framing",
+            "The format", "On the day", "Likely questions", "Stories", "What the paper says", "Gaps and honest framing",
             "Money and eligibility", "The company", "Small talk", "Ask them", "Warm route",
             "Earlier stages", "To rework", "Notes")
 # One living document per employer process, beside the application: every answer the person
@@ -616,7 +619,10 @@ def _answer_for(question, answers, names=(), company="", fits=None) -> dict | No
             top = max(top, score)
         if top >= 0.5:
             hits.append((bool(fits(a)) if fits else True, top, a))
-    return max(hits, key=lambda h: (h[0], h[1]))[2] if hits else None
+    # One that fits, or none: where every match works against this employer, there is no
+    # prepared answer, and Claude asks the person first (issue 369).
+    hits = [h for h in hits if h[0]]
+    return max(hits, key=lambda h: h[1])[2] if hits else None
 
 
 # The questions only the person can answer: why they are leaving, why each move, why this
@@ -719,6 +725,16 @@ def _row(company, role, tracker, contacts=None) -> dict:
     if len(roles) > 1 and not role:
         raise LookupError("%s has %d applications (%s): name the role with --role"
                           % (company, len(roles), "; ".join(roles)))
+    if len(roles) > 1:
+        # A --role that two applications here answer to: the one named exactly, else refused,
+        # never the last row quietly (issue 369).
+        exact = [r for r in pick if " ".join(_text(r.get("role")).lower().split())
+                 == " ".join(_text(role).lower().split())]
+        if not exact:
+            raise LookupError("%s has %d applications that %r names (%s): name the role as "
+                              "the tracker writes it with --role" % (company, len(roles), role,
+                                                                    "; ".join(roles)))
+        pick = exact
     return pick[-1]
 
 
@@ -1100,7 +1116,9 @@ def zone_name(zone) -> str:
         except Exception:  # noqa: BLE001  not a zone this machine knows
             return ""
     if re.fullmatch(r"[A-Za-z]{2,5}", z):
-        return z.upper()
+        # Only a word the app can place: any other ("IST" is India, Ireland or Israel) was kept
+        # and then read in the person's own zone (issue 369).
+        return z.upper() if z.upper() in person.ZONE_WORDS else ""
     # Words a person writes ("Toronto time", "Eastern", "Pacific Time"), kept as the zone's
     # own name: they gave no time at all before (the audit, 2026-11-03).
     return person.zone_in(z)
@@ -1749,6 +1767,16 @@ detail-oriented driven resilient collaborative flexible reliable personable team
 hard-working hardworking enthusiastic passionate""".split())
 
 
+_LEVEL_LABEL = re.compile(
+    r"^(?:[A-Z][\w&/-]*\s+){0,3}(?:analyst|consultant|associate|manager|engineer|scientist|"
+    r"director|lead|principal|specialist|partner|level|grade|band|[A-Z]\d)\s*:\s+(?=\S)", re.I)
+_YEARS_OF = re.compile(
+    r"^(?:(?:at least|minimum(?: of)?|over|more than)\s+)?\d+\s*(?:\+|-\s*\d+|to\s+\d+)?\s*"
+    r"(?:years?|yrs?)['\u2019]?(?:\s+of)?(?:\s+(?:relevant|professional|hands-on|"
+    r"commercial|industry|work|working|practical|prior|previous))*(?:\s+experience)?"
+    r"(?:\s+(?P<rest>.+))?$", re.I)
+
+
 def requirement_question(req, seen="") -> str:
     """A posting's requirement line as an interviewer asks about it: "Familiarity with dbt" is
     "Tell me about your experience with dbt.", "Excellent communication skills" is "Give me an
@@ -1757,8 +1785,23 @@ def requirement_question(req, seen="") -> str:
     experience with", and read "your experience with familiarity with dbt" (the review,
     2026-11-10)."""
     t = _QUALIFIER.sub("", _text(req).rstrip(" .;:")).rstrip(" .;:,")
+    # A posting's level heading in front of its line ("Senior Consultant: 4+ years in ...") is
+    # the level, never the thing asked about (issue 369).
+    t = _LEVEL_LABEL.sub("", t) or t
     if _DUTY.match(t) or _LANGUAGE.match(t):
         return ""
+    # Years of something is asked as the story of them: "Tell me about your experience with
+    # 4+ years in consulting" read as nonsense (issue 369).
+    m = _YEARS_OF.match(t)
+    if m:
+        rest = _text(m.group("rest"))
+        if not rest:
+            return "Walk me through your experience so far."
+        if re.match(r"(?i)as\b", rest):
+            return "Walk me through your time %s." % mid_sentence(rest, seen)
+        if not re.match(r"(?i)(?:in|with|of|across|on|at|using|[a-z]+ing)\b", rest):
+            rest = "with " + rest
+        return "Walk me through your experience %s." % mid_sentence(rest, seen)
     m = _YOU_HAVE.match(t)
     if m:
         return "When have you %s?" % t[m.end():]
@@ -1863,6 +1906,7 @@ def likely_questions(ctx) -> list:
             and _text(r.get("question")) and not _text(r.get("source"))
             and _text(r.get("landed")).lower() in HARD_LANDED]
     group = {
+        "practised": _practised(ctx),
         "hard": [(r["question"], "you found it hard at %s, %s: prepare it again%s" % (
                       _text(r.get("stage")) or "a stage", _text(r.get("date")) or "undated",
                       " (%s)" % _text(r.get("note")) if _text(r.get("note")) else ""),
@@ -1927,18 +1971,44 @@ def likely_questions(ctx) -> list:
     # "Tell me about yourself" (2026-10-20). A later stage leads on what came back from
     # the one before.
     order = {
-        "screen": [stage[:3], "hard", "map", "here", group["gaps"][:1], stage[3:6], "cond",
+        "screen": ["practised", stage[:3], "hard", "map", "here", group["gaps"][:1], stage[3:6],
+                   "cond",
                    "format", stage[6:], "reqs", group["gaps"][1:], "again"],
-        "technical": ["hard", "map", "here", "reqs", "gaps", "format", "stage", "again"],
-        "final": ["hard", "map", "here", stage[:1], group["gaps"][:1], stage[1:], "format",
+        "technical": ["practised", "hard", "map", "here", "reqs", "gaps", "format", "stage", "again"],
+        "final": ["practised", "hard", "map", "here", stage[:1], group["gaps"][:1], stage[1:], "format",
                   "reqs", group["gaps"][1:], "again"],
-        "offer": ["map", "here"],
+        "offer": ["practised", "map", "here"],
     }[step if step in STAGE_QUESTIONS else "technical"]
     for part in order:
         for question, why, source, extra in (group[part] if isinstance(part, str) else part):
             add(question, why, source, **extra)
     # "Everything" (Tweak I2) shows a third more questions; the rest of the pack is the same.
     return out[:MAX_QUESTIONS + (6 if person.get("prep.detail", "") == "everything" else 0)]
+
+
+PRACTISED_WHY = {"shaky": "you were shaky on it in practice: go over it first",
+                 "missed": "you missed it in practice: go over it again"}
+
+
+def _practised(ctx) -> list:
+    """The questions of this pack the person marked shaky or missed when they practised on
+    the page (the page database's practice marks, as this copy last read them), shaky first:
+    the next pack starts from what did not stick (issue 367)."""
+    import interview_round
+    docs = ctx.get("practice")
+    if docs is None:
+        docs = interview_round.mirror_docs()
+    iid = interview_round.interview_id(ctx["company"], ctx["role"])
+    hard = interview_round.struggled(interview_round.for_interview(docs, iid)["cards"])
+    if not hard:
+        return []
+    out = []
+    for q in practice(ctx.get("living") or "")["questions"]:
+        mark = hard.get(interview_round.card_id(iid, q["question"]))
+        if mark:
+            out.append((mark != "shaky", q["question"], PRACTISED_WHY[mark]))
+    return [(question, why, "your practice on the page", {})
+            for _rank, question, why in sorted(out, key=lambda x: x[0])]
 
 
 # How a question the person found hard is recorded in the bank (`asked --landed`).
@@ -2044,6 +2114,8 @@ def answer_for(item, ctx) -> dict:
                                 if isinstance(e, dict)]
     prepared = _answer_for(q, ctx["answers"], names, ctx["company"],
                            fits=lambda a: not against_employer(a, ctx))
+    # The one left out, to say why: never offered (issue 369).
+    unfit = None if prepared else _answer_for(q, ctx["answers"], names, ctx["company"])
     kind = motive(q, ctx["company"])
     why_us = kind == "why_us"
     if item.get("framing"):
@@ -2143,12 +2215,11 @@ def answer_for(item, ctx) -> dict:
         lines.append("Use a hook from The company, never a generic line.")
     # A stock answer that is not for this employer, or still a template, is never printed
     # as an answer: printed with a warning under it, it read as the thing to say.
-    careful = against_employer(prepared, ctx) if prepared else ""
-    if prepared and careful:
+    careful = against_employer(unfit, ctx) if unfit else ""
+    if careful:
         lines.append("Your stock answer to this is left out for %s: %s (source: %s). Say your "
-                     "real reasons for %s." % (ctx["company"], careful, prepared["source"],
+                     "real reasons for %s." % (ctx["company"], careful, unfit["source"],
                                                ctx["company"]))
-        prepared = None
     elif prepared and prepared.get("fill_in"):
         lines.append("Your stock answer to this still has a gap to fill (\"%s\"): fill it in "
                      "with Claude, and the next prep uses it." % prepared["fill_in"])
@@ -4473,22 +4544,33 @@ def _follow_said(body) -> list:
 
 
 # Likely follow-ups to a technical or modelling answer, the likeliest first, each with the one
-# asked after it: what a technical interviewer digs into (issue 362: model choice, class
-# imbalance, overfitting, monitoring after launch, sign-off). Written under each technical
-# question of a pack as follow-ups to answer, never as words to say.
+# asked after it and a third about the method itself: what a technical interviewer digs into
+# (issue 362: model choice, class imbalance, overfitting, monitoring after launch, sign-off).
+# Three deep since issue 367: the third is asked about the model or method the profile records
+# for the work ("{method}"), never the language it was written in. Written under each
+# technical question of a pack as follow-ups to answer, never as words to say.
 TECH_FOLLOW = (
     (r"\bwhy\b|choos|chose|approach|model", "Why that model, and not a simpler one?",
-     "What did you compare it against, and how?"),
+     "What did you compare it against, and how?",
+     "Where does {method} go wrong, and when would you not use it?"),
     (r"validat|check|test|accura|error|overfit|work", "How did you know it wasn't overfitting?",
-     "How did you split the data, and why that way?"),
+     "How did you split the data, and why that way?",
+     "Which metric did you judge {method} by, and why that one and not another?"),
     (r"product|deploy|launch|live|monitor|pipeline", "How was it monitored after launch?",
-     "What would have made you retrain it?"),
+     "What would have made you retrain it?",
+     "What change in the data would break {method} first, and how would you see it?"),
     (r"imbalanc|rare|fraud|risk|default|churn|classif|rank", "How did you handle the rare cases, "
-     "the class imbalance?", "How did you pick the cut-off?"),
+     "the class imbalance?", "How did you pick the cut-off?",
+     "How does {method} treat the rare cases, and what did you change for them?"),
     (r"stakeholder|business|sign|decision|trust", "Who signed it off, and what did they need "
-     "to see?", "What did you do when they pushed back?"),
+     "to see?", "What did you do when they pushed back?",
+     "How did you explain what {method} was doing to someone who doesn't model?"),
 )
 TECH_FOLLOW_N = 3
+TECH_FOLLOW_DEPTH = 3
+NO_METHOD_WORDS = "the method"
+NO_METHOD_FILL = ("> FILL IN: your profile records no model or method for this. Which did you "
+                  "use, and what did you compare it against?")
 _TECHNICAL_Q = re.compile(r"\bmodel|forecast|predict|machine learning|validat|algorithm|"
                           r"check the result|"
                           r"statistic|overfit|\bfeatures?\b|a/b test|experiment|\bsql\b|"
@@ -4500,14 +4582,26 @@ def technical(question) -> bool:
     return bool(_TECHNICAL_Q.search(_text(question)))
 
 
-def tech_follow_lines(question) -> list:
-    """The follow-ups to prepare under a technical question, two deep: the likeliest for what
-    it asks first, as lines of the document (`FOLLOW_MARK`), each answered under it."""
+def tech_follow_chains(question, methods=()) -> list:
+    """[(first, second, third)] for a technical question, the likeliest first: the third
+    asks about the first model or method the profile records for the work, or "the method"
+    where it records none (the pack then asks for it with a FILL IN)."""
     q = _text(question)
     ranked = sorted(TECH_FOLLOW, key=lambda t: not re.search(t[0], q, re.I))[:TECH_FOLLOW_N]
+    method = next((m for m in methods or () if _text(m)), "") or NO_METHOD_WORDS
+    return [(first, second, third.format(method=method)) for _rx, first, second, third in ranked]
+
+
+def tech_follow_lines(question, methods=()) -> list:
+    """The follow-ups to prepare under a technical question, three deep: the likeliest for
+    what it asks first, as lines of the document (`FOLLOW_MARK`), each answered under it. A
+    third level about a method the profile does not record carries a FILL IN note asking
+    which it was."""
     out = []
-    for _rx, first, second in ranked:
-        out += [FOLLOW_MARK % first, "  " + FOLLOW_MARK % second]
+    for first, second, third in tech_follow_chains(question, methods):
+        out += [FOLLOW_MARK % first, "  " + FOLLOW_MARK % second, "    " + FOLLOW_MARK % third]
+        if not any(_text(m) for m in methods or ()):
+            out.append("    " + NO_METHOD_FILL)
     return out
 
 
@@ -4607,7 +4701,7 @@ def answer_lines(ctx, answered) -> list:
         # deep, each to answer under its own line; once written (or any written by hand),
         # they are the person's and are kept as they are.
         if technical(q["question"]) and not split_follow(body)[1]:
-            out += [""] + tech_follow_lines(q["question"])
+            out += [""] + tech_follow_lines(q["question"], _answer_methods(a))
         out.append("")
     # An answer written for a question this stage does not list (an earlier stage's, one the
     # person added, one reworded since) is never dropped: it follows, as they wrote it.
@@ -4617,6 +4711,16 @@ def answer_lines(ctx, answered) -> list:
         if key not in asked and (written_answer(body) or any(
                 ln.strip() and not follow_line(ln) for ln in mine)):
             out += ["### %s" % q] + mine + [""]
+    return out
+
+
+def _answer_methods(a) -> list:
+    """The models and methods an answer's notes say the profile records for its story."""
+    out = []
+    for ln in (a or {}).get("lines") or []:
+        if ln.startswith(METHOD_MARK):
+            said = ln[len(METHOD_MARK):].split(" (source:")[0]
+            out += [m.strip(" .") for m in re.split(r",|\band\b", said) if m.strip(" .")]
     return out
 
 
@@ -4948,7 +5052,12 @@ _QUOTES_TEXT = re.compile(r"^(?:Prepared:|Say:|From your profile:|%s)" % re.esca
 def _sentence(text, n=170) -> str:
     """The first sentence of `text`, cut where a clause ends when it runs long."""
     first = re.split(r"(?<=[.!?])\s+", _text(text), maxsplit=1)[0]
-    return prep._short(first, n).rstrip(".") + "."
+    got = prep._short(first, n)
+    # A cut keeps its ellipsis, and a question its mark: "..." made "." read the cut-off
+    # half of a sentence as a whole one (issue 369).
+    if got.endswith(("...", "…", "?", "!")):
+        return got
+    return got.rstrip(".") + "."
 
 
 def say_these(ctx, answered, written=None) -> list:
@@ -5007,7 +5116,8 @@ def say_these(ctx, answered, written=None) -> list:
         _q, notice = _form_value(ctx, r"notice")
         if not notice:
             prepared = _answer_for("What is your notice period?", ctx["answers"],
-                                   [ctx["company"]], ctx["company"])
+                                   [ctx["company"]], ctx["company"],
+                                   fits=lambda a: not against_employer(a, ctx))
             notice = _text((prepared or {}).get("answer"))
         if notice:
             basics.append("notice: %s" % _sentence(notice, 60).rstrip(".").lower())
@@ -5133,6 +5243,12 @@ def pack_markdown(ctx, never_say=None) -> str:
                       "and this says what they listen for.")
     lines += _section("The format", prep._flag_banned(format_lines(ctx), banned),
                       "An offer: nothing to drill.")
+    # A round in the room has the day itself: where, when to arrive, what to bring and wear,
+    # the whiteboard, the last five minutes and the debrief after (issue 367). What only the
+    # person or the employer knows is a FILL IN, never a guess.
+    day = on_the_day(ctx)
+    if day is not None:
+        lines += _section("On the day", day, "")
 
     # Notes on each question, never words to say: where an answer can come from. Under Your
     # answers, an unwritten answer already lists the first notes it is said from and every
@@ -5201,6 +5317,23 @@ def pack_markdown(ctx, never_say=None) -> str:
         notes.pop()
     lines += _section("Notes", notes, NOTES_EMPTY[2:])
     return "\n".join(lines).rstrip() + "\n"
+
+
+def on_the_day(ctx) -> list | None:
+    """The "On the day" section's lines for a round held in person, else None."""
+    import interview_round
+    stage = next((s for s in ctx.get("stages") or [] if _same_round(s["label"], ctx["stage"])
+                  or s["label"].lower() == _text(ctx["stage"]).lower()), {"label": ctx["stage"]})
+    held = interview_round.load_logistics(ctx["folder"], ctx["stage"])
+    if not interview_round.in_person(stage, ctx.get("format") or "", held):
+        return None
+    etype = interview_round.employer_kind(ctx.get("row") or {"company": ctx["company"]})
+    try:
+        home = person.home_zone_named(person.directory())
+    except person.NoProfile:
+        home = ""
+    day = interview_round.logistics(stage, held, etype, home)
+    return interview_round.on_the_day_lines(day)
 
 
 def living_path(ctx) -> str:
@@ -6386,6 +6519,38 @@ def _touched(company: str, role: str) -> None:
     except Exception:  # noqa: BLE001  a button fewer, never a booking lost
         pass
 
+def _logistics(a) -> int:
+    """`logistics`: keep what the person said about getting to a round in the room, and say
+    what is still unknown."""
+    import interview_round
+    tracker = what_works._csv(person.state("job_search_tracker.csv"))
+    row = _row(a.company, a.role, tracker, state.load_contacts(person.state("network_contacts.csv")))
+    company, role = _text(row.get("company")) or a.company, _text(row.get("role")) or a.role
+    folder = docpaths.app_folder(company, role)
+    today = _text(a.today) or person.today().isoformat()
+    stage = _text(a.stage)
+    if not stage:
+        stages = what_works.outcome_stages(_read(os.path.join(folder, "outcome.md")), today)
+        stage = (next_stage(stages, today) if stages else {}).get("label") or ""
+    if not stage:
+        print("no round on record at %s yet: book it first (interview_pack.py book), or name "
+              "it with --stage" % company)
+        return 1
+    held = interview_round.save_logistics(
+        folder, stage, today, address=a.address, entrance=a.entrance, floor=a.floor,
+        travel=a.travel, wear=a.wear, arrive_by=a.arrive_by or None, time_zone=a.time_zone,
+        bring=a.bring, timeline=[{"at": x, "what": y} for x, y in a.step or []] or None,
+        confirmed=True if a.confirmed else None)
+    day = interview_round.logistics({"label": stage}, held)
+    left = interview_round.unknowns(day)
+    print("Saved how to get to the %s at %s%s." % (stage, company,
+                                                   ", confirmed" if held.get("confirmed") else ""))
+    if left:
+        print("Still to ask once: " + "; ".join(x.replace("FILL IN: ", "") for x in left))
+    _touched(company, role)
+    return 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -6514,8 +6679,28 @@ def main(argv=None) -> int:
     lc.add_argument("company")
     lc.add_argument("--role", default="")
     lc.add_argument("--today", type=_day)
+    lg = sub.add_parser("logistics", help="record how to get to a round held in person: the "
+                                          "address, entrance, floor, travel, arrival time, what "
+                                          "to bring and wear, and whether it is confirmed")
+    lg.add_argument("company")
+    lg.add_argument("--role", default="")
+    lg.add_argument("--stage", default="", help="as outcome.md names it; default the next booked")
+    for name in ("address", "entrance", "floor", "travel", "wear"):
+        lg.add_argument("--" + name, default=None)
+    lg.add_argument("--arrive-by", dest="arrive_by", default=None, type=_clock,
+                    help="when to arrive: 9:15 or 9.15am")
+    lg.add_argument("--time-zone", dest="time_zone", default=None,
+                    help="the zone the round is in, where it is not the person's own")
+    lg.add_argument("--bring", action="append", default=None, help="one thing to bring; repeatable")
+    lg.add_argument("--step", nargs=2, action="append", default=None, metavar=("AT", "WHAT"),
+                    help="one step of the day: when, then what; repeatable")
+    lg.add_argument("--confirmed", action="store_true", help="the person checked these with "
+                                                             "the invite")
+    lg.add_argument("--today", type=_day)
     a = ap.parse_args(argv)
     try:
+        if a.cmd == "logistics":
+            return _logistics(a)
         if a.cmd in ("live", "live-check"):
             return _live(a)
         if a.cmd == "feedback":

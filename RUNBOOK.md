@@ -926,6 +926,30 @@ reached an interview gives its bullets a small, capped lift in `tools/allocate.p
 decides between bullets a posting rates alike and never outranks one the posting asks for. A
 message logged without its `full_text` can never be an example.
 
+## Reading a request, and checking the answer
+
+**Read the whole request first, and check the answer before replying.** A chat that reads
+only the newest message, takes each one literally, and answers "use an agent" with prose makes
+the person ask again and again. Two of the app's agents stop that, and they cost little: both
+run on the smallest model, without the project's instructions loaded.
+
+1. **Before acting** on any request bigger than a one-line question, run `request-interpreter`
+   once, with every message the person sent on the task (oldest first, word for word, not only
+   the last) and a line on what is already done. It returns numbered requirements by intent,
+   the assumptions taken, what done looks like for each, and which expert agents to run. Work
+   to that list. Ask the person only what it marks "ask first"; otherwise go ahead and say the
+   assumption in one line.
+2. **Run the expert agents it names once, all at once**, each on the model it names. Never
+   write their part yourself in their voice: a role asked for is a real run.
+3. **Before replying**, run `result-checker` once with the list, the person's messages, the
+   reply in full, and the files and page records the work made. On a FAIL, fix every line it
+   gives, then reply. Run it again only if a fix changed what a requirement rests on.
+
+When the person adds a message to a task under way, or complains about it, the interpreter
+runs again on all the messages: a new message adds to the earlier ones and a complaint means
+do more and better. A one-line question or a plain yes or no skips both; a request from the
+page is read and checked the same way as one in a chat.
+
 ## Commands and skills: what routes where
 
 Several names are close enough to pick wrongly, so this is the map. **Skills** are

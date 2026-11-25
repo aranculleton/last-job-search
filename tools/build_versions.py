@@ -433,8 +433,10 @@ METHODS: dict[str, dict] = {
             (117, "2026-11-17", False, "RUNBOOK says where the person searches and their pay floor and cut line change through tools/wants.py set, the words for a work-life sign or a kind of role through wants.py words, and a no that only ranks down is written with --soft only where they say so; nothing made changes"),
             (118, "2026-11-17", False, "a page build looks for each application's folder once, where Applications, its stages and the campaign chats each looked again (issue 336); the same folder is found, so nothing made changes"),
             (119, "2026-11-17", False, "the page's colours are redone in templates/app/palettes.py, which this method's templates pattern also reads; nothing a draft prints changes"),
+            (120, "2026-11-25", False, "two long titles at one employer cut to the same folder name get a folder each, the earlier keeping its name (issue 369); nothing a draft prints changes"),
+            (121, "2026-11-25", False, "RUNBOOK says a request bigger than a one-line question is read whole by the request-interpreter agent first and the reply checked by the result-checker agent before it is sent (issue 370); nothing made changes"),
         ),
-        "fingerprint": "43f2e50edbbb6715",
+        "fingerprint": "e75e7db216a85790",
     },
     "interview": {
         # Only a process with a round still to come is prepared again: a prep for a round
@@ -447,7 +449,7 @@ METHODS: dict[str, dict] = {
                "1, said in a plain line): that pack is done, so record the version once the "
                "others are rebuilt",
         "files": (".claude/commands/interview.md", "tools/interview_pack.py",
-                  "tools/interview_live.py"),
+                  "tools/interview_live.py", "tools/interview_round.py"),
         "versions": (
             _first(),
             (2, "2026-10-15", False, "reads what the person has taught it (tools/learned.py) before drafting, flags the phrases they never want, their wording replaces the defaults, and every output is shown in the reply"),
@@ -512,8 +514,11 @@ METHODS: dict[str, dict] = {
             (60, "2026-11-25", True, "a question added to a prep under Your answers, and the follow-ups written under any answer, reach the page, the follow-ups no longer read as part of the answer above (issue 362); a technical question's prep carries the follow-ups an interviewer digs into, two deep, and a modelling answer is said from the model and method the profile records; each prep for a round still ahead is made again to carry them"),
             (61, "2026-11-25", False, "a live prep keeps what the prep's answers said when it was written, and while one has changed since, the page shows the prep itself and the chat drawing the page is told to make the live one again; one saved before is judged by when each file was saved; a technical question's follow-ups go four or five deep, and a modelling answer names the model the profile records (issue 363); a live prep already made is shown as it is until then"),
             (62, "2026-11-25", False, "a prep built for a new round leaves out the answers written only for the round held, kept apart beside it in earlier_answers.md, puts first the questions found hard there (asked --landed no or partly), and fails its check over MAX_PACK_CHARS characters; book says to record what was hard and build for the round booked only (issue 364); the rerun of version 60 makes each prep ahead again"),
+            (63, "2026-11-25", True, "each round still to come is practised on the page: who you meet and what they dig into, a one-screen cheat sheet, your stories and every number from your profile, answer cards with follow-ups three deep on every technical question (the third about the method your profile records, or a FILL IN asking for it), marks that bring a card back after 1, 3, 7 or 14 days, and how ready you are; a round in person gains On the day (interview_pack.py logistics records the address and the rest); the next pack starts from the cards you were shaky on; issue 367"),
+            (64, "2026-11-25", False, "a mock interview plays the named interviewer, asks one question at a time, digs at least three follow-ups deep on technical answers, gives no praise during it and ends with a short scorecard whose marks are kept for the next round's pack; timed spoken practice is 90 seconds an answer, with a pasted transcript checked for filler, hedging and overruns; a case round practises from a library of cases for the kind of employer (issue 367); nothing made before needs making again"),
+            (65, "2026-11-25", True, "a live prep records the checks it passed and is checked again when they change, left off the page while it fails them; a round moved, with a new interviewer or length takes its old live prep off the page; outcome.md's resolved Status ends an interview the tracker kept live; a stock answer that works against the employer is never offered, its notice included; a stage ticked done, held or had keeps its day, who and length; a checklist note is never a stage and one round written twice is one; a cut sentence keeps its ellipsis; a level heading and years of experience are asked as an interviewer asks them; an ambiguous --role is refused; a zone word the app cannot place is refused when an interview is booked (issue 369)"),
         ),
-        "fingerprint": "5d30cd3fc50d6f15",
+        "fingerprint": "1ea5f8c59b425efb",
     },
     "research": {
         "by": "upgrade", "priority": 3, "applies": "live_applications", "time": "~5 min each",
@@ -1252,8 +1257,9 @@ METHODS: dict[str, dict] = {
             (221, "2026-11-19", True, "a quiet button leading its line is drawn in by its padding, never laid out in, so it never fits back over the gauge on the line above"),
             (222, "2026-11-19", False, "the tour's To do step says Later puts a card off, and its Contacts step names each person's card, not the Messages view the redesign took away"),
             (223, "2026-11-25", True, "an interview's prep is a place of its own: Read your prep on an employer's or an interview's card, To do, Coming up and the Brief opens it full screen at its own address, the role and the round said under its day, on the one-screen summary with every likely question one tap away, each part in view under a bar that goes to it, follow-ups under their question at any depth; the cards no longer hold the prep (issue 365)"),
+            (224, "2026-11-25", True, "an interview's round is the prep's own screen: how long to go, where and who, today's step, how ready you are and the next step, who you meet and what each may ask, the cheat sheet; in person the plan for the day with what is not known said so and Confirm the plan; flashcards with filters, a 90-second clock and marks that bring each card back in 1, 3, 7 or 14 days; the story grid, the numbers drill, cases with their steps and bars, where you sit on the project and the plan to the day (issue 367); a table in a prep reads as a table, stacked on a phone (issue 368); a prep says the day it was made for, and why its read-aloud version is held back (issue 369)"),
         ),
-        "fingerprint": "a9dfa438739390b3",
+        "fingerprint": "9e580ffbf0b45a58",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",
@@ -1280,6 +1286,8 @@ KEEPS_NOTHING: dict[str, str] = {
                         "nothing kept in a person's copy",
     "plugin/*": "the optional front door on a computer: finds or makes the person's copy and "
                 "hands over to it, and keeps nothing of its own",
+    "tools/interview_cases.py": "a fixed library of practice cases printed on request; "
+                                "writes nothing",
     "tools/dates.py": "reads a date; every tool that keeps something is versioned where it keeps it",
     "tools/holds.py": "says what the person's rules hold back today and when each ends, worked "
                       "out afresh from their files on every page build; keeps nothing",
@@ -1353,6 +1361,8 @@ KEEPS_NOTHING: dict[str, str] = {
                                 "each person; a pack is the day's",
     "tools/cost_meter.py": "development tooling: measures what a run reads, keeps nothing",
     ".claude/agents/news-reader.md": "searches afresh for each brief; keeps nothing",
+    ".claude/agents/request-interpreter.md": "reads a task's messages afresh before each piece of work; keeps nothing",
+    ".claude/agents/result-checker.md": "checks each reply afresh before it is sent; keeps nothing",
     ".claude/agents/employer-judge.md": "judges a round's batch afresh, each round; the "
                                         "judgements are the person's own record "
                                         "(profile/employers_judged.json), never remade",

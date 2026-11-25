@@ -317,7 +317,9 @@ is pushed and merged is in "Builder", above.
   every finding against the cited lines, then one ranking pass, and it is read-only.
   `tools/lint_skills.py` checks the subagents' frontmatter, and a test pins the two models
   (`employer-researcher` on sonnet, `grounding-auditor` with none set, so the session's own),
-  so the auditor cannot be quietly downgraded.
+  so the auditor cannot be quietly downgraded. `request-interpreter` (Read only) and
+  `result-checker` (Read, Grep, Glob) are pinned to haiku the same way (issue 370), and
+  `tests/test_a_request_is_read_whole_and_the_answer_checked.py` holds what they do.
 - **A public name leaves on the record.** A top-level name in `tools/` or `templates/` with no
   leading underscore, outside `tools/openroles/`, may be used by a person's own tests. It is
   taken out of the code only with a record in `docs/removed_names.json` (`module`, `name`,

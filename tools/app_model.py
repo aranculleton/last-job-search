@@ -4411,6 +4411,12 @@ def _interviews(ctx: Ctx, targets: dict) -> list:
         if st in throttle.UNSENT or not st:
             continue
         folder, files, stages = ctx.stages(row)
+        # outcome.md resolved while the tracker still says the process is going: the file's
+        # end holds, and the card says the two differ (issue 369).
+        import what_works
+        ended = what_works.outcome_status(_read(os.path.join(folder, "outcome.md")))
+        differs = st if ended and st not in throttle.FINAL else ""
+        st = ended if differs else st
         ahead = any(s["date"] and not s["done"] and s["date"] >= today for s in stages)
         live = st not in throttle.FINAL and (st in followups.LIVE_PROCESS or ahead)
         past = None
@@ -4455,6 +4461,9 @@ def _interviews(ctx: Ctx, targets: dict) -> list:
             if not stage.get("date") else []
         item = {"id": iid, "company": row.get("company") or "", "role": row.get("role") or "",
                 "status": st,
+                # What the tracker says where outcome.md has resolved it: the chat sets the
+                # tracker to match (issue 369).
+                **({"tracker_status": differs} if differs else {}),
                 # The round as it was written (what an action names it by), and its name for
                 # a title: "Initial round" where the employer's whole paragraph was stored,
                 # the paragraph kept as its details (the maintainer, 2026-11-07).
@@ -4472,6 +4481,9 @@ def _interviews(ctx: Ctx, targets: dict) -> list:
                 # down: every page update from a fresh copy or another chat's folder rewrote the
                 # whole of Interviews, preps and all, with nothing in it changed (issue 217).
                 "prep": ({"path": rel(prep), "updated": _saved_stamp(prep),
+                          # The day its live prep was made for (issue 369).
+                          **({"for_day": _prep_for_day(folder, stage)}
+                             if _prep_for_day(folder, stage) else {}),
                           **({"stale": True, "stale_since": _saved_stamp(os.path.join(folder, "outcome.md"))}
                              if _prep_stale(folder, text, stage) else {})}
                          if text else None),
@@ -4508,6 +4520,18 @@ def _interviews(ctx: Ctx, targets: dict) -> list:
                 # page shows the prep as corrected, and the chat that draws the page is told to
                 # build it again (issue 363).
                 **({"live_behind": True} if live and text and _live_behind(folder, stage) else {}),
+                # The round as the page practises it (tools/interview_round.py, issue 367): who,
+                # the cheat sheet, stories, numbers, cards, the day in person, cases and how
+                # ready the person is, from their marks in the page's practice records. Only
+                # for a round still to come.
+                "round": _round_of(ctx, folder, text, stage, row, iid) if live else None,
+                # One passed by older checks that fails these is left out too, and the chat is
+                # told to fix it (issue 369).
+                **({"live_unfit": True} if live and text and _live_unfit(folder, stage) else {}),
+                # The round moved, or has a new interviewer or length, since its live prep was
+                # made: what changed, for the chat to build it again (issue 369).
+                **({"live_moved": _live_moved(folder, stage)}
+                   if live and text and _live_moved(folder, stage) else {}),
                 "sent_files": _sent_files(ctx, row),
                 "referrer": referrer_of(ctx, row),
                 "past": not live,
@@ -4537,6 +4561,28 @@ def _interviews(ctx: Ctx, targets: dict) -> list:
     return out
 
 
+def _round_of(ctx: Ctx, folder: str, text: str, stage: dict, row: dict, iid: str) -> dict | None:
+    """The round object for one interview still to come (interview_round.build), contact
+    details out; None when it cannot be read (a profile part missing), never a broken page."""
+    import interview_round
+    try:
+        got = interview_round.build(folder, text, stage, row, iid, ctx._got.get("practice") or [],
+                                    ctx.now, ctx.zone_named)
+    except person.NoProfile:
+        return None
+    # Who the round is with, as the page may hold anyone named: a first name and a title,
+    # never a surname (as `with` above), in the cheat sheet's line too.
+    for w in got.get("who") or []:
+        w["name"] = _third_party(w.get("name"), ctx.names)
+        w["probes"] = [_third_party(p, ctx.names) for p in w.get("probes") or []]
+    for c in got.get("cards") or []:
+        if c.get("who"):
+            c["who"] = _third_party(c["who"], ctx.names)
+    got["cheat_sheet"] = [_third_party(x, ctx.names) if x.startswith("You meet: ") else x
+                          for x in got.get("cheat_sheet") or []]
+    return _scrubbed(got, ctx.names)
+
+
 def _live_prep(folder: str, stage: dict, names) -> dict | None:
     """The live prep saved for this round, as the page draws it, or None: none saved, one
     no longer fit to show, or one built for another round."""
@@ -4550,7 +4596,45 @@ def _live_prep(folder: str, stage: dict, names) -> dict | None:
         return None
     if _live_behind(folder, stage):
         return None
+    # Passed by older checks and failing these, or made for another day, interviewer or
+    # length than the round now has: the prep itself is shown (issue 369).
+    if _live_unfit(folder, stage) or interview_live.details_changed(folder, stage):
+        return None
     return _scrubbed(doc, names)
+
+
+def _live_moved(folder: str, stage: dict) -> str:
+    """What the round's record says now that its live prep was not made for, or ""."""
+    import interview_live
+    return interview_live.details_changed(folder, stage)
+
+
+def _prep_for_day(folder: str, stage: dict) -> str | None:
+    """The day the live prep saved for this round was made for, or None: the hint under a
+    prep names the day it was written for, never the round's day now (issue 369)."""
+    import interview_live
+    import interview_pack
+    doc = interview_live.load(folder)
+    if not doc or not str(doc.get("date") or ""):
+        return None
+    label = str(stage.get("label") or "")
+    if label and doc.get("stage") and not interview_pack._same_round(doc["stage"], label):
+        return None
+    return str(doc["date"])
+
+
+def _live_unfit(folder: str, stage: dict) -> bool:
+    """Does the live prep saved for this round fail the checks as they are now, though it
+    passed the ones it was written under (interview_live.recheck)?"""
+    import interview_live
+    import interview_pack
+    doc = interview_live.load(folder)
+    if not doc:
+        return False
+    label = str(stage.get("label") or "")
+    if label and doc.get("stage") and not interview_pack._same_round(doc["stage"], label):
+        return False
+    return bool(interview_live.recheck(folder, doc))
 
 
 def _live_behind(folder: str, stage: dict) -> bool:
@@ -6652,7 +6736,8 @@ EMPTY = {
 def build(today: dt.date | None = None, now: dt.datetime | None = None,
           only=None, shown: dict | None = None, full: dict | None = None,
           work_time: dict | None = None, computer: dict | None = None,
-          held_work: dict | None = None, unsaved: list | None = None) -> tuple[dict, dict]:
+          held_work: dict | None = None, unsaved: list | None = None,
+          practice: list | None = None) -> tuple[dict, dict]:
     """(the model, what each item id stands for in the repo). `only` builds just those
     sections, for an applier that needs one item's rev and not the whole page. `shown` is
     {suggestion id: the day it first showed} from the page's database, so at most three new
@@ -6665,11 +6750,11 @@ def build(today: dt.date | None = None, now: dt.datetime | None = None,
     _SAVED_AT.clear()             # what git says is asked once a build, never kept past it
     with remembered.build():
         return _make_model(today, now, only, shown, full, work_time, computer, held_work,
-                           unsaved)
+                           unsaved, practice)
 
 
 def _make_model(today, now, only, shown, full, work_time, computer, held_work,
-                unsaved) -> tuple[dict, dict]:
+                unsaved, practice=None) -> tuple[dict, dict]:
     if today is None or now is None:
         t, n = clock()
         today, now = today or t, now or n
@@ -6683,6 +6768,12 @@ def _make_model(today, now, only, shown, full, work_time, computer, held_work,
     ctx._got["computer"] = dict(computer or {})
     # A save a retired chat gave up on, from the page's records (app.unsaved_saves): one card.
     ctx._got["unsaved"] = list(unsaved or [])
+    # The person's practice marks from the page's database (`app.py view`), else what this
+    # copy kept from the page's last read: each interview's readiness and card order.
+    if practice is None:
+        import interview_round
+        practice = interview_round.mirror_docs()
+    ctx._got["practice"] = list(practice or [])
     targets: dict = {}
     model = {"model": MODEL, "made_at": stamp(now), "rev": ""}
     # The sections built so far, for the one that reads them (employers, built last).

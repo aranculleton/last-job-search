@@ -2299,6 +2299,17 @@ html.tips-off .has-tip::after { content: none; }
 .prep-table { border-collapse: collapse; width: 100%; font-size: var(--t-sm); }
 .prep-table th, .prep-table td { border: 1px solid var(--line); padding: 8px 12px; text-align: left; vertical-align: top; }
 .prep-table th { background: var(--sunk); font-weight: 600; }
+.pi-items { display: flex; flex-direction: column; gap: 16px; }
+/* A prep's table on a phone (issue 368): a row a block, each cell under its column's name. */
+@media (max-width: 599px) {
+  .prep-table.prep-stack, .prep-table.prep-stack tbody, .prep-table.prep-stack tr, .prep-table.prep-stack td { display: block; width: 100%; }
+  .prep-table.prep-stack thead { display: none; }
+  .prep-table.prep-stack tr { border: 1px solid var(--line); border-radius: var(--r-sm); padding: 8px 12px; }
+  .prep-table.prep-stack tr + tr { margin-top: 8px; }
+  .prep-table.prep-stack td { border: 0; padding: 4px 0; overflow-wrap: anywhere; }
+  .prep-table.prep-stack td[data-label]::before { content: attr(data-label); display: block; font-size: var(--t-sm); font-weight: 600; color: var(--muted); }
+  .prep-table.prep-stack td.prep-td-empty { display: none; }
+}
 .prep-quote { margin: 0; padding: 8px 16px; border-left: 4px solid var(--line-strong); color: var(--muted); }
 .prep-rule { border: 0; border-top: 1px solid var(--line); margin: 8px 0; }
 
@@ -2691,6 +2702,7 @@ ul.bp-news { gap: 12px; }
 .kind .ic { box-sizing: border-box; width: 28px; height: 28px; padding: 4px; border-radius: 8px; color: var(--muted); background: var(--raised); }
 @media (min-width: 760px) { .sec-head .screen-title { font-size: 1.875rem; letter-spacing: -0.02em; } }
 
+/* ------------------------------------------------------------------ an interview's prep, its own place and its round */
 /* An interview's prep: a reading column and, on a wide screen, what was sent and the stages
    beside it. */
 .prep-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; margin-top: 8px; }
@@ -2741,6 +2753,99 @@ ul.bp-news { gap: 12px; }
 .pv-fu-q { font-weight: 600; overflow-wrap: anywhere; }
 .pv-fu-a { color: var(--ink); line-height: 1.55; }
 .pv-tq { scroll-margin-top: calc(var(--lp-bar-h, 0px) + 12px); }
+/* A round's own screen (issue 367): how ready they are over its one next step; who they meet,
+   the format and the cheat sheet first in the summary; then the day's plan in person, the
+   stories, the numbers and the cases, each a soft card; the flashcards a screen of their own. */
+.rd-ready { display: flex; flex-direction: column; gap: 4px; }
+.rd-ready-say { font-size: var(--t-lg); font-weight: 600; }
+.rd-next-k { font-weight: 600; }
+.rd-who { display: flex; flex-direction: column; gap: 8px; }
+.rd-people { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 12px; }
+.rd-person { display: flex; flex-direction: column; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
+.rd-person-name { font-size: var(--t-lg); font-weight: 600; }
+.rd-format { font-size: var(--t-md); }
+.rd-list { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; line-height: 1.5; }
+.rd-day { display: flex; flex-direction: column; gap: 16px; }
+.rd-confirmed { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.rd-day-grid, .rd-stories { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); gap: 16px; align-items: start; }
+.rd-facts { margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.rd-fact { display: grid; grid-template-columns: 6rem minmax(0, 1fr); gap: 12px; overflow-wrap: anywhere; }
+.rd-fact dt { color: var(--muted); font-size: var(--t-sm); font-weight: 600; padding-top: 2px; }
+.rd-fact dd { margin: 0; }
+.rd-timeline { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.rd-at { font-weight: 600; font-variant-numeric: tabular-nums; }
+.rd-story, .rd-case { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px 20px; display: flex; flex-direction: column; gap: 8px; min-width: 0; overflow-wrap: anywhere; }
+.rd-story-t { font-size: var(--t-lg); font-weight: 700; }
+.rd-story-part, .rd-cases { display: flex; flex-direction: column; gap: 16px; }
+.rd-grid-wrap { overflow-x: auto; max-width: 100%; }
+.rd-grid { border-collapse: collapse; width: 100%; font-size: var(--t-sm); }
+.rd-grid caption { text-align: left; padding-bottom: 8px; }
+.rd-grid th, .rd-grid td { padding: 8px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+.rd-grid thead th { font-weight: 600; color: var(--muted); }
+.rd-grid tbody th { font-weight: 400; }
+.rd-grid td { text-align: center; }
+.rd-tick { font-weight: 700; font-size: var(--t-lg); }
+.rd-grid-list { display: flex; flex-direction: column; gap: 12px; }
+.rd-gl { display: flex; flex-direction: column; gap: 4px; }
+.rd-gl-t { font-weight: 600; }
+/* The grid of stories against questions on a wider screen; a list a story on a phone. */
+@media (max-width: 759px) { .rd-grid-wrap { display: none; } }
+@media (min-width: 760px) { .rd-grid-list { display: none; } }
+.rd-numbers { display: flex; flex-direction: column; gap: 12px; }
+.rd-num-list { margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.rd-num { display: grid; grid-template-columns: 7rem minmax(0, 1fr); gap: 12px; align-items: baseline; overflow-wrap: anywhere; }
+.rd-num-v { font-size: var(--t-lg); }
+.rd-num-v:focus { outline: none; }
+.rd-num-what { margin: 0; }
+.rd-case-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.rd-prompt { font-size: var(--t-lg); }
+.rd-visual { margin: 0; padding: 12px; background: var(--sunk); border-radius: var(--r-sm); overflow-x: auto; max-width: 100%; font-size: var(--t-sm); line-height: 1.4; }
+.rd-practise { max-width: 760px; }
+.rd-practise :is(p, h3, ul, ol) { margin: 0; }
+.rd-flash-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.rd-flash { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 24px; display: flex; flex-direction: column; gap: 16px; min-width: 0; overflow-wrap: anywhere; }
+.rd-flash-q { font-size: var(--t-2xl); font-weight: 700; line-height: 1.3; }
+.rd-flash-q:focus { outline: none; }
+.rd-clock { font-variant-numeric: tabular-nums; }
+.rd-clock-n { font-weight: 600; }
+.rd-how { font-weight: 600; }
+@media (max-width: 759px) { .rd-flash { padding: 16px; } .rd-flash-q { font-size: var(--t-xl); } .rd-story, .rd-case { padding: 16px; } }
+/* The round's header: how long to go in large type, where and who, today's step. */
+.rd-board { display: flex; flex-direction: column; gap: 8px; }
+.rd-count { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; }
+.rd-count-n { font-size: var(--t-2xl); font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.rd-count-k { font-size: var(--t-lg); font-weight: 600; }
+.rd-board-list { margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.rd-board-row { display: grid; grid-template-columns: 4rem minmax(0, 1fr); gap: 12px; overflow-wrap: anywhere; }
+.rd-board-row dt { color: var(--muted); font-weight: 600; font-size: var(--t-sm); padding-top: 2px; }
+.rd-board-row dd { margin: 0; }
+.rd-today { font-size: var(--t-lg); }
+.rd-grid-q { min-width: 8rem; font-weight: 400; }
+.rd-home { color: var(--mark); }
+/* Steps in a row that wrap: a case's method, and where the person sits on a project. */
+.rd-steps { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); gap: 8px; }
+.rd-steps > li { display: flex; gap: 8px; align-items: flex-start; padding: 12px; border-radius: var(--r-sm); background: var(--sunk); min-width: 0; overflow-wrap: anywhere; }
+.rd-steps > li.rd-you { background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--mark); }
+.rd-step-n { flex: none; width: 24px; height: 24px; border-radius: 12px; background: var(--surface); font-weight: 700; font-size: var(--t-sm); display: inline-flex; align-items: center; justify-content: center; font-variant-numeric: tabular-nums; }
+.rd-step-what { display: block; font-size: var(--t-sm); }
+.rd-project { display: flex; flex-direction: column; gap: 12px; }
+.rd-chart { margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.rd-bars { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.rd-bar { display: grid; grid-template-columns: minmax(0, 8rem) minmax(0, 1fr) auto; gap: 12px; align-items: center; font-size: var(--t-sm); }
+.rd-bar-k { overflow-wrap: anywhere; }
+.rd-bar-track { position: relative; height: 16px; border-radius: 4px; background: var(--sunk); }
+.rd-bar-fill { position: absolute; inset: 0 auto 0 0; border-radius: 4px; background: var(--muted); }
+.rd-bar-low .rd-bar-fill { background: var(--mark); }
+.rd-bar-need { position: absolute; top: -4px; bottom: -4px; left: 0; border-right: 2px solid var(--ink); }
+.rd-bar-v { font-weight: 600; font-variant-numeric: tabular-nums; }
+.rd-plan { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; }
+.rd-plan-day { display: grid; grid-template-columns: minmax(0, 9rem) minmax(0, 1fr); gap: 12px; padding: 8px 12px; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+.rd-plan-day.rd-is-today { background: var(--accent-soft); border-radius: var(--r-sm); font-weight: 600; }
+.rd-plan-day.rd-was { color: var(--muted); }
+.rd-plan-when { white-space: nowrap; }
+@media (max-width: 479px) { .rd-plan-day { grid-template-columns: minmax(0, 1fr); gap: 2px; } }
+.rd-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.rd-filter-k { min-width: 4rem; }
 .pi-list { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 12px; line-height: 1.55; }
 .pi-list > li.pi-head { list-style: none; margin-left: -20px; }
 .pi-list > li.pi-head > span { font-weight: 600; }

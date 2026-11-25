@@ -80,7 +80,7 @@ Also collect, without interrogating - one or two open questions are enough:
 - Dates for the stages reached
 - Any feedback received, verbatim where the user remembers it
 - What they'd do differently, and any signal about what the company valued (the next stage's `/interview` pack is built from them, so concrete beats polished)
-- **After an interview stage: which questions came up, and which stories they told and whether each landed** (yes, partly, no). One open question is enough; take what they remember. Each goes into the question bank in the same turn, one call per question, so the next pack at any employer leads with what gets asked and the stories that work:
+- **After an interview stage, a two-minute debrief: which questions came up, and which stories they told and whether each landed** (yes, partly, no). Ask for it in those words ("Two minutes while it's fresh: what did they ask, and how did each answer go?"). One open question is enough; take what they remember. Each goes into the question bank in the same turn, one call per question, so the next pack at any employer leads with what gets asked and the stories that work:
 
   ```bash
   python3 tools/interview_pack.py asked --company "<Company>" --role "<Role>" --stage "<Stage>" \

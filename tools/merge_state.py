@@ -336,6 +336,10 @@ JSON_FILES = {
     # The live prep for the interview's next round (interview_live.write), one object, written
     # whole, so two chats' copies keep the newer one, as the prep it sits beside does.
     "documents/applications/*/interview_live.json": {"whole": ("",), "indent": 1},
+    # How to get to each round held in person, as the person told it (interview_pack.py
+    # logistics, interview_round.save_logistics): one object written whole, the newer kept.
+    "documents/applications/*/interview_logistics.json": {"whole": ("",), "indent": 1,
+                                                          "sort": "all"},
     # The kept draft both documents are rendered from (outreach.write, fit_to_page.save,
     # tweak), and what drafting it cost (draft_cost): each one object, written whole.
     "documents/applications/*/draft.json": {"whole": ("",), "indent": 1},
@@ -406,9 +410,11 @@ _CACHE = ("kept a short while in rounds/.cache beside the rounds, which git igno
           "(run_round.cache_dir): what a site answered, never committed, and either chat's copy "
           "is the same public answer")
 JSON_NAMES = {
+    "interview_logistics.json": "how to get to a round held in person, beside its interview_prep.md (interview_round.logistics_path, issue 367); merged as documents/applications/*/interview_logistics.json",
     "interview_live.json": "an interview's live prep beside its interview_prep.md (interview_live.path_for); merged as documents/applications/*/interview_live.json",
     ".from_search.json": "the person's own words choosing notes from search results, for one day only (reading.from_search_chosen, issue 287); a day gone by is ignored, so either side's copy is that day's choice or nothing",
     ".people_seen.json": "where an earlier people search found nobody in a place, by employer and date, so the next run searches likely employers first (candidates.order); expires after 30 days, and either side's copy is a hint, never a record",
+    "tools/interview_round.py: .json": "a file's own name in the page mirror's practice folder, read only to take the person's practice marks (interview_round.mirror_docs); never written",
     "tools/land.py: .json": "a changed file's own name, read only to check it parses before a data-only save lands (land.data_check); never written",
     ".sent.json": "each view batch's records as they stood before it was sent, in the view's own folder, so a refused save can be put back and made again (page_db.keep_landed); never committed",
     ".sent-seen.json": "each write the app's hook saw the page take, in the dump's own scratch folder, so a rebuilt update puts back only what never went (page_db.keep_sent_event, issue 358); never committed",
