@@ -321,3 +321,23 @@ def test_a_live_prep_and_its_round_are_one_tap_apart(run, tmp_path):
     s = got["after"][1]["eval"]
     assert s["kind"] == "prep:prep~" + IV and "halfway ready" in s["text"], s["kind"]
     assert got["after"][2]["eval"] == "interview:" + IV, got["after"][2]["eval"]
+
+
+def test_the_prep_says_the_day_it_was_made_for_and_why_its_read_aloud_version_is_held_back(run, tmp_path):
+    # Issue 369: a prep for a round that moved named the round's new day as the day it was
+    # written for; the engine now gives the day it was made for (`prep.for_day`), and what
+    # changed since the read-aloud prep was made (`live_moved`), or that it failed a check
+    # made since (`live_unfit`).
+    def moved(iv):
+        iv["when"] = "2026-10-26T13:00:00Z"
+        iv["prep"]["for_day"] = "2026-10-20"
+        iv["live_moved"] = "its day moved from 2026-10-20 to 2026-10-26"
+
+    def unfit(iv):
+        iv["live_unfit"] = True
+    got = _go(run, tmp_path, [{"hash": ADDR, "read": "dialog.detail"}], PHONE, model=_with(_sample(), moved), clock=CLOCK)
+    text = got["after"][0]["text"]
+    assert "This prep was written for your phone screen on Tue 20 Oct." in text, text[:600]
+    assert "The round has changed since your read-aloud prep was made: its day moved from Tue 20 Oct to Mon 26 Oct." in text
+    got = _go(run, tmp_path, [{"hash": ADDR, "read": "dialog.detail"}], PHONE, model=_with(_sample(), unfit), clock=CLOCK)
+    assert "Your read-aloud prep is being checked again" in got["after"][0]["text"]

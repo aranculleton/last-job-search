@@ -12924,10 +12924,19 @@
   }
   // A prep read after the day says "today" of the day it was written for (the audit,
   // 2026-11-03): said once, above it.
+  // The day the prep was made for is the engine's `prep.for_day` where it has one, never the
+  // round's day now: a round moved after its prep was written named the new day (issue 369).
+  // A read-aloud prep the engine held back says why in a plain line: the round changed since it
+  // was made (`live_moved`, what changed), or it is being checked again (`live_unfit`).
   function ivPrepHint(iv) {
     const has = !!obj(iv.prep).updated;
-    return has && (isPast(iv.when) || obj(iv.prep).stale) ? h("p", {class: "hint"}, obj(iv.prep).stale ? "This prep is for an earlier plan of rounds: Update my prep remakes it for this one."
-      : "This prep was written for your " + lc1(stageName(iv)) + (dayOf(iv.when) ? " on " + fmtDay(iv.when) : "") + ".") : null;
+    const day = dayOf(txt(obj(iv.prep).for_day)) || dayOf(iv.when);
+    const moved = txt(iv.live_moved);
+    const out = [has && (isPast(iv.when) || obj(iv.prep).stale) ? h("p", {class: "hint"}, obj(iv.prep).stale ? "This prep is for an earlier plan of rounds: Update my prep remakes it for this one."
+      : "This prep was written for your " + lc1(stageName(iv)) + (day ? " on " + fmtDay(day) : "") + ".") : null,
+    has && moved ? h("p", {class: "hint"}, "The round has changed since your read-aloud prep was made: " + isoDays(moved) + ". This is your prep until Claude makes it again.")
+      : has && iv.live_unfit === true ? h("p", {class: "hint"}, "Your read-aloud prep is being checked again, so this is your prep until it is ready.") : null].filter(Boolean);
+    return out.length ? out : null;
   }
   // Read your prep, wherever it is offered: the prep in a place of its own, full screen, never
   // inside the interview's or the employer's card. A live prep is the interview's own full

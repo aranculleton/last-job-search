@@ -380,6 +380,11 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   1, 3, 7 and 14 days, Got it a step on, Shaky the same step, Missed back to 1 (app.js
   `practiseDue`, the page's one copy of the engine's rule). Nothing is recorded but the mark,
   and the screen says so. (round screen test)
+- A prep's hint names the day the prep was made for (the engine's `prep.for_day`), never the
+  round's day now; where the read-aloud prep is held back, one plain line says why: the round
+  changed since it was made (`live_moved`, what changed, its days in words) or it is being
+  checked again (`live_unfit`), and this is the prep until Claude makes it again (issue 369).
+  (round screen test)
 - A table in a prep is a table wherever a prep is drawn, read from the prep's own Markdown or
   from the lines of a part the engine read, never its raw "|---|" lines; under 600px each row
   is stacked, every cell under its column's name and an empty cell left out (issue 368).
