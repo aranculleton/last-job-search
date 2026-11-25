@@ -168,7 +168,7 @@ def test_the_live_preps_notice_never_comes_from_an_answer_not_for_them(monkeypat
 
 # ---------------------------------------------------------------- 4. two roles, one folder
 
-LONG = ("Senior Consultant, Supply Chain Planning and Inventory Optimisation Transformation "
+LONG = ("Senior Consultant, Supply Chain Planning and inventory optimisation transformation "
         "Programme, %s")
 
 
