@@ -709,6 +709,24 @@ def outcome_stages(text: str, today: str = "") -> list[dict]:
     return out or _heading_stages(whole, today or dt.date.today().isoformat())
 
 
+# outcome.md's own **Status:** word, as the tracker spells the same end (documents/README.md,
+# /outcome Step 3): "interview_only" is the archive's word for a withdrawal.
+_OUTCOME_STATUS = re.compile(r"^(?:\*\*)?Status:(?:\*\*)?[ \t]*([A-Za-z_ -]+?)\s*$", re.M | re.I)
+_RESOLVED = {"hired": "hired", "rejected": "rejected", "no_response": "no_response",
+             "no response": "no_response", "offer_declined": "offer_declined",
+             "offer declined": "offer_declined", "interview_only": "withdrawn",
+             "withdrawn": "withdrawn", "withdrew": "withdrawn"}
+
+
+def outcome_status(text: str) -> str:
+    """The end outcome.md's **Status:** line records, as the tracker spells it ("withdrawn"
+    for the archive's "interview_only"), or "" for a process it says is still going or no
+    line at all. Nothing read it, so a file saying "withdrawn" beside a tracker row still
+    saying "interview" kept the interview live on the page (issue 369)."""
+    m = _OUTCOME_STATUS.search(str(text or ""))
+    return _RESOLVED.get(" ".join(m.group(1).lower().split()), "") if m else ""
+
+
 def furthest(row: dict) -> str:
     """The furthest step an application reached, or "" for none."""
     status = str(row.get("status") or "").strip().lower()

@@ -4411,6 +4411,12 @@ def _interviews(ctx: Ctx, targets: dict) -> list:
         if st in throttle.UNSENT or not st:
             continue
         folder, files, stages = ctx.stages(row)
+        # outcome.md resolved while the tracker still says the process is going: the file's
+        # end holds, and the card says the two differ (issue 369).
+        import what_works
+        ended = what_works.outcome_status(_read(os.path.join(folder, "outcome.md")))
+        differs = st if ended and st not in throttle.FINAL else ""
+        st = ended if differs else st
         ahead = any(s["date"] and not s["done"] and s["date"] >= today for s in stages)
         live = st not in throttle.FINAL and (st in followups.LIVE_PROCESS or ahead)
         past = None
@@ -4455,6 +4461,9 @@ def _interviews(ctx: Ctx, targets: dict) -> list:
             if not stage.get("date") else []
         item = {"id": iid, "company": row.get("company") or "", "role": row.get("role") or "",
                 "status": st,
+                # What the tracker says where outcome.md has resolved it: the chat sets the
+                # tracker to match (issue 369).
+                **({"tracker_status": differs} if differs else {}),
                 # The round as it was written (what an action names it by), and its name for
                 # a title: "Initial round" where the employer's whole paragraph was stored,
                 # the paragraph kept as its details (the maintainer, 2026-11-07).

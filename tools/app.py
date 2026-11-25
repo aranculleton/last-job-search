@@ -549,6 +549,11 @@ def live_behind_lines(model) -> list:
         if iv.get("live_behind"):
             out.append("The live prep for %s: %s." % (iv.get("company") or "", interview_live.BEHIND % (
                 iv.get("company") or "", iv.get("role") or "", iv.get("next_stage") or "")))
+        if iv.get("tracker_status"):
+            out.append("%s, %s: its outcome.md says %s and the tracker still says %s: set the "
+                       "tracker's status to match, as /outcome Step 4 does." % (
+                           iv.get("company") or "", iv.get("role") or "", iv.get("status") or "",
+                           iv["tracker_status"]))
         if iv.get("live_unfit"):
             out.append("The live prep for %s: %s." % (iv.get("company") or "", interview_live.UNFIT % (
                 "its checks grew stricter since it was written", iv.get("company") or "",

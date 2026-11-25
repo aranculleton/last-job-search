@@ -71,3 +71,26 @@ def test_a_live_prep_from_older_checks_that_still_passes_stays_shown():
     folder = os.path.dirname(path)
     assert L.recheck(folder) == []
     assert app_model._live_prep(folder, {"label": ctx["stage"]}, []) is not None
+
+
+# ---------------------------------------------------------------- 2. outcome.md against the tracker
+
+def test_outcome_md_resolved_ends_the_interview_the_tracker_still_calls_live(tmp_path):
+    import what_works
+    from test_a_tick_on_the_page_is_applied_once import Search
+    assert what_works.outcome_status("# Outcome\n\n**Status:** withdrawn\n") == "withdrawn"
+    assert what_works.outcome_status("**Status:** interview_only\n") == "withdrawn"
+    assert what_works.outcome_status("**Status:** in_progress\n") == ""
+    assert what_works.outcome_status("# Outcome\n") == ""
+    search = Search(str(tmp_path))
+    folder = os.path.join(search.state, "documents", "applications",
+                          "thornbury_bank_risk_analyst_thornbury")
+    with open(os.path.join(folder, "outcome.md"), "w", encoding="utf-8", newline="\n") as fh:
+        fh.write("# Outcome\n\n**Status:** withdrawn\n\n## Interview stages reached\n\n"
+                 "- [x] Phone screen (2026-10-15, with the recruiter)\n")
+    got = next(i for i in search.model()["interviews"] if i["company"] == "Thornbury Bank")
+    # The file's end holds: past, no invented next round, nothing waiting to hear.
+    assert got["status"] == "withdrawn" and got["past"] is True and not got.get("had"), got
+    assert got["tracker_status"] == "interview"
+    said = app.live_behind_lines({"interviews": [got]})
+    assert any("outcome.md says withdrawn" in s for s in said), said
