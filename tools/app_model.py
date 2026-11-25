@@ -4508,6 +4508,9 @@ def _interviews(ctx: Ctx, targets: dict) -> list:
                 # page shows the prep as corrected, and the chat that draws the page is told to
                 # build it again (issue 363).
                 **({"live_behind": True} if live and text and _live_behind(folder, stage) else {}),
+                # One passed by older checks that fails these is left out too, and the chat is
+                # told to fix it (issue 369).
+                **({"live_unfit": True} if live and text and _live_unfit(folder, stage) else {}),
                 "sent_files": _sent_files(ctx, row),
                 "referrer": referrer_of(ctx, row),
                 "past": not live,
@@ -4550,7 +4553,24 @@ def _live_prep(folder: str, stage: dict, names) -> dict | None:
         return None
     if _live_behind(folder, stage):
         return None
+    # Passed by older checks and failing these: the prep itself is shown (issue 369).
+    if _live_unfit(folder, stage):
+        return None
     return _scrubbed(doc, names)
+
+
+def _live_unfit(folder: str, stage: dict) -> bool:
+    """Does the live prep saved for this round fail the checks as they are now, though it
+    passed the ones it was written under (interview_live.recheck)?"""
+    import interview_live
+    import interview_pack
+    doc = interview_live.load(folder)
+    if not doc:
+        return False
+    label = str(stage.get("label") or "")
+    if label and doc.get("stage") and not interview_pack._same_round(doc["stage"], label):
+        return False
+    return bool(interview_live.recheck(folder, doc))
 
 
 def _live_behind(folder: str, stage: dict) -> bool:

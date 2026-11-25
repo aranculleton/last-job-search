@@ -2459,6 +2459,64 @@ def ready(doc) -> bool:
             and (doc.get("checked") or {}).get("problems") == 0)
 
 
+_CHECK_FILES = ("interview_live.py", "check_claims.py", "check_numbers.py", "told.py")
+_MARK = []
+_RECHECKED = {}
+
+
+def checks_mark() -> str:
+    """The checks a live prep is written under, as one short fingerprint of the code that runs
+    them: a prep stamped with another was passed by older checks, and is checked again before
+    it is shown (issue 369)."""
+    if not _MARK:
+        import hashlib
+        h = hashlib.sha1()
+        here = os.path.dirname(os.path.abspath(__file__))
+        for name in _CHECK_FILES:
+            try:
+                with open(os.path.join(here, name), "rb") as fh:
+                    h.update(fh.read().replace(b"\r\n", b"\n"))
+            except OSError:
+                h.update(name.encode("utf-8"))
+        _MARK.append(h.hexdigest()[:16])
+    return _MARK[0]
+
+
+def recheck(folder, doc=None) -> list:
+    """[(where, what to fix)] a saved live prep fails under the checks as they are now; empty
+    when it passes, or was written under these very checks. A prep kept once its checks passed
+    was shown for good, even after the checks grew stricter and it no longer passed them
+    (issue 369): the stamp records the checks it passed, and any other is checked again here,
+    from the records, as `live-check` does."""
+    doc = doc if doc is not None else load(folder)
+    if not doc or (doc.get("checked") or {}).get("checks") == checks_mark():
+        return []
+    try:
+        st = os.stat(path_for(folder))
+        key = (os.path.abspath(folder), st.st_mtime_ns, st.st_size)
+    except OSError:
+        key = None
+    if key and key in _RECHECKED:
+        return list(_RECHECKED[key])
+    import interview_pack as P
+    try:
+        ctx = P.gather(_t(doc.get("company")), _t(doc.get("role")), _t(doc.get("stage")),
+                       format_=_t(doc.get("format")))
+    except (LookupError, OSError, ValueError):
+        return []
+    if os.path.abspath(ctx.get("folder") or "") != os.path.abspath(folder):
+        return []
+    found = problems(merge(build(ctx), doc), ctx)
+    if key:
+        _RECHECKED[key] = list(found)
+    return found
+
+
+UNFIT = ("it no longer passes the checks it is held to (%s), so the page shows the prep itself "
+         "until it is fixed: python3 tools/interview_pack.py live-check \"%s\" --role \"%s\" says "
+         "what to change, then live --fill <your words file> --write")
+
+
 def prep_signature(folder) -> str:
     """What the answers in the living document say now, as one short fingerprint: every
     question under Your answers with what is written to say under it and under each of its
@@ -2509,7 +2567,7 @@ def write(ctx, filled) -> tuple:
     if found:
         return "", found
     doc["checked"] = {"on": ctx.get("today") or dt.date.today().isoformat(), "problems": 0,
-                      "drafts": len(drafts(doc))}
+                      "drafts": len(drafts(doc)), "checks": checks_mark()}
     # What the living document's answers said when this was written from them: the page and
     # every check can tell when one has changed since (`behind`).
     doc["prep_sig"] = prep_signature(ctx["folder"])
