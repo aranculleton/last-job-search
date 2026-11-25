@@ -2702,6 +2702,7 @@ ul.bp-news { gap: 12px; }
 .kind .ic { box-sizing: border-box; width: 28px; height: 28px; padding: 4px; border-radius: 8px; color: var(--muted); background: var(--raised); }
 @media (min-width: 760px) { .sec-head .screen-title { font-size: 1.875rem; letter-spacing: -0.02em; } }
 
+/* ------------------------------------------------------------------ an interview's prep, its own place and its round */
 /* An interview's prep: a reading column and, on a wide screen, what was sent and the stages
    beside it. */
 .prep-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; margin-top: 8px; }
