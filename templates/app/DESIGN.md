@@ -336,7 +336,7 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   "Likely questions", each a plain line in the ink and a tap to its answer), then every part
   in view under its own heading, nothing folded, with the live prep's bar of chips to each part
   staying at the top and its head's one pill, Practise with Claude (Update my prep quiet beside
-  it). A question's follow-ups are drawn under it, each with its own, a step in a level, any
+  it, then Add to calendar). A question's follow-ups are drawn under it, each with its own, a step in a level, any
   depth. A prep the engine could not read into parts is parted by its own headings, its
   one-screen summary first and the questions under its questions heading listed there.
   (prep place test)

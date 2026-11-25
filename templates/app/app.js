@@ -13027,7 +13027,9 @@
     const offer = ivOffer(iv);
     const acts = [busy ? btn("See its progress", openWork, {small: true, key: "pv-work:" + iv.id})
       : offer ? null : btn("Practise with Claude", () => { closeDetail(true); startMock(iv); }, {kind: "primary", small: true, key: "pv-mock:" + iv.id, wakes: "talk"}),
-    has && !busy ? btn("Update my prep", () => askPrep(iv), {kind: "quiet", small: true, key: "pv-prep:" + iv.id, wakes: "prep"}) : null].filter(Boolean);
+    has && !busy ? btn("Update my prep", () => askPrep(iv), {kind: "quiet", small: true, key: "pv-prep:" + iv.id, wakes: "prep"}) : null,
+    // The day into the calendar from the prep too, as the card offered it beside the prep.
+    calButton(iv, "pv-cal:" + iv.id)].filter(Boolean);
     const sid = pvId(iv, "x", "summary");
     let parts = [];
     let summary = null;
