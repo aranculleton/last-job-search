@@ -2986,12 +2986,17 @@ S.mock = async (a) => {
   return r;
 };
 
-// An interview's prep, read on the page (2026-11-03): what the minutes before show, the parts
-// folded below it, and everything in it once every fold is open, at the size asked for.
+// An interview's prep, read on the page (2026-11-03): its own place since issue 365, opened at
+// its own address, the minutes before first and every part in view under the bar that goes to
+// each, at the size asked for. An interview with no prep to read opens its card.
 S.prep_reader = async (a) => {
   const o = await open({html: a.html, viewport: a.viewport, scheme: a.scheme, hash: "interviews", clock: a.clock});
-  await throughNav(o.page, () => o.page.evaluate((h) => { location.hash = h; }, "interviews/" + a.id + "/open"));
+  await throughNav(o.page, () => o.page.evaluate((h) => { location.hash = h; }, "interviews/prep~" + a.id + "/open"));
   await turn(o.page, 8);
+  if (!(await o.page.$("dialog[open]"))) {
+    await throughNav(o.page, () => o.page.evaluate((h) => { location.hash = h; }, "interviews/" + a.id + "/open"));
+    await turn(o.page, 8);
+  }
   const r = {errors: o.errors};
   r.title = await one(o.page, "dialog[open] .detail-title");
   r.when = await one(o.page, "dialog[open] .d-stack > .when");
@@ -2999,15 +3004,12 @@ S.prep_reader = async (a) => {
   r.glanceH = await one(o.page, "dialog[open] .prep-glance-h");
   r.say = await T(o.page, "dialog[open] .prep-glance .pg-part:first-of-type .pg-list > li");
   r.parts = await o.page.$$eval("dialog[open] .prep-glance .pg-part", (ps) => ps.map((p) => ({label: (p.querySelector(".pg-label") || {}).textContent, n: p.querySelectorAll("li").length})));
-  r.folds = await T(o.page, "dialog[open] .prep-fold > summary .prep-fold-t");
-  r.openAtFirst = await o.page.$$eval("dialog[open] details.prep-fold[open]", (d) => d.length);
-  // A fold opens with a tap on its name.
-  if (r.folds.length) { await o.page.locator("dialog[open] .prep-fold > summary").first().click(); await turn(o.page, 4); }
-  r.openAfterTap = await o.page.$$eval("dialog[open] details.prep-fold[open]", (d) => d.length);
-  await o.page.$$eval("dialog[open] details.prep-fold:not([open])", (ds) => ds.forEach((d) => { d.open = true; }));
-  await turn(o.page, 4);
+  // The parts after the summary, each under its own heading, and the chips that go to them.
+  r.folds = await T(o.page, "dialog[open] .pv-part .lp-part-h");
+  r.chips = await T(o.page, "dialog[open] .pv-bar .lp-chips .btn");
+  r.openAtFirst = await o.page.$$eval("dialog[open] details", (d) => d.length);
   r.text = await one(o.page, "dialog[open] .detail-body");
-  r.drafts = await o.page.$$eval("dialog[open] .pq", (qs) => qs.filter((q) => /\bDraft\b/.test(q.textContent)).map((q) => q.querySelector(".pq-q").textContent));
+  r.drafts = await o.page.$$eval("dialog[open] .pv-q", (qs) => qs.filter((q) => /\bDraft\b/.test(q.textContent)).map((q) => q.querySelector(".pq-q").textContent));
   r.links = await o.page.$$eval("dialog[open] .detail-body a[href]", (as) => as.map((x) => x.getAttribute("href")));
   r.glanceFont = await o.page.$eval("dialog[open] .pg-list", (e) => parseFloat(getComputedStyle(e).fontSize)).catch(() => 0);
   r.bodyFont = await o.page.$eval("dialog[open] .pq-a, dialog[open] .pi-list", (e) => parseFloat(getComputedStyle(e).fontSize)).catch(() => 0);

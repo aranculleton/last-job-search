@@ -227,12 +227,13 @@ def test_an_interview_binned_leaves_interviews_at_once_and_undo_brings_it_back(r
 
 
 def test_the_prep_is_read_on_the_page_and_practice_uses_its_questions(run, tmp_path, vp):
-    # 2026-11-03: the prep opens on what to say and ask, and its likely questions are one tap
-    # below, folded: the questions are read once that fold is open.
+    # 2026-11-03: the prep opens on what to say and ask; since issue 365 it is a place of its
+    # own, Read your prep on the interview's card opening it full screen, every likely question
+    # in view under the summary.
     got = _go(run, tmp_path, [
-        # The row is its own tap to the prep (the redesign, phase 2, 2026-11-17).
+        # The row is its own tap to the interview's card (the redesign, phase 2, 2026-11-17).
         {"hash": "interviews", "open": "up-go:up-app-larkspur-supply-phone-screen-2026-10-28"},
-        {"open": "prep-fold:int-larkspur-supply:q", "read": "dialog.detail"},
+        {"click": "Read your prep", "within": "dialog.detail", "read": "dialog.detail"},
         {"click": "Practise with Claude", "within": "dialog.detail", "read": "#main", "wait": 300, "calls": "sample"},
         {"eval": "(() => { const t = document.querySelector('#talk-text'); t.value = 'I have three years of store and supplier data behind me, turned into weekly plans.'; t.dispatchEvent(new Event('input', {bubbles: true})); return 1; })()"},
         {"click": "Send", "exact": True, "wait": 300, "read": "#main .talk-list"},
