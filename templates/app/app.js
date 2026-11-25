@@ -12938,7 +12938,7 @@
     const drafts = lv ? Number(lv.drafts) || 0 : 0;
     const draftsSaid = drafts ? h("span", {class: "lp-drafts"}, (drafts === 1 ? "One answer is a draft" : drafts + " answers are drafts") + " you asked for.") : null;
     if (lv) return h("div", {class: "d-stack d-live"}, h("p", {class: "when lp-day"}, head, draftsSaid ? [" · ", draftsSaid] : null), hint,
-      refLine ? h("p", {class: "meta"}, refLine) : null, liveView(iv, lv, one ? h("div", {class: "card-actions"}, one) : null));
+      refLine ? h("p", {class: "meta"}, refLine) : null, liveView(iv, lv, one || ivRound(iv) ? h("div", {class: "card-actions"}, one, ivRound(iv) ? btn("Open your round", () => openDetail("prep", prepId(iv)), {kind: one ? "secondary" : "primary", small: true, key: "dround:" + iv.id}) : null) : null));
     // The one thing to do, said over its buttons, while the interview is still to come (the
     // redesign, 2026-11-16).
     const nextWhat = offer || isPast(iv.when) ? "" : busy ? "Claude is writing your prep." : has ? "Read your prep, then run through the likely questions out loud once before the day."
@@ -13093,13 +13093,16 @@
       if (rd.stories.length) at("stories", "Stories", "Your stories", plural(rd.stories.length, "story", "stories"), rdStories(iv, rd));
       if (rd.numbers.length) at("numbers", "Numbers", "Your numbers", plural(rd.numbers.length, "number", "numbers"), rdNumbers(iv, rd));
       if (rd.cases.length) at("cases", "Cases", "Cases to work through", plural(rd.cases.length, "case", "cases"), rdCases(iv, rd));
+      if (rd.project.length) at("project", "Your part", "Where you sit on the project", null, rdProject(iv, rd));
+      if (rd.plan.length) at("plan", "Plan", "Your plan to the day", plural(rd.plan.length, "day", "days"), rdPlan(iv, rd));
       // After the questions, before the rest of the prep's own parts.
       const qAt = parts.findIndex((x) => x.chip === "Questions");
       parts.splice(qAt >= 0 ? qAt + 1 : rd.in_person ? 1 : 0, 0, ...more);
     }
     const all = (summary ? [summary] : []).concat(parts);
     const ready = rd ? rdReadiness(iv, rd) : null;
-    const head = acts.length || ready ? h("div", {class: "lp-head"}, ready, acts.length ? h("div", {class: "card-actions"}, acts) : null) : null;
+    const board = rd ? rdBoard(iv, rd) : null;
+    const head = acts.length || ready || board ? h("div", {class: "lp-head"}, board, ready, acts.length ? h("div", {class: "card-actions"}, acts) : null) : null;
     if (!all.length) return h("div", {class: "d-stack"}, h("p", {class: "when"}, ivHead(iv)), [txt(iv.role), stageDetails(iv)].filter(Boolean).length ? h("p", {class: "meta"}, [txt(iv.role), stageDetails(iv)].filter(Boolean).join(" · ")) : null, head, h("p", {class: "muted"}, "Your prep is saved; it shows here once the page next updates."));
     const chips = all.map((x) => btn(clip(x.chip, 32), () => lpJump(x.id), {small: true, key: "pvchip:" + x.id}));
     const bar = h("div", {class: "lp-bar pv-bar"}, h("nav", {class: "lp-chips", "aria-label": "The parts of your prep",
@@ -13124,16 +13127,22 @@
     const list = (x) => arr(x).filter((v) => v && typeof v === "object");
     const words = (x) => arr(x).map(txt).filter(Boolean);
     const rd = {
-      who: list(r.who).filter((w) => txt(w.name) || txt(w.role)).map((w) => ({name: txt(w.name), role: txt(w.role), probes: words(w.probes)})),
+      who: list(r.who).filter((w) => txt(w.name) || txt(w.role)).map((w) => ({name: txt(w.name), role: txt(w.role), about: txt(w.about), probes: words(w.probes)})),
       format: txt(r.format), in_person: r.in_person === true, cheat: words(r.cheat_sheet),
-      stories: list(r.stories).filter((s) => txt(s.title)).map((s) => ({id: txt(s.id) || txt(s.title), title: txt(s.title), trigger: txt(s.trigger), bullets: words(s.bullets), questions: words(s.questions)})),
+      stories: list(r.stories).filter((s) => txt(s.title)).map((s) => ({id: txt(s.id) || txt(s.title), title: txt(s.title), trigger: txt(s.trigger), bullets: words(s.bullets), questions: words(s.questions), home: txt(s.home)})),
       numbers: list(r.numbers).filter((n) => txt(n.value)).map((n) => ({value: txt(n.value), what: txt(n.what)})),
-      cards: list(r.cards).filter((c) => txt(c.id) && txt(c.q || c.question)).map((c) => ({id: txt(c.id), q: txt(c.q || c.question), trigger: txt(c.trigger), bullets: words(c.bullets), follow: arr(c.follow)})),
+      cards: list(r.cards).filter((c) => txt(c.id) && txt(c.q || c.question)).map((c) => ({id: txt(c.id), q: txt(c.q || c.question), trigger: txt(c.trigger), bullets: words(c.bullets), follow: arr(c.follow), section: txt(c.section), who: txt(c.who)})),
       logistics: r.logistics && typeof r.logistics === "object" ? r.logistics : null,
-      cases: list(r.cases).filter((c) => txt(c.id) && (txt(c.title) || txt(c.prompt))).map((c) => ({id: txt(c.id), title: txt(c.title) || txt(c.prompt), type: txt(c.type), prompt: txt(c.prompt), steps: words(c.steps), numbers: words(c.numbers), visual: txt(c.visual)})),
+      cases: list(r.cases).filter((c) => txt(c.id) && (txt(c.title) || txt(c.prompt))).map((c) => ({id: txt(c.id), title: txt(c.title) || txt(c.prompt), type: txt(c.type), prompt: txt(c.prompt), steps: words(c.steps), numbers: words(c.numbers), visual: txt(c.visual),
+        chart: c.chart && typeof c.chart === "object" && list(c.chart.bars).some((b) => isFinite(Number(b.value))) ? {unit: txt(c.chart.unit), need: Number(c.chart.need), bars: list(c.chart.bars).filter((b) => txt(b.label) && isFinite(Number(b.value))).map((b) => ({label: txt(b.label), value: Number(b.value)}))} : null})),
       readiness: r.readiness && typeof r.readiness === "object" ? r.readiness : null,
+      // Beyond the first contract: a day-by-day plan to the interview, and where the person
+      // sits on the employer's kind of project (its steps, the ones they lead marked).
+      plan: list(r.plan).filter((d) => dayOf(txt(d.day)) && txt(d.focus)).map((d) => ({day: dayOf(txt(d.day)), focus: txt(d.focus)})).sort((a, b) => a.day.localeCompare(b.day)),
+      project: list(obj(r.project).steps).filter((x) => txt(x.name)).map((x) => ({name: txt(x.name), what: txt(x.what), you: x.you === true})),
+      projectSaid: txt(obj(r.project).intro),
     };
-    const any = rd.who.length || rd.format || rd.cheat.length || rd.stories.length || rd.numbers.length || rd.cards.length || rd.in_person || rd.cases.length || rd.readiness;
+    const any = rd.who.length || rd.format || rd.cheat.length || rd.stories.length || rd.numbers.length || rd.cards.length || rd.in_person || rd.cases.length || rd.readiness || rd.plan.length || rd.project.length;
     return any ? rd : null;
   }
   function practiseId(iv) { return "practise~" + txt(iv.id); }
@@ -13161,6 +13170,22 @@
       txt(r.next) ? h("p", {class: "rd-next"}, h("span", {class: "rd-next-k"}, "Next: "), txt(r.next)) : null,
       facts.length ? h("p", {class: "small muted"}, cap1(facts.join(" · ")) + ".") : null);
   }
+  // The round's header: how long to go, in large type, then where and who, and today's step of
+  // the plan where there is one (the round guide the maintainer set as the model, issue 367).
+  function rdBoard(iv, rd) {
+    const n = iv.when && !isPast(iv.when) ? dayDiff(iv.when) : null;
+    const l = obj(rd.logistics);
+    const where = rd.in_person ? [txt(l.address), txt(l.entrance), txt(l.floor)].filter(Boolean).join(", ") : formatWord(iv.format) || rd.format;
+    const who = rd.who.map((w) => [w.name, w.role].filter(Boolean).join(", ")).filter(Boolean);
+    const today = rd.plan.find((d) => d.day === todayIso());
+    if (n === null && !where && !who.length && !today) return null;
+    const row = (k, v) => (v ? h("div", {class: "rd-board-row"}, h("dt", {}, k), h("dd", {}, v)) : null);
+    return h("section", {class: "rd-board", "aria-label": "The round"},
+      n !== null ? h("p", {class: "rd-count"}, h("span", {class: "rd-count-n"}, n === 0 ? "Today" : n === 1 ? "Tomorrow" : String(n)),
+        n > 1 ? h("span", {class: "rd-count-k"}, " days to go") : null) : null,
+      h("dl", {class: "rd-board-list"}, row("Where", where || (rd.in_person ? h("span", {class: "muted rd-unknown"}, RD_UNKNOWN) : "")), row("Who", who.join("; "))),
+      today ? h("p", {class: "rd-today"}, h("span", {class: "rd-next-k"}, "Today: "), today.focus) : null);
+  }
   // Who they meet, each with what they are likely to probe; the format under them.
   function rdWho(iv, rd) {
     if (!rd.who.length && !rd.format) return null;
@@ -13168,6 +13193,7 @@
       rd.who.length ? h("h4", {class: "pg-label", id: pvId(iv, "x", "who-h")}, "Who you meet") : h("h4", {class: "pg-label", id: pvId(iv, "x", "who-h")}, "Format"),
       rd.who.length ? h("ul", {class: "rd-people"}, rd.who.map((w) => h("li", {class: "rd-person"},
         h("p", {class: "rd-person-name"}, h("bdi", {}, w.name || w.role), w.name && w.role ? h("span", {class: "muted"}, " · " + w.role) : null),
+        w.about ? h("p", {class: "small"}, isoDays(w.about)) : null,
         w.probes.length ? h("p", {class: "small"}, h("span", {class: "muted"}, "Likely to ask about: "), w.probes.join("; ")) : null))) : null,
       rd.format ? h("p", {class: "rd-format"}, rd.who.length ? h("span", {class: "muted"}, "Format: ") : null, rd.format) : null);
   }
@@ -13237,14 +13263,19 @@
     if (!qids.length) return cards;
     const order = rd.cards.map((c) => c.id);
     qids.sort((a, b) => (order.indexOf(a) < 0 ? 1e3 : order.indexOf(a)) - (order.indexOf(b) < 0 ? 1e3 : order.indexOf(b)));
+    // A story's home is the question it answers first (the engine's `home`, else its first);
+    // the others are its backups, for a question that comes up twice.
+    const home = (st) => (st.home && st.questions.indexOf(st.home) >= 0 ? st.home : st.questions[0]);
+    const mark = (st, q) => (st.questions.indexOf(q) < 0 ? h("span", {class: "sr-only"}, "No")
+      : home(st) === q ? [h("span", {class: "rd-tick rd-home", "aria-hidden": "true"}, "\u25cf"), h("span", {class: "sr-only"}, "Its home")]
+        : [h("span", {class: "rd-tick", "aria-hidden": "true"}, "\u25cb"), h("span", {class: "sr-only"}, "A backup")]);
     const grid = h("div", {class: "rd-grid-wrap"}, h("table", {class: "rd-grid"},
-      h("caption", {class: "pg-label"}, "Which story answers which question"),
-      h("thead", {}, h("tr", {}, h("th", {scope: "col"}, "Likely question"), rd.stories.map((s) => h("th", {scope: "col"}, s.title)))),
-      h("tbody", {}, qids.map((q) => h("tr", {}, h("th", {scope: "row"}, rdQuestionWords(iv, rd, q)),
-        rd.stories.map((s) => h("td", {}, s.questions.indexOf(q) >= 0 ? [h("span", {class: "rd-tick", "aria-hidden": "true"}, "✓"), h("span", {class: "sr-only"}, "Yes")] : h("span", {class: "sr-only"}, "No"))))))));
+      h("caption", {class: "small muted"}, "\u25cf is a story's home, the question it answers first; \u25cb a backup if that question comes up twice."),
+      h("thead", {}, h("tr", {}, h("th", {scope: "col"}, "Story"), qids.map((q) => h("th", {scope: "col", class: "rd-grid-q"}, rdQuestionWords(iv, rd, q))))),
+      h("tbody", {}, rd.stories.map((st) => h("tr", {}, h("th", {scope: "row"}, st.title), qids.map((q) => h("td", {}, mark(st, q))))))));
     const list = h("div", {class: "rd-grid-list"}, h("h4", {class: "pg-label"}, "Which story answers which question"),
       rd.stories.filter((s) => s.questions.length).map((s) => h("div", {class: "rd-gl"}, h("p", {class: "rd-gl-t"}, s.title),
-        h("ul", {class: "rd-list"}, s.questions.map((q) => h("li", {}, rdQuestionWords(iv, rd, q)))))));
+        h("ul", {class: "rd-list"}, s.questions.map((q) => h("li", {}, rdQuestionWords(iv, rd, q), home(s) === q ? h("span", {class: "muted"}, " (its home)") : null))))));
     return h("div", {class: "rd-story-part"}, cards, grid, list);
   }
   // Every number with what it is; Drill hides each value to say it first, then show it.
@@ -13275,6 +13306,21 @@
   // person they meet who is most likely to set one.
   function rdCaseDone(iv, c) { return obj(S.practiceLocal.get(rdCaseId(iv, c)) || S.practice.get(rdCaseId(iv, c))); }
   function rdCaseId(iv, c) { return "case~" + seg(txt(iv.id)) + "~" + seg(c.id); }
+  // A case's numbers as bars against what is needed: the shortest bar is where to look first.
+  function rdChart(c) {
+    const ch = c.chart;
+    const top = Math.max(...ch.bars.map((b) => b.value), isFinite(ch.need) ? ch.need : 0) || 1;
+    const low = Math.min(...ch.bars.map((b) => b.value));
+    const unit = ch.unit ? " " + ch.unit : "";
+    return h("figure", {class: "rd-chart"},
+      h("figcaption", {class: "lp-lbl"}, "The numbers, drawn"),
+      h("ul", {class: "rd-bars", style: isFinite(ch.need) ? "--need: " + Math.round((ch.need / top) * 1000) / 10 + "%" : null},
+        ch.bars.map((b) => h("li", {class: "rd-bar" + (b.value === low ? " rd-bar-low" : "")},
+          h("span", {class: "rd-bar-k"}, b.label),
+          h("span", {class: "rd-bar-track"}, h("span", {class: "rd-bar-fill", style: "width: " + Math.round((b.value / top) * 1000) / 10 + "%"})),
+          h("span", {class: "rd-bar-v"}, b.value + unit)))),
+      isFinite(ch.need) ? h("p", {class: "small muted"}, "The line is what is needed: " + ch.need + unit + ".") : null);
+  }
   function rdCases(iv, rd) {
     const caseEl = (c) => {
       const el = h("article", {class: "rd-case", id: pvId(iv, "case", c.id)});
@@ -13283,7 +13329,8 @@
         refill(el,
           h("div", {class: "rd-case-top"}, h("h4", {class: "rd-story-t"}, c.title), c.type ? stateWord(c.type, "plain") : null),
           c.prompt && c.prompt !== c.title ? h("p", {class: "rd-prompt"}, isoDays(c.prompt)) : null,
-          c.steps.length ? [h("p", {class: "lp-lbl"}, "Work it out loud"), h("ol", {class: "rd-list"}, c.steps.map((s) => h("li", {}, isoDays(s))))] : null,
+          c.steps.length ? [h("p", {class: "lp-lbl"}, "Work it out loud"), h("ol", {class: "rd-steps"}, c.steps.map((s, i) => h("li", {}, h("span", {class: "rd-step-n"}, String(i + 1)), h("span", {}, isoDays(s)))))] : null,
+          c.chart ? rdChart(c) : null,
           c.numbers.length ? [h("p", {class: "lp-lbl"}, "Numbers to use"), h("ul", {class: "rd-list"}, c.numbers.map((s) => h("li", {}, s)))] : null,
           c.visual ? [h("p", {class: "lp-lbl"}, "Draw it like this"), h("pre", {class: "rd-visual"}, c.visual)] : null,
           txt(done.at) ? h("p", {class: "small muted rd-done"}, "Worked through " + fmtDay(dayOf(done.at)) + ".") : null,
@@ -13299,6 +13346,22 @@
       h("div", {class: "card-actions"}, btn("Mock interview with Claude", () => { closeDetail(true); startMock(iv, who); },
         {kind: "secondary", small: true, key: "rd-mock:" + iv.id, wakes: "talk", aria: "Mock interview with Claude" + (whoSaid ? " as " + whoSaid : "")})),
       whoSaid ? h("p", {class: "small muted"}, "Claude plays " + whoSaid + ".") : null);
+  }
+  // Where the person sits on the employer's kind of project: each step in order, the ones they
+  // lead marked, to walk along if asked what they would actually do.
+  function rdProject(iv, rd) {
+    return h("div", {class: "rd-project"},
+      rd.projectSaid ? h("p", {}, rd.projectSaid) : null,
+      h("ol", {class: "rd-steps rd-proj"}, rd.project.map((x, i) => h("li", {class: x.you ? "rd-you" : null},
+        h("span", {class: "rd-step-n"}, String(i + 1)),
+        h("span", {}, h("strong", {}, x.name), x.you ? [" ", stateWord("You lead", "you")] : null, x.what ? h("span", {class: "rd-step-what"}, x.what) : null)))));
+  }
+  // The plan to the day, a day a row, today marked.
+  function rdPlan(iv, rd) {
+    const today = todayIso();
+    return h("ol", {class: "rd-plan"}, rd.plan.map((d) => h("li", {class: "rd-plan-day" + (d.day === today ? " rd-is-today" : d.day < today ? " rd-was" : ""), "aria-current": d.day === today ? "date" : null},
+      h("span", {class: "rd-plan-when"}, fmtDay(d.day), d.day === today ? [" ", stateWord("Today", "you")] : null),
+      h("span", {class: "rd-plan-what"}, isoDays(d.focus)))));
   }
   // ------------------------------------------------------------------ practice: spaced repetition
 
@@ -13320,20 +13383,29 @@
     return step < 0 || !day ? {step, due: null} : {step, due: addDays(day, PRACTISE_STEPS[step])};
   }
   function practiceDoc(id) { return S.practiceLocal.get(id) || S.practice.get(id) || null; }
-  // Due first, then the ones last marked Shaky or Missed, then the new ones, then the rest.
-  function practiseOrder(iv, rd) {
+  // Missed cards come back first, then what is due, then the shaky ones, then the new ones,
+  // then the rest; `pick` keeps the cards of one part or one interviewer.
+  function practiseOrder(iv, rd, pick) {
     const today = todayIso();
     const rank = (c) => {
       const d = practiceDoc(c.id);
       const marks = arr(obj(d).marks);
-      if (!marks.length) return [2, ""];
+      if (!marks.length) return [3, ""];
       const due = txt(obj(d).due) || practiseDue(marks).due || "";
-      if (due && due <= today) return [0, due];
       const last = txt(obj(marks[marks.length - 1]).mark);
-      if (last === "shaky" || last === "missed") return [1, due];
-      return [3, due];
+      if (last === "missed") return [0, due];
+      if (due && due <= today) return [1, due];
+      if (last === "shaky") return [2, due];
+      return [4, due];
     };
-    return rd.cards.map((c, i) => [c, rank(c), i]).sort((a, b) => a[1][0] - b[1][0] || a[1][1].localeCompare(b[1][1]) || a[2] - b[2]).map((x) => x[0]);
+    return rd.cards.filter((c) => !pick || pickHas(pick, c)).map((c, i) => [c, rank(c), i])
+      .sort((a, b) => a[1][0] - b[1][0] || a[1][1].localeCompare(b[1][1]) || a[2] - b[2]).map((x) => x[0]);
+  }
+  // A card asked by anyone ("Either", "Anyone" or none named) is in every interviewer's set.
+  function pickHas(pick, c) {
+    if (pick.section && c.section !== pick.section) return false;
+    if (pick.who && c.who && c.who !== pick.who && !/^(either|anyone|any|both|all)$/i.test(c.who)) return false;
+    return true;
   }
   async function practiceWrite(id, doc) {
     const was = practiceDoc(id);
@@ -13357,25 +13429,37 @@
   const PRACTISE_SECS = 90;
   function practiseView(iv, rd) {
     const root = h("div", {class: "d-stack rd-practise", "data-k": "practise:" + iv.id});
-    const st = {queue: practiseOrder(iv, rd), i: 0, shown: false, tally: {got: 0, shaky: 0, missed: 0}, t0: now(), timer: null};
+    const st = {pick: {section: "", who: ""}, i: 0, shown: false, tally: {got: 0, shaky: 0, missed: 0}, t0: 0, run: false, timer: null};
+    st.queue = practiseOrder(iv, rd, st.pick);
+    const sections = [...new Set(rd.cards.map((c) => c.section).filter(Boolean))];
+    const askers = [...new Set(rd.cards.map((c) => c.who).filter((w) => w && !/^(either|anyone|any|both|all)$/i.test(w)))];
+    // Filters: a soft pill a choice, the one chosen pressed, as Jobs' own views are.
+    const filterRow = (label, key, list) => (list.length < 2 && !(key === "who" && list.length) ? null : h("div", {class: "rd-filter", role: "group", "aria-label": label},
+      h("span", {class: "small muted rd-filter-k"}, label),
+      [""].concat(list).map((v) => btn(v || "All", () => { st.pick[key] = v; st.queue = practiseOrder(iv, rd, st.pick); st.i = 0; st.shown = false; st.run = false; draw(); },
+        {small: true, kind: st.pick[key] === v ? "secondary" : "quiet", pressed: st.pick[key] === v, key: "rd-pick:" + key + ":" + (v || "all"), aria: v ? label + ": " + v : label + ": all"}))));
     const say = (s) => announce(s);
     const tick = () => {
       const el = root.querySelector(".rd-clock-n");
       if (!root.isConnected && st.timer) { clearInterval(st.timer); st.timer = null; return; }
       if (!el) return;
-      const left = Math.max(0, PRACTISE_SECS - Math.floor((now() - st.t0) / 1000));
+      const left = st.run ? Math.max(0, PRACTISE_SECS - Math.floor((now() - st.t0) / 1000)) : PRACTISE_SECS;
       el.textContent = Math.floor(left / 60) + ":" + String(left % 60).padStart(2, "0");
       const over = root.querySelector(".rd-clock-over");
       if (over) over.hidden = left > 0;
     };
     const draw = () => {
+      if (!st.queue.length) {
+        refill(root, filterRow("Part", "section", sections), filterRow("Asked by", "who", askers), h("p", {class: "muted"}, "No cards here yet."));
+        return;
+      }
       if (st.i >= st.queue.length) {
         if (st.timer) { clearInterval(st.timer); st.timer = null; }
         const t = st.tally;
         refill(root, h("section", {class: "rd-flash rd-flash-end"},
           h("h3", {class: "rd-flash-q", tabindex: "-1"}, "That's all " + plural(st.queue.length, "card", "cards") + "."),
           h("p", {}, [t.got + " got", t.shaky + " shaky", t.missed + " missed"].join(" · ") + ". Each comes back when it is due."),
-          h("div", {class: "card-actions"}, btn("Start again", () => { st.queue = practiseOrder(iv, rd); st.i = 0; st.shown = false; st.tally = {got: 0, shaky: 0, missed: 0}; st.t0 = now(); draw(); }, {kind: "primary", small: true, key: "rd-again:" + iv.id}),
+          h("div", {class: "card-actions"}, btn("Start again", () => { st.queue = practiseOrder(iv, rd, st.pick); st.i = 0; st.shown = false; st.tally = {got: 0, shaky: 0, missed: 0}; st.run = false; draw(); }, {kind: "primary", small: true, key: "rd-again:" + iv.id}),
             btn("Back to your prep", () => readPrep(iv), {small: true, key: "rd-back:" + iv.id}))));
         const hd = root.querySelector(".rd-flash-q");
         if (hd) hd.focus();
@@ -13389,16 +13473,19 @@
       const mark = (k) => {
         st.tally[k]++;
         practiseMark(iv, c, k);
-        st.i++; st.shown = false; st.t0 = now();
+        st.i++; st.shown = false; st.run = false;
         say(k === "got" ? "Got it." : k === "shaky" ? "Shaky." : "Missed.");
         draw();
       };
       const follow = pvFollows(c.follow, 1);
+      const clockBtn = btn(st.run ? "Reset" : "Start the clock", () => { st.run = !st.run; st.t0 = now(); draw(); },
+        {small: true, kind: "quiet", key: "rd-clock:" + iv.id, aria: st.run ? "Reset the 90 second clock" : "Start the 90 second clock"});
       refill(root,
+        filterRow("Part", "section", sections), filterRow("Asked by", "who", askers),
         h("div", {class: "rd-flash-top"},
-          h("p", {class: "small muted"}, "Card " + (st.i + 1) + " of " + st.queue.length + " · ", status),
-          h("p", {class: "rd-clock small", "aria-label": "Time for this answer"}, h("span", {class: "rd-clock-n", "aria-hidden": "true"}, "1:30"),
-            h("span", {class: "muted rd-clock-over", hidden: true}, " Time's up: finish your thought."))),
+          h("p", {class: "small muted"}, "Card " + (st.i + 1) + " of " + st.queue.length + " · ", status, c.who ? " · " + (/^(either|anyone|any|both|all)$/i.test(c.who) ? "anyone may ask" : c.who + " may ask") : ""),
+          h("div", {class: "rd-clock small"}, h("span", {class: "rd-clock-n", role: "timer", "aria-label": "Time for this answer"}, "1:30"),
+            h("span", {class: "muted rd-clock-over", hidden: true}, " Time's up: cut it short."), clockBtn)),
         h("section", {class: "rd-flash", "data-card": c.id, "aria-label": "Card " + (st.i + 1)},
           h("h3", {class: "rd-flash-q", tabindex: "-1"}, c.q),
           !st.shown ? h("div", {class: "card-actions"}, btn("Show the answer", () => { st.shown = true; draw(); const b = root.querySelector('[data-k="rd-mark:got"]'); if (b) b.focus(); }, {kind: "primary", small: true, key: "rd-show:" + iv.id}))
@@ -13410,7 +13497,7 @@
                 btn("Got it", () => mark("got"), {kind: "primary", small: true, key: "rd-mark:got"}),
                 btn("Shaky", () => mark("shaky"), {small: true, key: "rd-mark:shaky"}),
                 btn("Missed", () => mark("missed"), {small: true, key: "rd-mark:missed"}))]),
-        h("p", {class: "lp-also"}, "Nothing is recorded: only the mark you choose is kept."));
+        h("p", {class: "lp-also"}, "Say it out loud before you show the answer: remember the trigger word and the points, never the sentences. Nothing is recorded; only your mark is kept."));
       tick();
       const hd = root.querySelector(".rd-flash-q");
       if (hd && root.isConnected && !st.shown) hd.focus();

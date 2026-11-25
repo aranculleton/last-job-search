@@ -1530,6 +1530,7 @@
           {
             "name": "Juno",
             "role": "Recruiter",
+            "about": "Runs the first screen for the planning team.",
             "probes": [
               "Why you are moving now",
               "Your notice and pay"
@@ -1538,6 +1539,7 @@
           {
             "name": "Kit",
             "role": "Supply planning lead",
+            "about": "Leads the store-level forecasting work started in September.",
             "probes": [
               "How you handle a forecast miss",
               "Explaining a model to store managers"
@@ -1566,7 +1568,8 @@
               "c-wrong",
               "c-explain",
               "c-proud"
-            ]
+            ],
+            "home": "c-wrong"
           },
           {
             "id": "st-regional-plan",
@@ -1580,7 +1583,8 @@
             "source": "profile",
             "questions": [
               "c-explain"
-            ]
+            ],
+            "home": "c-explain"
           }
         ],
         "numbers": [
@@ -1603,6 +1607,8 @@
         "cards": [
           {
             "id": "c-about",
+            "section": "Opening",
+            "who": "Either",
             "q": "Tell me about yourself.",
             "trigger": "Shelf",
             "bullets": [
@@ -1619,6 +1625,8 @@
           },
           {
             "id": "c-wrong",
+            "section": "Your work",
+            "who": "Kit",
             "q": "Tell me about a forecast that was wrong.",
             "trigger": "Holiday miss",
             "bullets": [
@@ -1642,6 +1650,8 @@
           },
           {
             "id": "c-explain",
+            "section": "Your work",
+            "who": "Kit",
             "q": "How do you explain a model to a store manager?",
             "trigger": "One page",
             "bullets": [
@@ -1652,6 +1662,8 @@
           },
           {
             "id": "c-proud",
+            "section": "Opening",
+            "who": "Juno",
             "q": "What are you proudest of?",
             "trigger": "Chilled lines",
             "bullets": [
@@ -1677,9 +1689,70 @@
               "A quarter more stock-outs",
               "About 180 stores in the region"
             ],
-            "visual": "Forecast  ->  Order  ->  Delivery  ->  Shelf\n   ok         ok         late        empty"
+            "visual": "Forecast  ->  Order  ->  Delivery  ->  Shelf\n   ok         ok         late        empty",
+            "chart": {
+              "unit": "deliveries a day",
+              "need": 100,
+              "bars": [
+                {
+                  "label": "Depot A",
+                  "value": 120
+                },
+                {
+                  "label": "Depot B",
+                  "value": 85
+                },
+                {
+                  "label": "Depot C",
+                  "value": 105
+                }
+              ]
+            }
           }
         ],
+        "plan": [
+          {
+            "day": "2026-10-25",
+            "focus": "Read the prep once; say Tell me about yourself out loud."
+          },
+          {
+            "day": "2026-10-26",
+            "focus": "Flashcards, then the stock-outs case on paper."
+          },
+          {
+            "day": "2026-10-27",
+            "focus": "The two cards not got yet, then the numbers drill."
+          },
+          {
+            "day": "2026-10-28",
+            "focus": "The cheat sheet once, an hour before the call."
+          }
+        ],
+        "project": {
+          "intro": "If they ask what you would actually do, walk them along this.",
+          "steps": [
+            {
+              "name": "Scope",
+              "what": "The planning lead agrees the question with the stores.",
+              "you": false
+            },
+            {
+              "name": "Data",
+              "what": "You join sales, orders and deliveries and check them.",
+              "you": true
+            },
+            {
+              "name": "Forecast",
+              "what": "You build and test the store-level forecast.",
+              "you": true
+            },
+            {
+              "name": "Roll out",
+              "what": "Store managers use the one-page plan.",
+              "you": false
+            }
+          ]
+        },
         "readiness": {
           "score": 55,
           "practised": [

@@ -103,6 +103,9 @@ def _model(ctx=None, live=None):
     m = _sample()
     for iv in m["interviews"]:
         if iv["id"] == IV:
+            # The live prep alone, as before the engine built a round: a round opens on its own
+            # screen, the live prep one tap from it (issue 367).
+            iv.pop("round", None)
             iv["live"] = live or _live()
             iv.update(company=iv["live"]["company"], role=iv["live"]["role"], next_stage=STAGE,
                       format="Video", **{"with": "Shirin Example, Head of Planning"})
