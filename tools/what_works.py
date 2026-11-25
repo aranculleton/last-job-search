@@ -686,9 +686,10 @@ def outcome_stages(text: str, today: str = "") -> list[dict]:
         when = _STAGE_WHEN.search(text_)
         offer = None if when else _STAGE_OFFERED.search(text_)
         # A box that names no round is a note, never a stage: "Paused until they knew"
-        # ticked read as a technical interview held (issue 369).
+        # ticked read as a technical interview held (issue 369). A line booked with its day
+        # is a round in any language ("Entretien technique (scheduled ...)").
         named = text_[:(when or offer).start()] if (when or offer) else text_
-        if not _ROUND_WORD.search(named) or _NOTE_START.match(named):
+        if (not (when or offer) and not _ROUND_WORD.search(named)) or _NOTE_START.match(named):
             continue
         if offer:
             label = text_[:offer.start()].strip()
