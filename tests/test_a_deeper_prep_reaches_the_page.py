@@ -40,18 +40,23 @@ Last year's same week, and the planners' own numbers, site by site.
 """
 
 
+
+def _read(path) -> str:
+    with open(path, encoding="utf-8") as fh:
+        return fh.read()
+
 def _add(path, block):
-    text = open(path, encoding="utf-8").read()
+    text = _read(path)
     head, rest = text.split("## Your answers\n", 1)
     body, tail = rest.split("\n## ", 1)
     with open(path, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(head + "## Your answers\n" + body.rstrip("\n") + "\n\n" + block + "\n## " + tail)
 
 
-def test_a_question_added_under_your_answers_is_shown_with_its_follow_ups(app):
+def test_a_question_added_under_your_answers_is_shown_with_its_follow_ups():
     path = P.write_pack(_ctx())
     _add(path, ADDED)
-    read = P.reading(open(path, encoding="utf-8").read(), "Fernhill Freight")
+    read = P.reading(_read(path), "Fernhill Freight")
     got = {q["question"]: q for q in read["questions"]}
     q = got.get("Why did you pick that forecasting approach?")
     assert q is not None, "a question added under Your answers never reached the page"
@@ -69,13 +74,13 @@ def test_a_question_added_under_your_answers_is_shown_with_its_follow_ups(app):
     assert second["question"] == "What would you change now?" and second["answer"] is None
     # And a rebuild keeps it, as the person's own.
     P.write_pack(_ctx())
-    again = P.reading(open(path, encoding="utf-8").read(), "Fernhill Freight")
+    again = P.reading(_read(path), "Fernhill Freight")
     assert "Why did you pick that forecasting approach?" in {x["question"] for x in again["questions"]}
 
 
-def test_a_technical_question_has_follow_ups_two_deep_to_answer(app):
+def test_a_technical_question_has_follow_ups_two_deep_to_answer():
     path = P.write_pack(_ctx())
-    text = open(path, encoding="utf-8").read()
+    text = _read(path)
     block = text.split("### Tell me about your experience with demand forecasting.\n", 1)[1]
     block = block.split("\n### ", 1)[0]
     tree = P.split_follow(block.splitlines())[1]
@@ -93,11 +98,11 @@ def test_a_technical_question_has_follow_ups_two_deep_to_answer(app):
     assert not P.split_follow(motive.splitlines())[1]
 
 
-def test_a_modelling_answer_is_said_from_the_model_and_method_the_profile_records(app, tmp_path,
+def test_a_modelling_answer_is_said_from_the_model_and_method_the_profile_records(tmp_path,
                                                                                     monkeypatch):
     # The example person's story records only the language ("in Python and SQL"): the pack
     # says so, and asks for the model rather than letting the answer stop at the language.
-    text = open(P.write_pack(_ctx()), encoding="utf-8").read()
+    text = _read(P.write_pack(_ctx()))
     assert P.NO_METHOD_MARK in text
     # A profile that records the model for the same work (a line sharing its figures): the
     # pack names it for the answer to say.

@@ -36,8 +36,13 @@ BOTH_WORDS = ("I'm an operations analyst, and the thread through my work is fore
               "planners actually trust.")
 
 
+
+def _read(path) -> str:
+    with open(path, encoding="utf-8") as fh:
+        return fh.read()
+
 def _write_answer(path, question, words):
-    text = open(path, encoding="utf-8").read()
+    text = _read(path)
     head, rest = text.split("### %s\n" % question, 1)
     body, tail = rest.split("\n### ", 1) if "\n### " in rest else rest.split("\n## ", 1)
     sep = "\n### " if "\n### " in rest else "\n## "
@@ -55,11 +60,11 @@ def test_the_next_round_retires_the_one_held_and_keeps_its_answers_apart():
     ctx = _ctx()
     assert not P._same_round(ctx["stage"], "Phone screen")
     P.write_pack(ctx)
-    text = open(path, encoding="utf-8").read()
+    text = _read(path)
     # The screen's own answer is out of the next round's pack...
     assert SCREEN_WORDS not in text and "### %s" % SCREEN_ONLY not in text
     # ...kept apart beside it, never lost...
-    kept = open(os.path.join(os.path.dirname(path), P.EARLIER_ANSWERS), encoding="utf-8").read()
+    kept = _read(os.path.join(os.path.dirname(path), P.EARLIER_ANSWERS))
     assert SCREEN_ONLY in kept and SCREEN_WORDS in kept and "Phone screen" in kept
     # ...and the pack says so, once.
     assert text.count(P.EARLIER_LINE) == 1
@@ -67,14 +72,14 @@ def test_the_next_round_retires_the_one_held_and_keeps_its_answers_apart():
     assert BOTH_WORDS in text
     # Built again for the same round, nothing more moves and nothing is kept twice.
     P.write_pack(_ctx())
-    again = open(os.path.join(os.path.dirname(path), P.EARLIER_ANSWERS), encoding="utf-8").read()
+    again = _read(os.path.join(os.path.dirname(path), P.EARLIER_ANSWERS))
     assert again == kept
-    assert BOTH_WORDS in open(path, encoding="utf-8").read()
+    assert BOTH_WORDS in _read(path)
 
 
 def test_an_answer_added_for_this_round_stays():
     path = P.write_pack(_ctx())
-    text = open(path, encoding="utf-8").read()
+    text = _read(path)
     head, tail = text.split("## Your answers\n", 1)
     body, rest = tail.split("\n## ", 1)
     with open(path, "w", encoding="utf-8", newline="\n") as fh:
@@ -82,7 +87,7 @@ def test_an_answer_added_for_this_round_stays():
                  "I picked it with the planners, so a site was flagged only when it mattered.\n"
                  "\n## " + rest)
     P.write_pack(_ctx())
-    assert "### Why that cut-off?" in open(path, encoding="utf-8").read()
+    assert "### Why that cut-off?" in _read(path)
     assert not os.path.exists(os.path.join(os.path.dirname(path), P.EARLIER_ANSWERS))
 
 

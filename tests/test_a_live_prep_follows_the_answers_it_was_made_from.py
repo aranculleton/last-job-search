@@ -39,8 +39,13 @@ FIXED = ("The clearest one is the weekly forecast I rebuilt, because planners we
          "error with extra safety stock, and I brought it down to 14%, which freed about £1.1M.")
 
 
+
+def _read(path) -> str:
+    with open(path, encoding="utf-8") as fh:
+        return fh.read()
+
 def _answer(path, words):
-    text = open(path, encoding="utf-8").read()
+    text = _read(path)
     head, rest = text.split("### %s\n" % QUESTION, 1)
     body, tail = rest.split("\n### ", 1)
     keep = [ln for ln in body.splitlines() if ln.startswith(P.INTENT_MARK)]
