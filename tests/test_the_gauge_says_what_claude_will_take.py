@@ -91,7 +91,9 @@ def test_preparing_practising_and_a_follow_up_carry_the_gauge_everywhere_and_in_
     # gauge's sweep never looked in.
     got = _go(run, tmp_path, [{"hash": "interviews", "eval": WAKERS}, {"open": "up-view:interviews", "eval": WAKERS},
                               {"hash": "todo", "eval": WAKERS}, {"hash": "jobs", "open": "jobsw:applied", "eval": WAKERS},
-                              {"hash": "interviews/int-larkspur-supply/open", "wait": 200, "eval": WAKERS}], WIDE, clock=T)
+                              # The prep reader: the prep's own place since issue 365, where Update
+                              # my prep moved from the interview's card.
+                              {"hash": "interviews/prep~int-larkspur-supply/open", "wait": 200, "eval": WAKERS}], WIDE, clock=T)
     seen = [x for a in got["after"] for x in a["eval"]]
     assert {n for n, _ in seen} >= {"Prepare me", "Update my prep", "Practise with Claude", "Draft the follow-up"}, seen
     assert [x for x in seen if not x[1]] == [], seen
