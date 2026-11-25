@@ -2441,6 +2441,40 @@ def kind_changed(folder, stage="") -> str:
     return now if now and _norm(now) != _norm(doc.get("format")) else ""
 
 
+def details_changed(folder, stage) -> str:
+    """What the round's record now says that the live prep saved for it was not made for, in
+    plain words ("" when nothing): its day, who it is with or how long it runs. A round moved,
+    or a new interviewer named, kept the prep for the old plan on the page, and its hint named
+    the new day (issue 369). `stage` is the round as outcome_stages reads it."""
+    import interview_pack as P
+    doc = load(folder)
+    stage = stage or {}
+    if not doc:
+        return ""
+    label = _t(stage.get("label"))
+    if label and _t(doc.get("stage")) and not P._same_round(doc["stage"], label):
+        return ""
+    out = []
+    was, now = _t(doc.get("date")), _t(stage.get("date"))
+    if was and now and was != now:
+        out.append("its day moved from %s to %s" % (was, now))
+    was, now = _t(doc.get("with")), _t(stage.get("with"))
+    if now and _norm(was) != _norm(now):
+        out.append("it is now with %s" % now)
+    try:
+        was, now = int(doc.get("minutes") or 0), int(stage.get("minutes") or 0)
+    except (TypeError, ValueError):
+        was = now = 0
+    if was and now and was != now:
+        out.append("it now runs %d minutes, not %d" % (now, was))
+    return "; ".join(out)
+
+
+MOVED = ("the round's record changed since it was written (%s), so the page shows the prep itself "
+         "until it is built again: python3 tools/interview_pack.py live \"%s\" --role \"%s\" "
+         "--stage \"%s\" --write")
+
+
 def path_for(folder) -> str:
     return os.path.join(folder, LIVE)
 

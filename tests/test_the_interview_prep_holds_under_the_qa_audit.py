@@ -96,6 +96,34 @@ def test_outcome_md_resolved_ends_the_interview_the_tracker_still_calls_live(tmp
     assert any("outcome.md says withdrawn" in s for s in said), said
 
 
+# ---------------------------------------------------------------- 7. a round moved
+
+@pytest.mark.usefixtures("app_fixture")
+def test_a_new_day_interviewer_or_length_takes_the_old_live_prep_off_the_page():
+    ctx = _ctx()
+    path = _live(ctx)
+    folder = os.path.dirname(path)
+    with open(path, encoding="utf-8") as fh:
+        doc = json.load(fh)
+    stage = {"label": ctx["stage"], "date": doc["date"], "with": doc["with"],
+             "minutes": doc["minutes"]}
+    assert L.details_changed(folder, stage) == ""
+    assert app_model._live_prep(folder, stage, []) is not None
+    assert app_model._prep_for_day(folder, stage) == (doc["date"] or None)
+    for change, said in ((dict(date="2099-01-05"), "its day moved"),
+                         (dict(**{"with": "a panel of three directors"}), "it is now with"),
+                         (dict(minutes=doc["minutes"] + 30), "now runs")):
+        if change.get("date") and not doc["date"]:
+            continue
+        moved = dict(stage, **change)
+        assert said in L.details_changed(folder, moved)
+        assert app_model._live_prep(folder, moved, []) is None
+        lines = app.live_behind_lines({"interviews": [{"company": COMPANY, "role": ROLE,
+                                                       "next_stage": ctx["stage"],
+                                                       "live_moved": L.details_changed(folder, moved)}]})
+        assert lines and said in lines[0]
+
+
 # ---------------------------------------------------------------- 3. a stock answer not for them
 
 NOTICE = {"question": "What is your notice period?", "alternatives": ["What is your notice period?"],

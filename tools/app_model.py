@@ -4481,6 +4481,9 @@ def _interviews(ctx: Ctx, targets: dict) -> list:
                 # down: every page update from a fresh copy or another chat's folder rewrote the
                 # whole of Interviews, preps and all, with nothing in it changed (issue 217).
                 "prep": ({"path": rel(prep), "updated": _saved_stamp(prep),
+                          # The day its live prep was made for (issue 369).
+                          **({"for_day": _prep_for_day(folder, stage)}
+                             if _prep_for_day(folder, stage) else {}),
                           **({"stale": True, "stale_since": _saved_stamp(os.path.join(folder, "outcome.md"))}
                              if _prep_stale(folder, text, stage) else {})}
                          if text else None),
@@ -4520,6 +4523,10 @@ def _interviews(ctx: Ctx, targets: dict) -> list:
                 # One passed by older checks that fails these is left out too, and the chat is
                 # told to fix it (issue 369).
                 **({"live_unfit": True} if live and text and _live_unfit(folder, stage) else {}),
+                # The round moved, or has a new interviewer or length, since its live prep was
+                # made: what changed, for the chat to build it again (issue 369).
+                **({"live_moved": _live_moved(folder, stage)}
+                   if live and text and _live_moved(folder, stage) else {}),
                 "sent_files": _sent_files(ctx, row),
                 "referrer": referrer_of(ctx, row),
                 "past": not live,
@@ -4562,10 +4569,31 @@ def _live_prep(folder: str, stage: dict, names) -> dict | None:
         return None
     if _live_behind(folder, stage):
         return None
-    # Passed by older checks and failing these: the prep itself is shown (issue 369).
-    if _live_unfit(folder, stage):
+    # Passed by older checks and failing these, or made for another day, interviewer or
+    # length than the round now has: the prep itself is shown (issue 369).
+    if _live_unfit(folder, stage) or interview_live.details_changed(folder, stage):
         return None
     return _scrubbed(doc, names)
+
+
+def _live_moved(folder: str, stage: dict) -> str:
+    """What the round's record says now that its live prep was not made for, or ""."""
+    import interview_live
+    return interview_live.details_changed(folder, stage)
+
+
+def _prep_for_day(folder: str, stage: dict) -> str | None:
+    """The day the live prep saved for this round was made for, or None: the hint under a
+    prep names the day it was written for, never the round's day now (issue 369)."""
+    import interview_live
+    import interview_pack
+    doc = interview_live.load(folder)
+    if not doc or not str(doc.get("date") or ""):
+        return None
+    label = str(stage.get("label") or "")
+    if label and doc.get("stage") and not interview_pack._same_round(doc["stage"], label):
+        return None
+    return str(doc["date"])
 
 
 def _live_unfit(folder: str, stage: dict) -> bool:
