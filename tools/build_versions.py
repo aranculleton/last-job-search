@@ -433,8 +433,9 @@ METHODS: dict[str, dict] = {
             (117, "2026-11-17", False, "RUNBOOK says where the person searches and their pay floor and cut line change through tools/wants.py set, the words for a work-life sign or a kind of role through wants.py words, and a no that only ranks down is written with --soft only where they say so; nothing made changes"),
             (118, "2026-11-17", False, "a page build looks for each application's folder once, where Applications, its stages and the campaign chats each looked again (issue 336); the same folder is found, so nothing made changes"),
             (119, "2026-11-17", False, "the page's colours are redone in templates/app/palettes.py, which this method's templates pattern also reads; nothing a draft prints changes"),
+            (120, "2026-11-25", False, "two long titles at one employer cut to the same folder name get a folder each, the earlier keeping its name (issue 369); nothing a draft prints changes"),
         ),
-        "fingerprint": "43f2e50edbbb6715",
+        "fingerprint": "421ebede5f03824c",
     },
     "interview": {
         # Only a process with a round still to come is prepared again: a prep for a round
@@ -512,8 +513,9 @@ METHODS: dict[str, dict] = {
             (60, "2026-11-25", True, "a question added to a prep under Your answers, and the follow-ups written under any answer, reach the page, the follow-ups no longer read as part of the answer above (issue 362); a technical question's prep carries the follow-ups an interviewer digs into, two deep, and a modelling answer is said from the model and method the profile records; each prep for a round still ahead is made again to carry them"),
             (61, "2026-11-25", False, "a live prep keeps what the prep's answers said when it was written, and while one has changed since, the page shows the prep itself and the chat drawing the page is told to make the live one again; one saved before is judged by when each file was saved; a technical question's follow-ups go four or five deep, and a modelling answer names the model the profile records (issue 363); a live prep already made is shown as it is until then"),
             (62, "2026-11-25", False, "a prep built for a new round leaves out the answers written only for the round held, kept apart beside it in earlier_answers.md, puts first the questions found hard there (asked --landed no or partly), and fails its check over MAX_PACK_CHARS characters; book says to record what was hard and build for the round booked only (issue 364); the rerun of version 60 makes each prep ahead again"),
+            (63, "2026-11-25", True, "a live prep records the checks it passed and is checked again when they change, left off the page while it fails them; a round moved, with a new interviewer or length takes its old live prep off the page; outcome.md's resolved Status ends an interview the tracker kept live; a stock answer that works against the employer is never offered, its notice included; a stage ticked done, held or had keeps its day, who and length; a checklist note is never a stage and one round written twice is one; a cut sentence keeps its ellipsis; a level heading and years of experience are asked as an interviewer asks them; an ambiguous --role is refused (issue 369)"),
         ),
-        "fingerprint": "5d30cd3fc50d6f15",
+        "fingerprint": "3b790f7c7b9c600d",
     },
     "research": {
         "by": "upgrade", "priority": 3, "applies": "live_applications", "time": "~5 min each",
