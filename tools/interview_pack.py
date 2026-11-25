@@ -6639,6 +6639,9 @@ def _live(a) -> int:
             return 1
         found = interview_live.problems(interview_live.merge(interview_live.build(ctx), doc), ctx)
         now = interview_live.kind_changed(ctx["folder"], ctx["stage"])
+        if interview_live.behind(ctx["folder"], doc):
+            found.insert(0, ("the answers", interview_live.BEHIND
+                             % (ctx["company"], ctx["role"], ctx["stage"])))
         if now:
             found.insert(0, ("the round", "its record now says it is %s, and this prep was made for "
                              "another kind of round (%s): build it again" % (now, doc.get("format") or "no format said")))
@@ -6676,6 +6679,13 @@ def _live(a) -> int:
         print("the kind of interview is a guess (%s): where the invite, the recruiter or the "
               "person says what the round is, build again with --format \"<what they said>\", "
               "and it is kept on the round's record" % doc["assumed"])
+    if a.write and not a.fill and interview_live.behind(ctx["folder"]):
+        # Kept again with no words, a prep behind its answers would be marked as written from
+        # them while it still says the old ones (issue 363).
+        print("interview_pack: not written: %s. Where none of its words need to change, "
+              "--fill a words file holding {} says so." % (interview_live.BEHIND % (
+                  ctx["company"], ctx["role"], ctx["stage"])))
+        return 1
     if a.write:
         path, found = interview_live.write(ctx, filled)
         if path:
@@ -6791,6 +6801,8 @@ def _live_line(ctx) -> None:
         print("live prep: not made yet; build it (Step 3b): python3 tools/interview_pack.py live "
               "\"%s\" --role \"%s\" --stage \"%s\" --out <scratch>/live.json"
               % (ctx["company"], ctx["role"], ctx["stage"]))
+    elif interview_live.behind(ctx["folder"], saved):
+        print("live prep: %s" % (interview_live.BEHIND % (ctx["company"], ctx["role"], ctx["stage"])))
     elif found:
         print("live prep: %d thing(s) to write before it is kept again (the saved one still "
               "shows): live --out, fill, then live --fill --write" % len(found))
