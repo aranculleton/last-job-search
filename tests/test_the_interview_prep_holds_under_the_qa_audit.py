@@ -223,3 +223,20 @@ def test_a_sentence_cut_short_keeps_its_ellipsis():
     assert P._sentence("I lead with the forecast.") == "I lead with the forecast."
     assert P._sentence("I lead with the forecast") == "I lead with the forecast."
     assert P._sentence("Why this team?") == "Why this team?"
+
+
+# ---------------------------------------------------------------- 9. a level heading and years
+
+@pytest.mark.parametrize("req, asked", [
+    ("Senior Consultant: 4+ years in management consulting",
+     "Walk me through your experience in management consulting."),
+    ("3+ years of experience building data pipelines",
+     "Walk me through your experience building data pipelines."),
+    ("Minimum 5 years as a pricing analyst", "Walk me through your time as a pricing analyst."),
+    ("2-4 years of relevant experience", "Walk me through your experience so far."),
+    ("Familiarity with dbt", "Tell me about your experience with dbt."),
+])
+def test_a_requirement_is_asked_as_an_interviewer_asks_it(req, asked):
+    got = P.requirement_question(req)
+    assert got == asked
+    assert "Consultant:" not in got and "years" not in got

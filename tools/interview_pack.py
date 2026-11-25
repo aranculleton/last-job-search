@@ -1762,6 +1762,16 @@ detail-oriented driven resilient collaborative flexible reliable personable team
 hard-working hardworking enthusiastic passionate""".split())
 
 
+_LEVEL_LABEL = re.compile(
+    r"^(?:[A-Z][\w&/-]*\s+){0,3}(?:analyst|consultant|associate|manager|engineer|scientist|"
+    r"director|lead|principal|specialist|partner|level|grade|band|[A-Z]\d)\s*:\s+(?=\S)", re.I)
+_YEARS_OF = re.compile(
+    r"^(?:(?:at least|minimum(?: of)?|over|more than)\s+)?\d+\s*(?:\+|-\s*\d+|to\s+\d+)?\s*"
+    r"(?:years?|yrs?)['\u2019]?(?:\s+of)?(?:\s+(?:relevant|professional|hands-on|"
+    r"commercial|industry|work|working|practical|prior|previous))*(?:\s+experience)?"
+    r"(?:\s+(?P<rest>.+))?$", re.I)
+
+
 def requirement_question(req, seen="") -> str:
     """A posting's requirement line as an interviewer asks about it: "Familiarity with dbt" is
     "Tell me about your experience with dbt.", "Excellent communication skills" is "Give me an
@@ -1770,8 +1780,23 @@ def requirement_question(req, seen="") -> str:
     experience with", and read "your experience with familiarity with dbt" (the review,
     2026-11-10)."""
     t = _QUALIFIER.sub("", _text(req).rstrip(" .;:")).rstrip(" .;:,")
+    # A posting's level heading in front of its line ("Senior Consultant: 4+ years in ...") is
+    # the level, never the thing asked about (issue 369).
+    t = _LEVEL_LABEL.sub("", t) or t
     if _DUTY.match(t) or _LANGUAGE.match(t):
         return ""
+    # Years of something is asked as the story of them: "Tell me about your experience with
+    # 4+ years in consulting" read as nonsense (issue 369).
+    m = _YEARS_OF.match(t)
+    if m:
+        rest = _text(m.group("rest"))
+        if not rest:
+            return "Walk me through your experience so far."
+        if re.match(r"(?i)as\b", rest):
+            return "Walk me through your time %s." % mid_sentence(rest, seen)
+        if not re.match(r"(?i)(?:in|with|of|across|on|at|using|[a-z]+ing)\b", rest):
+            rest = "with " + rest
+        return "Walk me through your experience %s." % mid_sentence(rest, seen)
     m = _YOU_HAVE.match(t)
     if m:
         return "When have you %s?" % t[m.end():]
