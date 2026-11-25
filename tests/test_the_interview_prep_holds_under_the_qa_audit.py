@@ -211,3 +211,15 @@ def test_a_note_in_the_checklist_is_never_a_stage_and_one_round_is_one_line():
     # The furthest step reached is the screen, never a technical round held.
     assert [s["step"] for s in stages if s["done"]] == ["screen"]
 
+
+# ---------------------------------------------------------------- 8. a cut sentence says so
+
+def test_a_sentence_cut_short_keeps_its_ellipsis():
+    long = ("I rebuilt the weekly demand forecast for the northern distribution network, working "
+            "with planners at every site to agree what the error had cost them in safety stock, "
+            "and brought it down from 22% to 14% over two quarters.")
+    got = P._sentence(long, 80)
+    assert got.endswith("...") and not got.endswith("....") and len(got) < len(long)
+    assert P._sentence("I lead with the forecast.") == "I lead with the forecast."
+    assert P._sentence("I lead with the forecast") == "I lead with the forecast."
+    assert P._sentence("Why this team?") == "Why this team?"

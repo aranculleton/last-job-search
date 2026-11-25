@@ -4962,7 +4962,12 @@ _QUOTES_TEXT = re.compile(r"^(?:Prepared:|Say:|From your profile:|%s)" % re.esca
 def _sentence(text, n=170) -> str:
     """The first sentence of `text`, cut where a clause ends when it runs long."""
     first = re.split(r"(?<=[.!?])\s+", _text(text), maxsplit=1)[0]
-    return prep._short(first, n).rstrip(".") + "."
+    got = prep._short(first, n)
+    # A cut keeps its ellipsis, and a question its mark: "..." made "." read the cut-off
+    # half of a sentence as a whole one (issue 369).
+    if got.endswith(("...", "…", "?", "!")):
+        return got
+    return got.rstrip(".") + "."
 
 
 def say_these(ctx, answered, written=None) -> list:
