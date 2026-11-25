@@ -1525,6 +1525,173 @@
         ]
       },
       "draft": null,
+      "round": {
+        "who": [
+          {
+            "name": "Juno",
+            "role": "Recruiter",
+            "probes": [
+              "Why you are moving now",
+              "Your notice and pay"
+            ]
+          },
+          {
+            "name": "Kit",
+            "role": "Supply planning lead",
+            "probes": [
+              "How you handle a forecast miss",
+              "Explaining a model to store managers"
+            ]
+          }
+        ],
+        "format": "Twenty minutes on the phone with the recruiter, then ten with the planning lead.",
+        "in_person": false,
+        "cheat_sheet": [
+          "Lead with chilled lines: stock-outs down by a third.",
+          "Why Larkspur: forecasting moved to store level in September.",
+          "Notice is one month; no sponsorship needed."
+        ],
+        "stories": [
+          {
+            "id": "st-bank-holiday",
+            "title": "The bank holiday forecast",
+            "trigger": "Holiday miss",
+            "bullets": [
+              "Missed a bank holiday weekend by a fifth.",
+              "Added holiday effects store by store.",
+              "Next quarter's error came down to 9%."
+            ],
+            "source": "profile",
+            "questions": [
+              "c-wrong",
+              "c-explain",
+              "c-proud"
+            ]
+          },
+          {
+            "id": "st-regional-plan",
+            "title": "The one-page regional plan",
+            "trigger": "One page",
+            "bullets": [
+              "Store managers ignored a 40-row report.",
+              "Cut it to one page of three actions.",
+              "Adoption went from two regions to all six."
+            ],
+            "source": "profile",
+            "questions": [
+              "c-explain"
+            ]
+          }
+        ],
+        "numbers": [
+          {
+            "value": "a third",
+            "what": "fewer stock-outs on chilled lines",
+            "source": "profile"
+          },
+          {
+            "value": "9%",
+            "what": "forecast error the quarter after the fix",
+            "source": "profile"
+          },
+          {
+            "value": "2,400",
+            "what": "products in the weekly forecast",
+            "source": "profile"
+          }
+        ],
+        "cards": [
+          {
+            "id": "c-about",
+            "q": "Tell me about yourself.",
+            "trigger": "Shelf",
+            "bullets": [
+              "Three years turning store and supplier data into weekly plans.",
+              "Now want to work closer to the shelf."
+            ],
+            "follow": [
+              {
+                "question": "Why leave now?",
+                "answer": "The work I like best is store level, and that is what you are building.",
+                "follow": []
+              }
+            ]
+          },
+          {
+            "id": "c-wrong",
+            "q": "Tell me about a forecast that was wrong.",
+            "trigger": "Holiday miss",
+            "bullets": [
+              "Bank holiday weekend missed by a fifth.",
+              "Added holiday effects store by store.",
+              "Error down to 9% next quarter."
+            ],
+            "follow": [
+              {
+                "question": "What would you do differently?",
+                "answer": "Check the calendar effects before the season, not after.",
+                "follow": [
+                  {
+                    "question": "Who would you tell first?",
+                    "answer": "The store managers who order.",
+                    "follow": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "c-explain",
+            "q": "How do you explain a model to a store manager?",
+            "trigger": "One page",
+            "bullets": [
+              "One page, three actions.",
+              "Show last week's miss and what changes."
+            ],
+            "follow": []
+          },
+          {
+            "id": "c-proud",
+            "q": "What are you proudest of?",
+            "trigger": "Chilled lines",
+            "bullets": [
+              "Stock-outs on chilled lines down by a third."
+            ],
+            "follow": []
+          }
+        ],
+        "logistics": null,
+        "cases": [
+          {
+            "id": "case-stockout",
+            "title": "Why are stock-outs up?",
+            "type": "Diagnosis",
+            "prompt": "Stock-outs on yoghurt rose by a quarter last month in the North West. Where do you start?",
+            "steps": [
+              "Ask what changed: range, supplier, promotions, weather.",
+              "Split by store and day to see where it sits.",
+              "Check the forecast against what sold.",
+              "Say the one fix you would test first."
+            ],
+            "numbers": [
+              "A quarter more stock-outs",
+              "About 180 stores in the region"
+            ],
+            "visual": "Forecast  ->  Order  ->  Delivery  ->  Shelf\n   ok         ok         late        empty"
+          }
+        ],
+        "readiness": {
+          "score": 55,
+          "practised": [
+            2,
+            4
+          ],
+          "cases_done": 0,
+          "mocks_done": 1,
+          "logistics_confirmed": false,
+          "next": "Practise the two cards you have not got yet."
+        }
+      },
       "prep_read": {
         "glance": {
           "assessing": "whether the basics hold and your story makes sense, in about twenty minutes",
