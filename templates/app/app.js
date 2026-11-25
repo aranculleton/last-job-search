@@ -4894,7 +4894,7 @@
     const offer = ivOffer(iv);
     const offered = !gone && !offer ? arr(iv.offered) : [];
     const what = lc1(stageName(iv));
-    const read = (kind) => btn("Read your prep", () => openDetail("interview", iv.id), {kind, small: true, key: "read:" + k, aria: "Read your prep for your " + what + " with " + txt(iv.company)});
+    const read = (kind) => btn("Read your prep", () => readPrep(iv), {kind, small: true, key: "read:" + k, aria: "Read your prep for your " + what + " with " + txt(iv.company)});
     const prepBtn = (kind) => btn(has ? "Update my prep" : "Prepare me", () => askPrep(iv), {kind, small: true, key: "prep:" + k, wakes: "prep", aria: (has ? "Update my prep for " : "Prepare me for ") + txt(iv.company)});
     const bin = IV_OVER[txt(iv.status)] ? null : btn("", () => askEndApplication(iv, "the " + what + " with " + txt(iv.company), gone ? null : () => askMoved(iv), ["interview", iv.id]),
       {kind: "quiet icon-only", small: true, icon: "bin", key: "ivbin:" + k, aria: "Not going ahead: " + txt(iv.company)});
@@ -6642,7 +6642,7 @@
           heroUp ? btn("", () => calSheet([heroUp]), {kind: "quiet icon-only", small: true, icon: "cal-add", key: "bp-cal-hero", aria: "Add to your calendar: " + txt(heroUp.title)}) : null),
         h("h4", {class: "bp-iv-what"}, stageName(iv) + " with ", h("bdi", {}, txt(iv.company))),
         txt(iv.role) ? h("p", {class: "bp-iv-role"}, txt(iv.role)) : null,
-        act || (obj(iv.prep).updated ? btn("Read your prep", () => openDetail("interview", iv.id), {kind: "primary", small: true, key: "bp-prep:" + iv.id})
+        act || (obj(iv.prep).updated ? btn("Read your prep", () => readPrep(iv), {kind: "primary", small: true, key: "bp-prep:" + iv.id})
           : btn("Prepare me", () => askPrep(iv), {kind: "primary", small: true, key: "bp-askprep:" + iv.id, wakes: "prep"})));
     };
     const ivWhen = (iv) => fmtDay(dayOf(iv.when)) + (timeOf(iv.when) ? ", " + timeOf(iv.when) : "") + " · " + lc1(relWhen(iv.when));
@@ -7530,7 +7530,7 @@
     else if (st === "drafting") primary = draftLine ? null : btn("See its progress", openWork, {small: true, key: "seework:" + r.id, aria: "See its progress: " + about});
     else if (st === "asking") primary = btn("Answer", () => askWorkAnswer(draftWorkId(r)), {kind: "primary", small: true, key: "answer:" + r.id, aria: "Answer Claude's question: " + about});
     else if (st === "dismissed") primary = btn("Bring back", () => act([{item: r.id, action: "job.bring_back", rev: r.rev}], "Brought back: " + txt(r.company)), {small: true, key: "restore:" + r.id, aria: "Bring back: " + about});
-    else if (iv) primary = btn(obj(iv.prep).updated ? "Read your prep" : "Prepare me", () => (obj(iv.prep).updated ? openDetail("interview", iv.id) : askPrep(iv)), {kind: "primary", small: true, key: "jobiv:" + r.id, wakes: obj(iv.prep).updated ? null : "prep", aria: (obj(iv.prep).updated ? "Read your prep for " : "Prepare me for ") + txt(r.company)});
+    else if (iv) primary = btn(obj(iv.prep).updated ? "Read your prep" : "Prepare me", () => (obj(iv.prep).updated ? readPrep(iv) : askPrep(iv)), {kind: "primary", small: true, key: "jobiv:" + r.id, wakes: obj(iv.prep).updated ? null : "prep", aria: (obj(iv.prep).updated ? "Read your prep for " : "Prepare me for ") + txt(r.company)});
     else if (nudge) primary = btn("Draft the follow-up", () => askDue(nudge), {kind: "primary", small: true, key: "jobnudge:" + r.id, wakes: dueWakes(nudge), aria: "Draft the follow-up: " + about});
     if (primary && primary.tagName === "A") primary.classList.add("btn", "primary", "small");
     const markApplied = () => confirmApplied([r], () => appliedToday(r));
@@ -10053,7 +10053,7 @@
     // title opens each prep.
     if (brief) {
       const p = obj(iv.prep);
-      if (leadRow === u.id && p.updated && !p.stale) return h("span", {class: "up-prep"}, btn("Read your prep", () => openDetail("interview", iv.id), {kind: "secondary", small: true, key: "bp-up-read:" + u.id, aria: "Read your prep for " + txt(iv.company)}));
+      if (leadRow === u.id && p.updated && !p.stale) return h("span", {class: "up-prep"}, btn("Read your prep", () => readPrep(iv), {kind: "secondary", small: true, key: "bp-up-read:" + u.id, aria: "Read your prep for " + txt(iv.company)}));
       return h("span", {class: "up-prep"}, p.updated && !p.stale ? "Prep ready" : p.updated ? "Prep is for an earlier plan" : "No prep yet");
     }
     // The row's one pill, in the words To do uses ("Read your prep"): the night before, the key
@@ -10063,7 +10063,7 @@
     // On a practice day the row leads as To do does: practise first (the review of the fixes,
     // 2026-11-10); the row's own title still opens the prep to read.
     if (obj(iv.prep).updated && livePrep(iv) && ivPractiseDay(iv)) return h("span", {class: "up-prep sep-before"}, btn("Practise 3 questions", () => practisePrep(iv), {kind: "secondary", small: true, key: "up-drill:" + u.id, aria: "Practise 3 questions for " + txt(iv.company)}));
-    if (obj(iv.prep).updated) return h("span", {class: "up-prep sep-before"}, btn("Read your prep", () => openDetail("interview", iv.id), {kind: "secondary", small: true, key: "up-read:" + u.id, aria: "Read your prep for " + txt(iv.company)}));
+    if (obj(iv.prep).updated) return h("span", {class: "up-prep sep-before"}, btn("Read your prep", () => readPrep(iv), {kind: "secondary", small: true, key: "up-read:" + u.id, aria: "Read your prep for " + txt(iv.company)}));
     return h("span", {class: "up-prep sep-before"}, "No prep yet ",
       btn("Prepare me", () => askPrep(iv), {kind: "secondary", small: true, key: "up-prep:" + u.id, wakes: "prep", aria: "Prepare me for " + txt(iv.company)}));
   }
@@ -10177,7 +10177,7 @@
     if (!iv) return null;
     const p = obj(iv.prep);
     if (p.updated && !p.stale && livePrep(iv) && ivPractiseDay(iv)) return h("span", {class: "up-prep"}, btn("Practise 3 questions", () => practisePrep(iv), {kind: "secondary", small: true, key: "up-drill:" + u.id, aria: "Practise 3 questions for " + txt(iv.company)}));
-    if (lead === u.id && p.updated && !p.stale) return h("span", {class: "up-prep"}, btn("Read your prep", () => openDetail("interview", iv.id), {kind: "secondary", small: true, key: "up-read:" + u.id, aria: "Read your prep for " + txt(iv.company)}));
+    if (lead === u.id && p.updated && !p.stale) return h("span", {class: "up-prep"}, btn("Read your prep", () => readPrep(iv), {kind: "secondary", small: true, key: "up-read:" + u.id, aria: "Read your prep for " + txt(iv.company)}));
     if (nextPrep !== u.id) return null;
     return h("span", {class: "up-prep"}, p.updated ? btn("Update my prep", () => askPrep(iv), {kind: "secondary", small: true, key: "up-prep:" + u.id, wakes: "prep", aria: "Update my prep for " + txt(iv.company)})
       : btn("Prepare me", () => askPrep(iv), {kind: "secondary", small: true, key: "up-prep:" + u.id, wakes: "prep", aria: "Prepare me for " + txt(iv.company)}));
@@ -12339,7 +12339,7 @@
       : nudge ? "Next: " + step(nudge.title, txt(nudge.sub) || txt(nudge.kind)) + (Number(nudge.overdue_days) > 0 ? " now" : nudge.due ? ", " + dayWords(nudge.due) : "")
         : late ? "Next: " + lc1(txt(next.label || next.title) || "follow up") + " now"
           : txt(next.label || next.title) ? "Next: " + step(next.label || next.title, next.kind) + (next.date || next.on ? ", " + dayWords(next.date || next.on) : "") : a.applied_on ? "Applied " + fmtDay(a.applied_on) : "";
-    const primary = !live ? null : iv && !isPast(iv.when) ? btn(obj(iv.prep).updated ? "Read your prep" : "Prepare me", () => (obj(iv.prep).updated ? openDetail("interview", iv.id) : askPrep(iv)), {kind: "primary", small: true, key: "recprep:" + a.id, wakes: obj(iv.prep).updated ? null : "prep", aria: (obj(iv.prep).updated ? "Read your prep for " : "Prepare me for ") + txt(a.company)})
+    const primary = !live ? null : iv && !isPast(iv.when) ? btn(obj(iv.prep).updated ? "Read your prep" : "Prepare me", () => (obj(iv.prep).updated ? readPrep(iv) : askPrep(iv)), {kind: "primary", small: true, key: "recprep:" + a.id, wakes: obj(iv.prep).updated ? null : "prep", aria: (obj(iv.prep).updated ? "Read your prep for " : "Prepare me for ") + txt(a.company)})
       : nudge ? btn("Draft the follow-up", () => askDue(nudge), {kind: "primary", small: true, key: "recnudge:" + a.id, wakes: dueWakes(nudge), aria: "Draft the follow-up: " + about}) : null;
     const job = jobRows().find((r) => txt(r.id) === txt(a.job)) || null;
     // More as labelled rows, as on a Found card (2026-11-04): how it has gone so far, the
@@ -12517,7 +12517,7 @@
   function ivNext(iv, key) {
     const has = !!obj(iv.prep).updated;
     return dNext("Your " + lc1(stageName(iv)) + ", " + lc1(relWhen(iv.when)) + (fmtWhen(iv.when) ? " (" + fmtWhen(iv.when) + ")" : "") + ".",
-      btn(has ? "Read your prep" : "Get ready for it", () => openDetail("interview", iv.id), {kind: "primary", small: true, key}));
+      btn(has ? "Read your prep" : "Get ready for it", () => (has ? readPrep(iv) : openDetail("interview", iv.id)), {kind: "primary", small: true, key}));
   }
   // A card's "Next": the one thing to do there, in a line, and its one filled button.
   function dNext(what, button, more) {
@@ -12529,7 +12529,14 @@
     // A live prep is read full screen on every screen: the parts, its term panel beside them.
     // Wide only with a prep to read beside its stages: without one it is 680 as every card is,
     // never 960 round one line (the redesign's second round, 2026-11-17).
-    if (kind === "interview") { const iv = allInterviews().find((x) => x.id === id); return iv ? [ivTitle(iv), interviewDetail(iv), "interviews", obj(iv.prep).updated ? (livePrep(iv) ? "wide full" : "wide") : ""] : null; }
+    if (kind === "interview") { const iv = allInterviews().find((x) => x.id === id); return iv ? [ivTitle(iv), interviewDetail(iv), "interviews", obj(iv.prep).updated && livePrep(iv) ? "wide full" : ""] : null; }
+    // A prep's own place, full screen: never inside the interview's or the employer's card
+    // (issue 365). A live prep is the interview's own view, so its address opens that.
+    if (kind === "prep") {
+      const iv = /^prep~/.test(txt(id)) ? allInterviews().find((x) => prepId(x) === id) : null;
+      if (!iv || !obj(iv.prep).updated) return null;
+      return [ivTitle(iv), livePrep(iv) ? interviewDetail(iv) : prepView(iv), "interviews", "wide full"];
+    }
     // A person's card carries their initial beside their name, in their one colour.
     if (kind === "person") { const p = peopleItems().find((x) => x.id === id); return p ? [whoAt(p.first_name, p.employer), personDetail(p), "contacts", "", avatar(p)] : null; }
     if (kind === "application") { const a = applicationItems().find((x) => x.id === id); return a ? [txt(a.role) + " at " + txt(a.company), applicationDetail(a), "jobs", ""] : null; }
@@ -12724,18 +12731,6 @@
       careful.length ? h("div", {class: "pg-part pg-careful"}, h("h4", {class: "pg-label"}, "Watch out for"), h("ul", {class: "pg-list"}, careful.map((t) => h("li", {}, t)))) : null].filter(Boolean);
     return parts.length ? h("section", {class: "prep-glance", "aria-labelledby": "pg-h-" + seg(iv.id)}, h("h3", {class: "prep-glance-h", id: "pg-h-" + seg(iv.id)}, "Before you go in"), parts) : null;
   }
-  // Each likely question with the person's own answer, or, while it is unwritten, what to
-  // answer it with. "Draft" only on an answer that is one, said once, with what to do.
-  function prepQuestion(q, i) {
-    const answer = txt(q.answer);
-    const notes = arr(q.notes).map(txt).filter(Boolean);
-    return h("li", {class: "pq"},
-      h("p", {class: "pq-q"}, h("span", {class: "pq-n", "aria-hidden": "true"}, (i + 1) + ". "), txt(q.question)),
-      answer && q.draft ? h("p", {class: "pq-draft"}, stateWord("Draft", "warn"), " Check it's true before you say it.") : null,
-      answer ? h("p", {class: "pq-a"}, answer) : h("p", {class: "pq-cue"}, txt(q.cue) ? cap1(isoDays(txt(q.cue))) : "Not written yet."),
-      !answer && txt(q.checking) ? h("p", {class: "pq-why small muted"}, "They're checking " + isoDays(txt(q.checking)).replace(/ They want to hear: /, " They want to hear ")) : null,
-      !answer && notes.length ? h("ul", {class: "pq-notes small"}, notes.filter((n) => n !== txt(q.cue)).slice(0, 3).map((n) => h("li", {}, isoDays(n)))) : null);
-  }
   function prepFold(key, title, count, body, open) {
     return det("prep:" + key, !!open, {class: "prep-fold"},
       h("summary", {class: "prep-fold-sum", "data-k": "prep-fold:" + key}, h("span", {class: "prep-fold-t"}, title), count ? h("span", {class: "prep-fold-n muted"}, String(count)) : null),
@@ -12753,15 +12748,6 @@
   // A day the document writes as 2026-11-04, as the page says every other day ("Wed 4 Nov").
   function isoDays(t) {
     return txt(t).replace(/\b(20\d\d-[01]\d-[0-3]\d)\b/g, (m) => fmtDay(m) || m);
-  }
-  function prepFolds(iv) {
-    const r = prepRead(iv);
-    if (!r) return null;
-    const qs = arr(r.questions);
-    const folds = [qs.length ? prepFold(iv.id + ":q", "Likely questions", qs.length, h("ol", {class: "plain pq-list"}, qs.map(prepQuestion))) : null]
-      .concat(arr(r.sections).map((sec) => prepFold(iv.id + ":" + txt(sec.key), txt(sec.title), sec.key === "stories" ? arr(sec.items).length : 0,
-        h("ul", {class: "pi-list"}, arr(sec.items).map(prepItem)))));
-    return h("div", {class: "prep-folds"}, folds, r.live ? h("p", {class: "small muted prep-live"}, "This is for before and after the interview: Claude doesn't join, listen in or record it.") : null);
   }
   // What they hold of the person's: never a file's name (DESIGN.md, Words), the kind and the day.
   function sentWords(f) {
@@ -12883,27 +12869,45 @@
     // (2026-11-03).
     return cap1(cut.length > 70 ? clip(cut, 70) : cut);
   }
+  // The interview's line of facts, the same on its card and on its prep: how far away, the day,
+  // how it is held and who with.
+  function ivHead(iv) {
+    const offer = ivOffer(iv);
+    const rel = !offer && iv.when && !isPast(iv.when) ? relWhen(iv.when) : "";
+    return [rel, offer ? "" : (isPast(iv.when) ? (ivHad(iv) && !IV_OVER[txt(iv.status)] ? "You had it " : "") + fmtDayMonth(iv.when) : fmtWhen(iv.when)) || "No day yet", formatWord(iv.format), iv.with ? "with " + txt(iv.with) : ""].filter(Boolean).join(" · ");
+  }
+  // A prep read after the day says "today" of the day it was written for (the audit,
+  // 2026-11-03): said once, above it.
+  function ivPrepHint(iv) {
+    const has = !!obj(iv.prep).updated;
+    return has && (isPast(iv.when) || obj(iv.prep).stale) ? h("p", {class: "hint"}, obj(iv.prep).stale ? "This prep is for an earlier plan of rounds: Update my prep remakes it for this one."
+      : "This prep was written for your " + lc1(stageName(iv)) + (dayOf(iv.when) ? " on " + fmtDay(iv.when) : "") + ".") : null;
+  }
+  // Read your prep, wherever it is offered: the prep in a place of its own, full screen, never
+  // inside the interview's or the employer's card. A live prep is the interview's own full
+  // screen view; any other prep is its own sheet, opening on the one-screen summary (issue 365:
+  // the whole prep sat at the foot of a card, under everything else, minutes before a call).
+  function prepId(iv) { return "prep~" + txt(iv.id); }
+  function readPrep(iv) {
+    if (livePrep(iv)) openDetail("interview", iv.id);
+    else openDetail("prep", prepId(iv));
+  }
   function interviewDetail(iv) {
     const has = !!obj(iv.prep).updated;
     const w = workDoc("prep~" + seg(iv.id));
     const busy = w && ACTIVE.has(w.status);
     const ref = obj(iv.referrer);
     const offer = ivOffer(iv);
-    const rel = !offer && iv.when && !isPast(iv.when) ? relWhen(iv.when) : "";
-    const head = [rel, offer ? "" : (isPast(iv.when) ? (ivHad(iv) && !IV_OVER[txt(iv.status)] ? "You had it " : "") + fmtDayMonth(iv.when) : fmtWhen(iv.when)) || "No day yet", formatWord(iv.format), iv.with ? "with " + txt(iv.with) : ""].filter(Boolean).join(" · ");
-    const r = prepRead(iv);
+    const head = ivHead(iv);
     const lv = has ? livePrep(iv) : null;
-    const glance = has && !lv ? prepGlance(iv) : null;
-    const folds = has && !lv ? prepFolds(iv) : null;
-    // A prep read after the day says "today" of the day it was written for (the audit,
-    // 2026-11-03): said once, above it.
-    const hint = has && (isPast(iv.when) || obj(iv.prep).stale) ? h("p", {class: "hint"}, obj(iv.prep).stale ? "This prep is for an earlier plan of rounds: Update my prep remakes it for this one."
-      : "This prep was written for your " + lc1(stageName(iv)) + (dayOf(iv.when) ? " on " + fmtDay(iv.when) : "") + ".") : null;
+    const hint = ivPrepHint(iv);
     const refLine = ref.id || ref.contact ? ["Referred by ", itemLink("contacts", txt(ref.contact || ref.id), txt(ref.first_name), "ivref:" + iv.id)] : null;
+    // The card says where the prep is and opens it; it never holds it (issue 365).
     const acts = h("div", {class: "card-actions"},
-      busy ? btn("See its progress", openWork, {small: true, key: "dprep-work:" + iv.id}) : has ? null : btn("Prepare me", () => askPrep(iv), {kind: "primary", small: true, key: "dprep:" + iv.id, wakes: "prep"}),
-      has && !busy && !offer ? btn("Practise with Claude", () => { closeDetail(true); startMock(iv); }, {kind: "primary", small: true, key: "dmock:" + iv.id, wakes: "talk"}) : null,
-      has && !busy ? btn("Update my prep", () => askPrep(iv), {kind: "quiet", small: true, key: "dprep2:" + iv.id, wakes: "prep"}) : null,
+      busy ? btn("See its progress", openWork, {small: true, key: "dprep-work:" + iv.id})
+        : has ? btn("Read your prep", () => readPrep(iv), {kind: "primary", small: true, key: "dread:" + iv.id, aria: "Read your prep for your " + lc1(stageName(iv)) + " with " + txt(iv.company)})
+          : btn("Prepare me", () => askPrep(iv), {kind: "primary", small: true, key: "dprep:" + iv.id, wakes: "prep"}),
+      has && !busy && !offer ? btn("Practise with Claude", () => { closeDetail(true); startMock(iv); }, {kind: "secondary", small: true, key: "dmock:" + iv.id, wakes: "talk"}) : null,
       calButton(iv, "dcal:" + iv.id));
     // The live prep, where /interview has made one: the interview in the order it runs, its
     // role said in its first line, so the head is the day and nothing else above it.
@@ -12921,7 +12925,7 @@
       refLine ? h("p", {class: "meta"}, refLine) : null, liveView(iv, lv, one ? h("div", {class: "card-actions"}, one) : null));
     // The one thing to do, said over its buttons, while the interview is still to come (the
     // redesign, 2026-11-16).
-    const nextWhat = offer || isPast(iv.when) ? "" : busy ? "Claude is writing your prep." : has ? "Run through the likely questions out loud once before the day."
+    const nextWhat = offer || isPast(iv.when) ? "" : busy ? "Claude is writing your prep." : has ? "Read your prep, then run through the likely questions out loud once before the day."
       : "Get your prep: what to say, what they will likely ask, and what to ask them.";
     return h("div", {class: "d-stack"},
       head ? h("p", {class: "when"}, head) : null,
@@ -12929,19 +12933,138 @@
       h("p", {class: "meta"}, [txt(iv.role), stageDetails(iv)].filter(Boolean).join(" · "),
         refLine ? [" · ", refLine] : null),
       nextWhat ? dNext(nextWhat, null, acts) : acts,
-      // The minutes before first, in big type; the rest folded, one tap each; what was sent
-      // and the stages beside it, never under it (the maintainer, 2026-10-29).
-      lv ? null : h("div", {class: "prep-layout"},
-        h("div", {class: "prep-main"},
-          has ? [glance, folds,
-            !r && iv.prep_text ? det("prep:" + iv.id + ":doc", false, {class: "prep-fold"}, h("summary", {class: "prep-fold-sum", "data-k": "prep-fold:" + iv.id + ":doc"}, h("span", {class: "prep-fold-t"}, "The whole prep")), h("div", {class: "prep-fold-body"}, prepText(iv.prep_text))) : null,
-            !glance && !folds && !iv.prep_text ? h("p", {class: "muted"}, "Your prep is saved; it shows here once the page next updates.") : null]
-            // Where Next says it, nothing: a lone "No prep yet." in an empty column said it twice.
-            : nextWhat ? null : h("p", {class: "muted"}, "No prep yet. Prepare me builds it: what to say, the questions they are likely to ask, and what to ask them.")),
+      // What was sent, the stages and the rest at the employer; the prep is a place of its own.
+      h("div", {class: "prep-layout"},
         h("aside", {class: "prep-side"},
           block("What you sent", arr(iv.sent_files).filter((f) => txt(f.name) || txt(f.kind)).map((f) => h("p", {}, sentWords(f)))),
           dTimeline("Stages", arr(iv.stages).filter((s) => txt(s.label || s.name)).map((s) => ({day: s.date || s.on ? fmtDay(s.date || s.on) : "", label: txt(s.label || s.name), done: stepDone(s)}))),
           relatedRows(iv.company, iv.id, iv))));
+  }
+  // ------------------------------------------------------------------ a prep's own place (issue 365)
+
+  // A prep with no live prep, read full screen in a place of its own: it opens on the
+  // one-screen summary (what to say, what to ask, pay, what to watch) with every likely
+  // question one tap from it; a bar that stays at the top goes to each part, and nothing is
+  // folded. Drawn from what the engine reads of the prep (`prep_read`), or, where it read
+  // nothing, from the prep's own headings. A follow-up may carry its own follow-ups, any depth.
+  const PV_DEPTH = 6;
+  function pvId(iv, kind, x) { return "pv-" + seg(txt(iv.id)) + "-" + kind + "-" + seg(txt(x)); }
+  // A follow-up as the engine may write it: a question in words, or {q|question, who, answer,
+  // simple or detailed, follow}.
+  function pvFollow(f) {
+    if (typeof f === "string") return {q: f, who: "", a: "", follow: []};
+    const o = obj(f);
+    const said = Array.isArray(o.simple) ? o.simple.map(txt).filter(Boolean).join(" ") : txt(o.simple);
+    return {q: txt(o.q || o.question), who: txt(o.who), a: txt(o.answer) || txt(o.detailed) || said || txt(o.cue),
+      follow: arr(o.follow || o.follows || o.follow_ups)};
+  }
+  function pvFollows(list, depth) {
+    const items = arr(list).map(pvFollow).filter((f) => f.q);
+    if (!items.length || depth > PV_DEPTH) return null;
+    return h("ul", {class: "pv-follow", "data-depth": String(depth)}, items.map((f) => h("li", {class: "pv-fu"},
+      h("p", {class: "pv-fu-q"}, isoDays(f.q), f.who ? [" ", h("span", {class: "lp-who"}, LP_WHO[f.who] || cap1(f.who))] : null),
+      f.a ? h("p", {class: "pv-fu-a"}, isoDays(f.a)) : null,
+      pvFollows(f.follow, depth + 1))));
+  }
+  function pvQuestion(iv, q, i) {
+    const answer = txt(q.answer);
+    const notes = arr(q.notes).map(txt).filter(Boolean);
+    const follow = pvFollows(q.follow || q.follows || q.follow_ups, 1);
+    return h("article", {class: "lp-q pv-q", id: pvId(iv, "q", i), tabindex: "-1", "data-pvq": String(i)},
+      h("h4", {class: "lp-q-q pq-q"}, h("span", {class: "pq-n", "aria-hidden": "true"}, (i + 1) + ". "), txt(q.question)),
+      answer && q.draft ? h("p", {class: "pq-draft"}, stateWord("Draft", "warn"), " Check it's true before you say it.") : null,
+      answer ? h("p", {class: "pq-a"}, answer) : h("p", {class: "pq-cue"}, txt(q.cue) ? cap1(isoDays(txt(q.cue))) : "Not written yet."),
+      !answer && txt(q.checking) ? h("p", {class: "pq-why small muted"}, "They're checking " + isoDays(txt(q.checking)).replace(/ They want to hear: /, " They want to hear ")) : null,
+      !answer && notes.length ? h("ul", {class: "pq-notes small"}, notes.filter((n) => n !== txt(q.cue)).slice(0, 3).map((n) => h("li", {}, isoDays(n)))) : null,
+      follow ? [h("p", {class: "lp-kids-h"}, "They may ask next"), follow] : null);
+  }
+  function pvPart(id, title, eyebrow, body) {
+    const hid = id + "-h";
+    return h("section", {class: "lp-part pv-part", id, tabindex: "-1", "aria-labelledby": hid},
+      h("div", {class: "lp-part-top"}, eyebrow ? h("p", {class: "lp-eyebrow"}, eyebrow) : null, h("h3", {class: "lp-part-h", id: hid}, title)),
+      body);
+  }
+  // The likely questions, each a plain line in the ink that goes to its answer.
+  function pvIndex(iv, list) {
+    if (!list.length) return null;
+    return h("section", {class: "lp-box pv-index", "aria-labelledby": pvId(iv, "x", "index-h")},
+      h("p", {class: "lp-lbl", id: pvId(iv, "x", "index-h")}, "Likely questions"),
+      h("ol", {}, list.map(([words, id], i) => h("li", {}, h("button", {type: "button", class: "lp-glance-q", "data-k": "pvq:" + iv.id + ":" + i, onclick: () => lpJump(id)}, words)))));
+  }
+  // A prep the engine could not read into parts: its own headings are the parts, the one-screen
+  // summary first where it has one, and the questions are the headings under its questions part.
+  function pvFromText(iv) {
+    const lines = txt(iv.prep_text).replace(/\r/g, "").split("\n");
+    const secs = [];
+    let cur = null;
+    for (const ln of lines) {
+      const t = ln.trim();
+      const m = /^##\s+(.*?)\s*#*$/.exec(t);
+      if (m) { cur = {title: m[1].replace(/[*_`]/g, ""), lines: []}; secs.push(cur); continue; }
+      if (/^#\s/.test(t) && !cur) continue;
+      if (!cur) { cur = {title: "", lines: []}; secs.push(cur); }
+      cur.lines.push(ln);
+    }
+    const kept = secs.filter((x) => x.lines.join("").trim());
+    const lead = kept.findIndex((x) => /one screen|at a glance|before you go|summary/i.test(x.title));
+    if (lead > 0) kept.unshift(kept.splice(lead, 1)[0]);
+    const qIndex = [];
+    const parts = kept.map((x, i) => {
+      const id = pvId(iv, "p", i);
+      const body = prepText(x.lines.join("\n"));
+      if (/question/i.test(x.title)) {
+        body.querySelectorAll("h4.prep-h").forEach((el, j) => { el.id = pvId(iv, "tq", i + "-" + j); el.tabIndex = -1; el.classList.add("pv-tq"); qIndex.push([el.textContent, el.id]); });
+      }
+      return {id, chip: x.title || "Your prep", el: pvPart(id, x.title || "Your prep", null, body)};
+    });
+    return {parts, qIndex};
+  }
+  function prepView(iv) {
+    const r = prepRead(iv);
+    const has = !!obj(iv.prep).updated;
+    const w = workDoc("prep~" + seg(iv.id));
+    const busy = w && ACTIVE.has(w.status);
+    const offer = ivOffer(iv);
+    const acts = [busy ? btn("See its progress", openWork, {small: true, key: "pv-work:" + iv.id})
+      : offer ? null : btn("Practise with Claude", () => { closeDetail(true); startMock(iv); }, {kind: "primary", small: true, key: "pv-mock:" + iv.id, wakes: "talk"}),
+    has && !busy ? btn("Update my prep", () => askPrep(iv), {kind: "quiet", small: true, key: "pv-prep:" + iv.id, wakes: "prep"}) : null].filter(Boolean);
+    const sid = pvId(iv, "x", "summary");
+    let parts = [];
+    let summary = null;
+    if (r) {
+      const qs = arr(r.questions).filter((q) => txt(obj(q).question));
+      const glance = prepGlance(iv);
+      const index = pvIndex(iv, qs.map((q, i) => [txt(q.question), pvId(iv, "q", i)]));
+      if (glance || index) summary = {id: sid, chip: "On one screen", el: h("div", {class: "pv-summary lp-part", id: sid, tabindex: "-1"}, glance, index)};
+      const qid = pvId(iv, "x", "questions");
+      if (qs.length) parts.push({id: qid, chip: "Questions", el: pvPart(qid, "Likely questions", plural(qs.length, "question", "questions"),
+        h("div", {class: "lp-group pv-qs"}, qs.map((q, i) => pvQuestion(iv, q, i))))});
+      arr(r.sections).forEach((sec) => {
+        const items = arr(obj(sec).items);
+        if (!items.length) return;
+        const id = pvId(iv, "s", sec.key || sec.title);
+        parts.push({id, chip: txt(sec.title), el: pvPart(id, txt(sec.title), null, h("ul", {class: "pi-list"}, items.map(prepItem)))});
+      });
+    } else if (txt(iv.prep_text)) {
+      const got = pvFromText(iv);
+      parts = got.parts;
+      const glance = prepGlance(iv);
+      const index = pvIndex(iv, got.qIndex);
+      if (glance) summary = {id: sid, chip: "On one screen", el: h("div", {class: "pv-summary lp-part", id: sid, tabindex: "-1"}, glance, index)};
+      // The prep's own first part is its summary, the questions listed under it.
+      else if (parts.length && index) parts[0].el.appendChild(index);
+    }
+    const all = (summary ? [summary] : []).concat(parts);
+    const head = acts.length ? h("div", {class: "lp-head"}, h("div", {class: "card-actions"}, acts)) : null;
+    if (!all.length) return h("div", {class: "d-stack"}, h("p", {class: "when"}, ivHead(iv)), head, h("p", {class: "muted"}, "Your prep is saved; it shows here once the page next updates."));
+    const chips = all.map((x) => btn(clip(x.chip, 32), () => lpJump(x.id), {small: true, key: "pvchip:" + x.id}));
+    const bar = h("div", {class: "lp-bar pv-bar"}, h("nav", {class: "lp-chips", "aria-label": "The parts of your prep",
+      onscroll: (e) => e.currentTarget.classList.toggle("lp-scrolled", e.currentTarget.scrollLeft > 0)}, chips));
+    const root = h("div", {class: "lp pv", "data-mode": "both"}, head || h("div", {class: "lp-head"}), bar, all.map((x) => x.el),
+      h("p", {class: "lp-also prep-live"}, "Claude doesn't join, listen or record. This page is just for you to look at."));
+    // A part jumped to lands under the bar, never behind it, as on the live prep.
+    if (window.ResizeObserver) new ResizeObserver(() => root.style.setProperty("--lp-bar-h", bar.offsetHeight + "px")).observe(bar);
+    return h("div", {class: "d-stack d-live d-prep"}, h("p", {class: "when lp-day"}, ivHead(iv)), ivPrepHint(iv), root);
   }
   // ------------------------------------------------------------------ the live prep (tools/interview_live.py)
 
@@ -18855,7 +18978,7 @@
     // An old address of Messages (a view until 2026-11-04) is put right: Contacts, on the person.
     if (/^#(drafts-messages|messages)(\/|$)/.test(location.hash)) keepAddress(true);
     if (opened) {
-      const kind = ["interview", "person", "application", "employer"].find((k) => detailOf(k, opened));
+      const kind = ["interview", "prep", "person", "application", "employer"].find((k) => detailOf(k, opened));
       if (kind) openDetail(kind, opened, {fromHistory: true});
     }
   }
