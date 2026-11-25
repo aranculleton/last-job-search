@@ -434,8 +434,9 @@ METHODS: dict[str, dict] = {
             (118, "2026-11-17", False, "a page build looks for each application's folder once, where Applications, its stages and the campaign chats each looked again (issue 336); the same folder is found, so nothing made changes"),
             (119, "2026-11-17", False, "the page's colours are redone in templates/app/palettes.py, which this method's templates pattern also reads; nothing a draft prints changes"),
             (120, "2026-11-25", False, "two long titles at one employer cut to the same folder name get a folder each, the earlier keeping its name (issue 369); nothing a draft prints changes"),
+            (121, "2026-11-25", False, "RUNBOOK says a request bigger than a one-line question is read whole by the request-interpreter agent first and the reply checked by the result-checker agent before it is sent (issue 370); nothing made changes"),
         ),
-        "fingerprint": "421ebede5f03824c",
+        "fingerprint": "e75e7db216a85790",
     },
     "interview": {
         # Only a process with a round still to come is prepared again: a prep for a round
@@ -1360,6 +1361,8 @@ KEEPS_NOTHING: dict[str, str] = {
                                 "each person; a pack is the day's",
     "tools/cost_meter.py": "development tooling: measures what a run reads, keeps nothing",
     ".claude/agents/news-reader.md": "searches afresh for each brief; keeps nothing",
+    ".claude/agents/request-interpreter.md": "reads a task's messages afresh before each piece of work; keeps nothing",
+    ".claude/agents/result-checker.md": "checks each reply afresh before it is sent; keeps nothing",
     ".claude/agents/employer-judge.md": "judges a round's batch afresh, each round; the "
                                         "judgements are the person's own record "
                                         "(profile/employers_judged.json), never remade",

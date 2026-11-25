@@ -91,8 +91,8 @@ they cannot act on is one they did not get. Everything said to them, on the page
   exception is the maintainer's own repo (its GitHub owner is the app's, which
   `sync_app.maintainers()` checks), and only when they ask.
 
-The tools' own messages are written this way (`tests/test_a_beginner_is_told_in_plain_words.py`
-keeps them so): pass them on as they are, never reworded into jargon.
+The tools' own messages are written this way: pass them on as they are, never reworded into
+jargon.
 
 **A draft they ask for is not a claim.** When the person asks for an example, an anecdote,
 metrics, a project or a way they might have used a tool, for interview prep or a call, write
@@ -112,6 +112,10 @@ question for the person goes on the page too, as a To do card, never left waitin
 Where no page can be published, the chat is the page: text they will send pasted in full,
 documents sent with the file-sending tool, and applications delivered the one way RUNBOOK.md,
 "Delivering in the chat", sets. A file path is the record, never the answer on its own.
+
+Any request beyond a one-line question: run the `request-interpreter` agent on all its
+messages before acting, and `result-checker` before replying, fixing what it fails (RUNBOOK.md,
+"Reading a request").
 
 The page is always one tap away from a chat. When the person asks for it in any words
 ("open the app", "where's my page"), open it at once with the Artifact tool's `open` action
@@ -168,7 +172,6 @@ brings it in.
 | A container or a computer to set up; a job site the chat cannot reach | RUNBOOK.md step 0 and SETUP.md; the job-scraper skill |
 | A resume for somebody other than the candidate | RUNBOOK.md, "Documents for someone else" |
 | Changing the app itself | MAINTAINING.md, "Developer rules" |
-| Where each rule of the longer instructions before 4.0 went | `docs/rule_map.json` |
 
-Read only the section a row names (find its heading with Grep, then Read from there), never
-a whole long file: whatever a chat reads stays in its context for every later call.
+Read only the section a row names (Grep its heading, then Read from there), never a whole
+long file: what a chat reads stays in its context.
