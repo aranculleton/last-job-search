@@ -311,7 +311,7 @@ MONEY = r"""(() => { const t = (s) => (document.querySelector(s) || {}).textCont
 def test_money_is_written_one_way_everywhere(run, tmp_path):
     # "At least GBP 38,000" in Settings and "Say GBP 44,000" in the prep, against "£44,000" on
     # the job's card: the same money written two ways (the screen review, 2026-11-11).
-    got = _go(run, tmp_path, [{"hash": "settings", "eval": MONEY}, {"hash": "interviews/int-larkspur-supply/open", "wait": 200, "eval": MONEY}], WIDE)
+    got = _go(run, tmp_path, [{"hash": "settings", "eval": MONEY}, {"hash": "interviews/prep~int-larkspur-supply/open", "wait": 200, "eval": MONEY}], WIDE)
     pay, prep = got["after"][0]["eval"]["pay"], got["after"][1]["eval"]["prep"]
     assert "£38,000" in pay and "GBP" not in pay, pay
     assert "£44,000" in prep and "GBP" not in prep, prep[:600]
