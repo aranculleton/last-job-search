@@ -174,3 +174,16 @@ def test_a_role_two_applications_answer_to_is_refused_not_guessed(tmp_path):
     with pytest.raises(LookupError, match="names"):
         P._row(COMPANY, "Demand Planning Analyst", rows)
     assert P._row(COMPANY, "Demand Planning Analyst (Remote)", rows) is rows[1]
+
+
+# ---------------------------------------------------------------- 5. a stage ticked by hand
+
+@pytest.mark.parametrize("word", ["done", "held", "had", "held on"])
+def test_a_stage_ticked_done_by_hand_keeps_its_day_who_and_length(word):
+    import what_works
+    text = ("## Interview stages reached\n\n- [x] Round 1 with the hiring manager (%s 2026-11-23 "
+            "16:00 Europe/London, 60 min, with the head of planning)\n" % word)
+    s, = what_works.outcome_stages(text, "2026-11-25")
+    assert s["done"] and s["date"] == "2026-11-23" and s["time"] == "16:00"
+    assert s["zone"] == "Europe/London" and s["minutes"] == 60
+    assert s["with"] == "the head of planning" and not s["scheduled"]

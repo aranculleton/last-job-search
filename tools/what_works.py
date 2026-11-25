@@ -592,7 +592,10 @@ _STAGE_LINE = re.compile(r"^\s*[-*]\s*\[( |x|X)\]\s*(.+?)\s*$")
 # Written when it is booked (4.7), never guessed from the label's words: "due" for something
 # to finish by the day (an online test), its length ("45 min"), and its zone as the time
 # zone's own name ("America/Toronto") as well as the invite's word (EST).
-_STAGE_WHEN = re.compile(r"\((?:(?P<sched>scheduled\s+)|(?P<due>due\s+))?(?P<date>\d{4}-\d{2}-\d{2})"
+# A stage ticked by hand says it was held: "(done 2026-11-23 16:00 Europe/London, 60 min, with
+# ...)", "held" or "had", and read as undated it lost its day, who and how long (issue 369).
+_STAGE_WHEN = re.compile(r"\((?:(?P<sched>scheduled\s+)|(?P<due>due\s+)|(?:done|held|had)(?:\s+on)?\s+)?"
+                         r"(?P<date>\d{4}-\d{2}-\d{2})"
                          r"(?:,?\s*(?:at\s+)?(?P<time>\d{1,2}(?:[:.]\d{2})?\s*"
                          r"(?:[ap]\.?m\.?)?)(?:\s*(?-i:(?P<zone>[A-Z]{2,5}\b|[A-Z][A-Za-z_]+(?:/[A-Za-z0-9_+-]+)+)))?(?=\s*[,)]))?"
                          r"(?:\s*,\s*(?P<minutes>\d{1,3})\s*min\w*)?"
