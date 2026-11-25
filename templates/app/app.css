@@ -2835,7 +2835,7 @@ ul.bp-news { gap: 12px; }
 .rd-bar-track { position: relative; height: 16px; border-radius: 4px; background: var(--sunk); }
 .rd-bar-fill { position: absolute; inset: 0 auto 0 0; border-radius: 4px; background: var(--muted); }
 .rd-bar-low .rd-bar-fill { background: var(--mark); }
-.rd-bars[style] .rd-bar-track::after { content: ""; position: absolute; top: -4px; bottom: -4px; left: var(--need); width: 2px; background: var(--ink); }
+.rd-bar-need { position: absolute; top: -4px; bottom: -4px; left: 0; border-right: 2px solid var(--ink); }
 .rd-bar-v { font-weight: 600; font-variant-numeric: tabular-nums; }
 .rd-plan { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; }
 .rd-plan-day { display: grid; grid-template-columns: minmax(0, 9rem) minmax(0, 1fr); gap: 12px; padding: 8px 12px; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }

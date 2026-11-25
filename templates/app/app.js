@@ -13346,10 +13346,13 @@
     const unit = ch.unit ? " " + ch.unit : "";
     return h("figure", {class: "rd-chart"},
       h("figcaption", {class: "lp-lbl"}, "The numbers, drawn"),
-      h("ul", {class: "rd-bars", style: isFinite(ch.need) ? "--need: " + Math.round((ch.need / top) * 1000) / 10 + "%" : null},
+      h("ul", {class: "rd-bars"},
         ch.bars.map((b) => h("li", {class: "rd-bar" + (b.value === low ? " rd-bar-low" : "")},
           h("span", {class: "rd-bar-k"}, b.label),
-          h("span", {class: "rd-bar-track"}, h("span", {class: "rd-bar-fill", style: "width: " + Math.round((b.value / top) * 1000) / 10 + "%"})),
+          // Inline styles set sizes only: the line of what is needed is a span as wide as it,
+          // its right edge drawn.
+          h("span", {class: "rd-bar-track"}, h("span", {class: "rd-bar-fill", style: "width:" + Math.round((b.value / top) * 1000) / 10 + "%"}),
+            isFinite(ch.need) ? h("span", {class: "rd-bar-need", "aria-hidden": "true", style: "width:" + Math.round((ch.need / top) * 1000) / 10 + "%"}) : null),
           h("span", {class: "rd-bar-v"}, b.value + unit)))),
       isFinite(ch.need) ? h("p", {class: "small muted"}, "The line is what is needed: " + ch.need + unit + ".") : null);
   }
