@@ -28,6 +28,9 @@ make sense to somebody whose repo just received it.
 - **Your stories against the questions they answer.** Each story is a card with its trigger word, and a grid shows which question is its home and where it is a backup; on a phone it is a list a story (issue 367).
 - **A numbers card with a drill.** Every number you may want to say, with what it is; Drill hides them so you can say each before you show it (issue 367).
 - **Cases to work through out loud, where you sit on the project, and a plan to the day.** Each case has its steps, its numbers drawn as bars and its picture, and Done keeps that you worked through it; Mock interview with Claude plays the person you meet. The project's steps mark the ones you lead, and the plan marks today (issue 367).
+- **Practice cases for a case round.** Claude picks cases that fit the kind of employer (operations: a bottleneck, capacity, how busy a fleet is, a backlog; data: a metric that fell, an A/B test, a forecast that missed; finance; and general ones like market sizing), each worked out loud with the numbers said as you go and a small sketch to draw (issue 367).
+- **A mock interview with the person you will meet.** Ask for a mock, or press Practise with Claude, and Claude plays that interviewer: one question at a time, follow-ups at least three deep on technical answers, no praise until the end, then a short scorecard (got it, shaky or missed for each question, and the two things to practise next) that the prep for your next round starts from (issue 367).
+- **Timed practice out loud.** 90 seconds an answer; paste what you said, from your phone's voice notes for example, and Claude points out filler, hedging and answers that ran long, using your own rules. Nothing is recorded by the app (issue 367).
 
 ### Changed
 
