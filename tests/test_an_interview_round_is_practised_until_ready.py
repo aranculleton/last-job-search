@@ -189,7 +189,7 @@ def _block(text, question):
     return body.split("\n### ", 1)[0].split("\n## ", 1)[0]
 
 
-def test_every_technical_answer_is_prepared_three_follow_ups_deep(app, mirror):
+def test_every_technical_answer_is_prepared_three_follow_ups_deep(app, mirror):  # noqa: F811
     text = _read(P.write_pack(_ctx()))
     technical = [q["question"] for q in P.practice(text)["questions"] if P.technical(q["question"])]
     assert technical
@@ -221,7 +221,7 @@ def test_the_third_follow_up_names_the_recorded_method():
     assert gap[0]["follow"][0]["follow"][0]["answer"].startswith("FILL IN: ")
 
 
-def test_a_round_in_person_gets_the_day_and_its_logistics_are_recorded(app, mirror):
+def test_a_round_in_person_gets_the_day_and_its_logistics_are_recorded(app, mirror):  # noqa: F811
     text = _read(P.write_pack(_ctx()))
     assert "## On the day" not in text                               # a video round: none
     out = io.StringIO()
@@ -257,7 +257,7 @@ def test_a_round_in_person_gets_the_day_and_its_logistics_are_recorded(app, mirr
     assert rnd["readiness"]["logistics_confirmed"] is True
 
 
-def test_the_next_pack_starts_from_the_cards_that_were_shaky(app, mirror):
+def test_the_next_pack_starts_from_the_cards_that_were_shaky(app, mirror):  # noqa: F811
     text = _read(P.write_pack(_ctx()))
     asked = [q["question"] for q in P.practice(text)["questions"]]
     iid = R.interview_id(COMPANY, ROLE)
@@ -276,7 +276,7 @@ def test_the_next_pack_starts_from_the_cards_that_were_shaky(app, mirror):
 
 # ------------------------------------------------------------------ the brief
 
-def test_the_brief_says_each_rounds_readiness_in_one_line(app, mirror, monkeypatch):
+def test_the_brief_says_each_rounds_readiness_in_one_line(app, mirror, monkeypatch):  # noqa: F811
     import brief
     P.write_pack(_ctx())
     tracker = [dict(ROW)]
