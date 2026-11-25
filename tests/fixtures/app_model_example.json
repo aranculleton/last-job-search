@@ -1,7 +1,7 @@
 {
  "model": 1,
  "made_at": "2026-10-25T18:00:00Z",
- "rev": "64254ad14a50",
+ "rev": "b6b5eb9943a6",
  "app": {
   "version": "4.17.0",
   "url": null,
@@ -13,7 +13,7 @@
   ],
   "privacy": "Only you can open this page unless you share it. It holds first names, employers, your drafts and your setup answers, so keep it unshared.",
   "repo": "https://github.com/aranculleton/last-job-search",
-  "page": 222,
+  "page": 223,
   "not_saved": 0,
   "app_bugs": []
  },
@@ -77,7 +77,7 @@
  ],
  "jobs": {
   "round": "r9",
-  "made_at": "2026-11-25T10:17:31Z",
+  "made_at": "2026-11-25T16:52:51Z",
   "met": false,
   "summary": "3 roles from the last search to look at, 1 of them scoring 75 or more. 3 left out, each with its reason.",
   "rows": [
@@ -1013,7 +1013,7 @@
    "when": "2026-10-28",
    "prep": {
     "path": "documents/applications/thornbury_bank_risk_analyst_thornbury/interview_prep.md",
-    "updated": "2026-11-25T10:17:31Z"
+    "updated": "2026-11-25T16:52:51Z"
    },
    "questions": 2,
    "all_day": true,
@@ -1105,6 +1105,246 @@
     "min_quote_words": 3
    },
    "live": null,
+   "round": {
+    "who": [
+     {
+      "name": "the head of risk",
+      "role": "the head of risk",
+      "probes": [
+       "Judgement and why: what you would do in their first months, and why you",
+       "Wants to hear judgement and commercial sense: what you would do, why, and what it would change for them",
+       "In this round: whether they would hire you over the others, and why now"
+      ]
+     }
+    ],
+    "format": null,
+    "in_person": false,
+    "cheat_sheet": [
+     "You meet: the head of risk",
+     "Lead with: The forecast that freed safety stock; Ending a daily reconciliation; One report in place of eleven spreadsheets",
+     "Numbers to land: 2,400 SKUs, 6 distribution centres, 22% to 14%, £1.1M, 9%"
+    ],
+    "stories": [
+     {
+      "id": "story-6a3c5889",
+      "title": "The forecast that freed safety stock",
+      "trigger": "14%",
+      "bullets": [
+       "Situation: forecast error at 22% across 2,400 SKUs and six distribution centres, and planners covering the gap with extra safety stock.",
+       "Task: a weekly demand forecast the planners would trust.",
+       "What you did: rebuilt it in Python and SQL with promotions and seasonality as features, and tracked error by distribution centre so the planners could see where it held.",
+       "Result: error down to 14%, about £1.1M of safety stock released."
+      ],
+      "source": "Senior Operations Analyst at Brindle & Hart Logistics: Built weekly demand-forecasting models in Python and SQL across 2,400 SKUs and 6…",
+      "questions": [
+       "int-thornbury_bank_risk_analyst~q8b1a502b17"
+      ]
+     },
+     {
+      "id": "story-72c2b049",
+      "title": "Ending a daily reconciliation",
+      "trigger": "the daily two-hour reconciliation ended",
+      "bullets": [
+       "Situation: every morning someone spent two hours reconciling the warehouse-management data feed against the reports built on it.",
+       "Task: remove the manual step rather than keep absorbing it.",
+       "What you did: rebuilt the feed as dbt models with data-quality tests, so a bad load failed loudly instead of surfacing in a report.",
+       "Result: the daily two-hour reconciliation ended."
+      ],
+      "source": "Senior Operations Analyst at Brindle & Hart Logistics: Rebuilt the warehouse-management data feed as dbt models with data-quality tests, ending…",
+      "questions": [
+       "int-thornbury_bank_risk_analyst~qb94f86a409"
+      ]
+     },
+     {
+      "id": "story-e93d7e46",
+      "title": "One report in place of eleven spreadsheets",
+      "trigger": "30+ operations managers",
+      "bullets": [
+       "Situation: 30+ operations managers read service levels from eleven spreadsheets, and the numbers disagreed.",
+       "Task: one definition of service level and one place to read it.",
+       "What you did: built the Power BI service-level reporting, agreed the definitions with the managers, and retired the spreadsheets as each team moved over.",
+       "Result: one report used by 30+ operations managers, in place of eleven spreadsheets."
+      ],
+      "source": "Senior Operations Analyst at Brindle & Hart Logistics: Owned the Power BI service-level reporting used by 30+ operations managers, replacing…",
+      "questions": []
+     },
+     {
+      "id": "story-477b1f2c",
+      "title": "Chilled-line write-offs",
+      "trigger": "18% over two",
+      "bullets": [
+       "Situation: at Oakmere Foods, chilled lines were losing stock to expiry, and ordering took no account of shelf life.",
+       "Task: turn how shelf life and order patterns interact into a change the buyers could make.",
+       "What you did: modelled shelf-life and order patterns for the chilled lines and gave the buyers specific order changes rather than a general finding.",
+       "Result: write-offs fell 18% over two quarters."
+      ],
+      "source": "Supply Chain Data Analyst at Oakmere Foods: Modelled shelf-life and order patterns for chilled lines; write-offs fell 18% over two…",
+      "questions": []
+     },
+     {
+      "id": "story-510710cd",
+      "title": "Segmented 140 suppliers by on-time-in-full performance and cost to…",
+      "trigger": "140 suppliers",
+      "bullets": [
+       "Result: Segmented 140 suppliers by on-time-in-full performance and cost to serve",
+       "FILL IN: what was the situation before, and who needed it?",
+       "FILL IN: what did you do yourself, step by step?"
+      ],
+      "source": "Supply Chain Data Analyst at Oakmere Foods: Segmented 140 suppliers by on-time-in-full performance and cost to serve",
+      "questions": []
+     },
+     {
+      "id": "story-4eb008a1",
+      "title": "Ran a replenishment-rules pilot in 12 stores against matched controls",
+      "trigger": "12 stores",
+      "bullets": [
+       "Result: Ran a replenishment-rules pilot in 12 stores against matched controls",
+       "FILL IN: what was the situation before, and who needed it?",
+       "FILL IN: what did you do yourself, step by step?"
+      ],
+      "source": "Supply Chain Data Analyst at Oakmere Foods: Ran a replenishment-rules pilot in 12 stores against matched controls",
+      "questions": []
+     }
+    ],
+    "numbers": [
+     {
+      "value": "2,400 SKUs",
+      "what": "Built weekly demand-forecasting models in Python and SQL across 2,400 SKUs and 6 distribution centres, cutting forecast error from 22% to…",
+      "source": "Senior Operations Analyst at Brindle & Hart Logistics"
+     },
+     {
+      "value": "6 distribution centres",
+      "what": "Built weekly demand-forecasting models in Python and SQL across 2,400 SKUs and 6 distribution centres, cutting forecast error from 22% to…",
+      "source": "Senior Operations Analyst at Brindle & Hart Logistics"
+     },
+     {
+      "value": "22% to 14%",
+      "what": "Built weekly demand-forecasting models in Python and SQL across 2,400 SKUs and 6 distribution centres, cutting forecast error from 22% to…",
+      "source": "Senior Operations Analyst at Brindle & Hart Logistics"
+     },
+     {
+      "value": "£1.1M",
+      "what": "Built weekly demand-forecasting models in Python and SQL across 2,400 SKUs and 6 distribution centres, cutting forecast error from 22% to…",
+      "source": "Senior Operations Analyst at Brindle & Hart Logistics"
+     },
+     {
+      "value": "9%",
+      "what": "Designed a route-consolidation model that removed 9% of weekly van miles",
+      "source": "Senior Operations Analyst at Brindle & Hart Logistics"
+     },
+     {
+      "value": "30+ operations managers",
+      "what": "Owned the Power BI service-level reporting used by 30+ operations managers, replacing eleven spreadsheets",
+      "source": "Senior Operations Analyst at Brindle & Hart Logistics"
+     },
+     {
+      "value": "18%",
+      "what": "Modelled shelf-life and order patterns for chilled lines; write-offs fell 18% over two quarters",
+      "source": "Supply Chain Data Analyst at Oakmere Foods"
+     },
+     {
+      "value": "140 suppliers",
+      "what": "Segmented 140 suppliers by on-time-in-full performance and cost to serve",
+      "source": "Supply Chain Data Analyst at Oakmere Foods"
+     },
+     {
+      "value": "12 stores",
+      "what": "Ran a replenishment-rules pilot in 12 stores against matched controls",
+      "source": "Supply Chain Data Analyst at Oakmere Foods"
+     }
+    ],
+    "cards": [
+     {
+      "id": "int-thornbury_bank_risk_analyst~q8b1a502b17",
+      "q": "Tell me about a forecast you built",
+      "trigger": "The forecast that freed safety stock",
+      "bullets": [
+       "FILL IN: what would you say to \"Tell me about a forecast you built\", in a sentence or two?"
+      ],
+      "follow": [
+       {
+        "question": "Why that model, and not a simpler one?",
+        "answer": null,
+        "follow": [
+         {
+          "question": "What did you compare it against, and how?",
+          "answer": null,
+          "follow": [
+           {
+            "question": "Where does the method go wrong, and when would you not use it?",
+            "answer": "FILL IN: which model or method did you use for this, and what did you compare it against?",
+            "follow": []
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "question": "How did you know it wasn't overfitting?",
+        "answer": null,
+        "follow": [
+         {
+          "question": "How did you split the data, and why that way?",
+          "answer": null,
+          "follow": [
+           {
+            "question": "Which metric did you judge the method by, and why that one and not another?",
+            "answer": "FILL IN: which model or method did you use for this, and what did you compare it against?",
+            "follow": []
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "question": "How was it monitored after launch?",
+        "answer": null,
+        "follow": [
+         {
+          "question": "What would have made you retrain it?",
+          "answer": null,
+          "follow": [
+           {
+            "question": "What change in the data would break the method first, and how would you see it?",
+            "answer": "FILL IN: which model or method did you use for this, and what did you compare it against?",
+            "follow": []
+           }
+          ]
+         }
+        ]
+       }
+      ],
+      "story": "story-6a3c5889",
+      "last": null,
+      "due": null
+     },
+     {
+      "id": "int-thornbury_bank_risk_analyst~qb94f86a409",
+      "q": "How do you check your data",
+      "trigger": "Ending a daily reconciliation",
+      "bullets": [
+       "FILL IN: what would you say to \"How do you check your data\", in a sentence or two?"
+      ],
+      "follow": [],
+      "story": "story-72c2b049",
+      "last": null,
+      "due": null
+     }
+    ],
+    "logistics": null,
+    "cases": [],
+    "readiness": {
+     "score": 0,
+     "practised": [
+      0,
+      2
+     ],
+     "cases_done": 0,
+     "mocks_done": 0,
+     "logistics_confirmed": false,
+     "next": "Go through your 2 answer cards once"
+    }
+   },
    "sent_files": [
     {
      "kind": "resume",

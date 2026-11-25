@@ -45,6 +45,9 @@ three hooks, the money line, what not to say), then the detail.
     python3 tools/interview_pack.py live "<Company>" [--role R] [--stage S] --out F
     python3 tools/interview_pack.py live "<Company>" [--role R] [--stage S] --fill F --write
     python3 tools/interview_pack.py live-check "<Company>" [--role R]
+    python3 tools/interview_pack.py logistics "<Company>" [--role R] [--stage S]
+            [--address A] [--entrance E] [--floor F] [--travel T] [--arrive-by 9:15]
+            [--bring "..."] [--wear W] [--time-zone Z] [--step AT WHAT] [--confirmed]
 
 The live prep (tools/interview_live.py) is the same interview in the order it runs, for
 the minutes before and for practice: the engine builds its parts, questions, stories and
@@ -102,7 +105,7 @@ STORIES_FILE = "07-interview-prep.md"
 EVALUATION = person.file("evaluation", "04-job-evaluation.md")
 
 SECTIONS = ("On one screen", "Your answers", "What they have been told", "Who you are meeting",
-            "The format", "Likely questions", "Stories", "What the paper says", "Gaps and honest framing",
+            "The format", "On the day", "Likely questions", "Stories", "What the paper says", "Gaps and honest framing",
             "Money and eligibility", "The company", "Small talk", "Ask them", "Warm route",
             "Earlier stages", "To rework", "Notes")
 # One living document per employer process, beside the application: every answer the person
@@ -1863,6 +1866,7 @@ def likely_questions(ctx) -> list:
             and _text(r.get("question")) and not _text(r.get("source"))
             and _text(r.get("landed")).lower() in HARD_LANDED]
     group = {
+        "practised": _practised(ctx),
         "hard": [(r["question"], "you found it hard at %s, %s: prepare it again%s" % (
                       _text(r.get("stage")) or "a stage", _text(r.get("date")) or "undated",
                       " (%s)" % _text(r.get("note")) if _text(r.get("note")) else ""),
@@ -1927,18 +1931,44 @@ def likely_questions(ctx) -> list:
     # "Tell me about yourself" (2026-10-20). A later stage leads on what came back from
     # the one before.
     order = {
-        "screen": [stage[:3], "hard", "map", "here", group["gaps"][:1], stage[3:6], "cond",
+        "screen": ["practised", stage[:3], "hard", "map", "here", group["gaps"][:1], stage[3:6],
+                   "cond",
                    "format", stage[6:], "reqs", group["gaps"][1:], "again"],
-        "technical": ["hard", "map", "here", "reqs", "gaps", "format", "stage", "again"],
-        "final": ["hard", "map", "here", stage[:1], group["gaps"][:1], stage[1:], "format",
+        "technical": ["practised", "hard", "map", "here", "reqs", "gaps", "format", "stage", "again"],
+        "final": ["practised", "hard", "map", "here", stage[:1], group["gaps"][:1], stage[1:], "format",
                   "reqs", group["gaps"][1:], "again"],
-        "offer": ["map", "here"],
+        "offer": ["practised", "map", "here"],
     }[step if step in STAGE_QUESTIONS else "technical"]
     for part in order:
         for question, why, source, extra in (group[part] if isinstance(part, str) else part):
             add(question, why, source, **extra)
     # "Everything" (Tweak I2) shows a third more questions; the rest of the pack is the same.
     return out[:MAX_QUESTIONS + (6 if person.get("prep.detail", "") == "everything" else 0)]
+
+
+PRACTISED_WHY = {"shaky": "you were shaky on it in practice: go over it first",
+                 "missed": "you missed it in practice: go over it again"}
+
+
+def _practised(ctx) -> list:
+    """The questions of this pack the person marked shaky or missed when they practised on
+    the page (the page database's practice marks, as this copy last read them), shaky first:
+    the next pack starts from what did not stick (issue 367)."""
+    import interview_round
+    docs = ctx.get("practice")
+    if docs is None:
+        docs = interview_round.mirror_docs()
+    iid = interview_round.interview_id(ctx["company"], ctx["role"])
+    hard = interview_round.struggled(interview_round.for_interview(docs, iid)["cards"])
+    if not hard:
+        return []
+    out = []
+    for q in practice(ctx.get("living") or "")["questions"]:
+        mark = hard.get(interview_round.card_id(iid, q["question"]))
+        if mark:
+            out.append((mark != "shaky", q["question"], PRACTISED_WHY[mark]))
+    return [(question, why, "your practice on the page", {})
+            for _rank, question, why in sorted(out, key=lambda x: x[0])]
 
 
 # How a question the person found hard is recorded in the bank (`asked --landed`).
@@ -5166,6 +5196,12 @@ def pack_markdown(ctx, never_say=None) -> str:
                       "and this says what they listen for.")
     lines += _section("The format", prep._flag_banned(format_lines(ctx), banned),
                       "An offer: nothing to drill.")
+    # A round in the room has the day itself: where, when to arrive, what to bring and wear,
+    # the whiteboard, the last five minutes and the debrief after (issue 367). What only the
+    # person or the employer knows is a FILL IN, never a guess.
+    day = on_the_day(ctx)
+    if day is not None:
+        lines += _section("On the day", day, "")
 
     # Notes on each question, never words to say: where an answer can come from. Under Your
     # answers, an unwritten answer already lists the first notes it is said from and every
@@ -5234,6 +5270,23 @@ def pack_markdown(ctx, never_say=None) -> str:
         notes.pop()
     lines += _section("Notes", notes, NOTES_EMPTY[2:])
     return "\n".join(lines).rstrip() + "\n"
+
+
+def on_the_day(ctx) -> list | None:
+    """The "On the day" section's lines for a round held in person, else None."""
+    import interview_round
+    stage = next((s for s in ctx.get("stages") or [] if _same_round(s["label"], ctx["stage"])
+                  or s["label"].lower() == _text(ctx["stage"]).lower()), {"label": ctx["stage"]})
+    held = interview_round.load_logistics(ctx["folder"], ctx["stage"])
+    if not interview_round.in_person(stage, ctx.get("format") or "", held):
+        return None
+    etype = interview_round.employer_kind(ctx.get("row") or {"company": ctx["company"]})
+    try:
+        home = person.home_zone_named(person.directory())
+    except person.NoProfile:
+        home = ""
+    day = interview_round.logistics(stage, held, etype, home)
+    return interview_round.on_the_day_lines(day)
 
 
 def living_path(ctx) -> str:
@@ -6419,6 +6472,38 @@ def _touched(company: str, role: str) -> None:
     except Exception:  # noqa: BLE001  a button fewer, never a booking lost
         pass
 
+def _logistics(a) -> int:
+    """`logistics`: keep what the person said about getting to a round in the room, and say
+    what is still unknown."""
+    import interview_round
+    tracker = what_works._csv(person.state("job_search_tracker.csv"))
+    row = _row(a.company, a.role, tracker, state.load_contacts(person.state("network_contacts.csv")))
+    company, role = _text(row.get("company")) or a.company, _text(row.get("role")) or a.role
+    folder = docpaths.app_folder(company, role)
+    today = _text(a.today) or person.today().isoformat()
+    stage = _text(a.stage)
+    if not stage:
+        stages = what_works.outcome_stages(_read(os.path.join(folder, "outcome.md")), today)
+        stage = (next_stage(stages, today) if stages else {}).get("label") or ""
+    if not stage:
+        print("no round on record at %s yet: book it first (interview_pack.py book), or name "
+              "it with --stage" % company)
+        return 1
+    held = interview_round.save_logistics(
+        folder, stage, today, address=a.address, entrance=a.entrance, floor=a.floor,
+        travel=a.travel, wear=a.wear, arrive_by=a.arrive_by or None, time_zone=a.time_zone,
+        bring=a.bring, timeline=[{"at": x, "what": y} for x, y in a.step or []] or None,
+        confirmed=True if a.confirmed else None)
+    day = interview_round.logistics({"label": stage}, held)
+    left = interview_round.unknowns(day)
+    print("Saved how to get to the %s at %s%s." % (stage, company,
+                                                   ", confirmed" if held.get("confirmed") else ""))
+    if left:
+        print("Still to ask once: " + "; ".join(x.replace("FILL IN: ", "") for x in left))
+    _touched(company, role)
+    return 0
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -6547,8 +6632,28 @@ def main(argv=None) -> int:
     lc.add_argument("company")
     lc.add_argument("--role", default="")
     lc.add_argument("--today", type=_day)
+    lg = sub.add_parser("logistics", help="record how to get to a round held in person: the "
+                                          "address, entrance, floor, travel, arrival time, what "
+                                          "to bring and wear, and whether it is confirmed")
+    lg.add_argument("company")
+    lg.add_argument("--role", default="")
+    lg.add_argument("--stage", default="", help="as outcome.md names it; default the next booked")
+    for name in ("address", "entrance", "floor", "travel", "wear"):
+        lg.add_argument("--" + name, default=None)
+    lg.add_argument("--arrive-by", dest="arrive_by", default=None, type=_clock,
+                    help="when to arrive: 9:15 or 9.15am")
+    lg.add_argument("--time-zone", dest="time_zone", default=None,
+                    help="the zone the round is in, where it is not the person's own")
+    lg.add_argument("--bring", action="append", default=None, help="one thing to bring; repeatable")
+    lg.add_argument("--step", nargs=2, action="append", default=None, metavar=("AT", "WHAT"),
+                    help="one step of the day: when, then what; repeatable")
+    lg.add_argument("--confirmed", action="store_true", help="the person checked these with "
+                                                             "the invite")
+    lg.add_argument("--today", type=_day)
     a = ap.parse_args(argv)
     try:
+        if a.cmd == "logistics":
+            return _logistics(a)
         if a.cmd in ("live", "live-check"):
             return _live(a)
         if a.cmd == "feedback":

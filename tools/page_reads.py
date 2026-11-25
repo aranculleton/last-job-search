@@ -55,8 +55,9 @@ PLAN = ".reads.json"                  # in a dump folder: what was read, and fro
 CLOCK_SLACK_S = 2 * 3600
 FULL_EVERY_S = 6 * 3600
 LIMIT = 1000
-# Read whole every time: a few records each.
-WHOLE = ("meta", "beats", "holds")
+# Read whole every time: a few records each. `practice` is the person's marks on interview
+# cards, one record a card (issue 367): read whole, so readiness is never from half of them.
+WHOLE = ("meta", "beats", "holds", "practice")
 # Read whole only on a whole read; else kept from the mirror.
 KEPT = ("screen", "addr")
 # Every folder the mirror keeps (the store's own names).
@@ -64,7 +65,8 @@ MIRRORED = ("actions", "receipts", "work") + WHOLE + KEPT
 FINISHED = ("done", "failed", "stopped")
 # Every collection of a whole read, as a wake always read them (the talk threads are read
 # for the one item in hand, never here).
-FULL_READS = ("actions", "receipts", "work", "beats", "holds", "meta", "screen", "addr")
+FULL_READS = ("actions", "receipts", "work", "beats", "holds", "meta", "screen", "addr",
+              "practice")
 # The page version from which every write the page makes to a work item says when it was made
 # (`changed_at`), found by its own words in build_versions. Until the published page is on it,
 # a tap's Stop or answer changes an item with no field a read could ask for by time, so a read

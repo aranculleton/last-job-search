@@ -27,7 +27,7 @@ python3 tools/app.py reads --in "<your scratchpad>"
 
 makes this wake's own folder there, a fresh one with a short name, and names it first: that is
 `$D` from here on. Then it prints the reads, one ArtifactData `query` a line: make them all in
-one message, each with `out_dir: $D` and the url. It asks for the small collections whole (`meta`, `beats`, `holds`)
+one message, each with `out_dir: $D` and the url. It asks for the small collections whole (`meta`, `beats`, `holds`, `practice`)
 and only what changed since the last read for the rest (taps, receipts, and work changed,
 asked or finished since); this copy keeps the rest from the last read, and `wake` lays it
 under what was read, so every command sees the whole database. Where work this copy wrote

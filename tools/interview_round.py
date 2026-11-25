@@ -212,7 +212,8 @@ _NUM = re.compile(r"(?:[£$€]|(?:CA|US|GBP|CAD|USD)\$?\s?)?~?\d[\d,.]*\+?\s?(?
                   r"(?:million|billion|thousand)\b)?(?:\s+(?:to|-)\s+~?\d[\d,.]*\s?%?)?")
 # A number that is a date or a year range, not a metric.
 _YEARS = re.compile(r"^(?:19|20)\d{2}$")
-_UNIT = re.compile(r"^\s*([A-Za-z][\w-]*(?:\s+[a-z][\w-]*)?)")
+_UNIT = re.compile(r"^\s*([A-Za-z][\w-]*(?:\s+(?!(?:and|or|by|over|of|to|in|on|at|for|with|from|"
+                   r"against|the|a|an|per|into|across)\b)[a-z][\w-]*)?)")
 
 
 def _roles(profile_text=None) -> list:
@@ -292,7 +293,7 @@ def stories(profile_text=None, stories_list=None) -> list:
         text = " ".join(star.get(k, "") for k in "STAR")
         figs = _figures(text)
         best = None
-        for i, (r, b) in enumerate(lines):
+        for i, (_r, b) in enumerate(lines):
             score = len(figs & _figures(b)) * 2 + interview_pack.similar(text, b)
             if score > 0.25 and (best is None or score > best[0]):
                 best = (score, i)
@@ -338,7 +339,7 @@ def _trigger(text) -> str:
     if m and len(re.sub(r"[^\d]", "", m.group(0))) > 0:
         after = _UNIT.match(t[m.end():])
         return _clip((m.group(0).strip() + (" " + after.group(1) if after else "")), 40)
-    return _clip(" ".join(t.split()[:6]), 40)
+    return _clip(" ".join(t.split()[:6]), 40).rstrip(".,;")
 
 
 # ------------------------------------------------------------------ cards and follow-ups
@@ -382,12 +383,13 @@ def cards(reading, interview: str, story_list=()) -> list:
         question = q.get("question") or ""
         if not question:
             continue
-        st, _score = interview_pack.best_story(question, [s for s in story_list if s.get("use_for")]) \
-            if story_list else (None, 0)
+        st = _story_for(question, story_list)
         if q.get("answer"):
             bullets = _sentences(q["answer"])[:5]
         else:
             bullets = [n for n in (q.get("notes") or []) if n][:3]
+        if not bullets and st:
+            bullets = list(st.get("bullets") or [])[:4]
         if not bullets:
             bullets = [FILL_IN % ("what would you say to \"%s\", in a sentence or two?" % question)]
         follow = list(q.get("follow") or [])
@@ -400,6 +402,29 @@ def cards(reading, interview: str, story_list=()) -> list:
                     "bullets": bullets, "follow": _nested(follow),
                     **({"story": st["id"]} if st else {})})
     return out
+
+
+def _story_for(question, story_list):
+    """The story a question is best answered with: by its `Use for:` tags, else the one whose
+    own words share the most with the question, or None."""
+    import interview_pack
+    tagged = [s for s in story_list or () if s.get("use_for")]
+    st, _score = interview_pack.best_story(question, tagged) if tagged else (None, 0)
+    if st is not None:
+        return st
+    asked = interview_pack._words(question) - _ASKING
+    if not asked:
+        return None
+    scored = [(len(asked & interview_pack._words(" ".join(
+                  [s["title"]] + list(s.get("use_for") or []) + list(s.get("bullets") or []))))
+               / len(asked), i, s) for i, s in enumerate(story_list or ())]
+    best = max(scored, key=lambda x: (x[0], -x[1]), default=None)
+    return best[2] if best and best[0] >= STORY_WORDS else None
+
+
+STORY_WORDS = 0.5
+# Words that ask, not what is asked about.
+_ASKING = frozenset("tell describe walk talk give time example check".split())
 
 
 def _nested(nodes) -> list:

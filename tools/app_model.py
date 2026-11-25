@@ -4508,6 +4508,11 @@ def _interviews(ctx: Ctx, targets: dict) -> list:
                 # page shows the prep as corrected, and the chat that draws the page is told to
                 # build it again (issue 363).
                 **({"live_behind": True} if live and text and _live_behind(folder, stage) else {}),
+                # The round as the page practises it (tools/interview_round.py, issue 367): who,
+                # the cheat sheet, stories, numbers, cards, the day in person, cases and how
+                # ready the person is, from their marks in the page's practice records. Only
+                # for a round still to come.
+                "round": _round_of(ctx, folder, text, stage, row, iid) if live else None,
                 "sent_files": _sent_files(ctx, row),
                 "referrer": referrer_of(ctx, row),
                 "past": not live,
@@ -4535,6 +4540,18 @@ def _interviews(ctx: Ctx, targets: dict) -> list:
     _list(ctx, "interviews", full, len(out), folded)
     ctx._got["coming_up"] = coming_up(out)
     return out
+
+
+def _round_of(ctx: Ctx, folder: str, text: str, stage: dict, row: dict, iid: str) -> dict | None:
+    """The round object for one interview still to come (interview_round.build), contact
+    details out; None when it cannot be read (a profile part missing), never a broken page."""
+    import interview_round
+    try:
+        got = interview_round.build(folder, text, stage, row, iid, ctx._got.get("practice") or [],
+                                    ctx.now, ctx.zone_named)
+    except person.NoProfile:
+        return None
+    return _scrubbed(got, ctx.names)
 
 
 def _live_prep(folder: str, stage: dict, names) -> dict | None:
@@ -6652,7 +6669,8 @@ EMPTY = {
 def build(today: dt.date | None = None, now: dt.datetime | None = None,
           only=None, shown: dict | None = None, full: dict | None = None,
           work_time: dict | None = None, computer: dict | None = None,
-          held_work: dict | None = None, unsaved: list | None = None) -> tuple[dict, dict]:
+          held_work: dict | None = None, unsaved: list | None = None,
+          practice: list | None = None) -> tuple[dict, dict]:
     """(the model, what each item id stands for in the repo). `only` builds just those
     sections, for an applier that needs one item's rev and not the whole page. `shown` is
     {suggestion id: the day it first showed} from the page's database, so at most three new
@@ -6665,11 +6683,11 @@ def build(today: dt.date | None = None, now: dt.datetime | None = None,
     _SAVED_AT.clear()             # what git says is asked once a build, never kept past it
     with remembered.build():
         return _make_model(today, now, only, shown, full, work_time, computer, held_work,
-                           unsaved)
+                           unsaved, practice)
 
 
 def _make_model(today, now, only, shown, full, work_time, computer, held_work,
-                unsaved) -> tuple[dict, dict]:
+                unsaved, practice=None) -> tuple[dict, dict]:
     if today is None or now is None:
         t, n = clock()
         today, now = today or t, now or n
@@ -6683,6 +6701,12 @@ def _make_model(today, now, only, shown, full, work_time, computer, held_work,
     ctx._got["computer"] = dict(computer or {})
     # A save a retired chat gave up on, from the page's records (app.unsaved_saves): one card.
     ctx._got["unsaved"] = list(unsaved or [])
+    # The person's practice marks from the page's database (`app.py view`), else what this
+    # copy kept from the page's last read: each interview's readiness and card order.
+    if practice is None:
+        import interview_round
+        practice = interview_round.mirror_docs()
+    ctx._got["practice"] = list(practice or [])
     targets: dict = {}
     model = {"model": MODEL, "made_at": stamp(now), "rev": ""}
     # The sections built so far, for the one that reads them (employers, built last).
