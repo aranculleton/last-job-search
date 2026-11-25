@@ -466,7 +466,8 @@ def test_the_prep_on_a_phone_is_the_minutes_before_then_every_part_in_view(run, 
     assert r["text"].count("Draft") == 1
     outside = [h for h in r["links"] if not h.startswith("#")]
     assert outside and all(h.startswith("https://larkspur.example/") for h in outside), r["links"]
-    assert "Your CV, " in r["text"] and "Morgan_Ellis" not in r["text"]
+    # What was sent is on the interview's card, beside the prep, by its kind, never a file's name.
+    assert "Your CV, " in r["card"] and "Morgan_Ellis" not in r["card"] + r["text"]
     assert r["overflow"]["sw"] <= r["overflow"]["cw"]
 
 

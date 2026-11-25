@@ -165,12 +165,14 @@ def seeds():
 
 # What opens over a screen or inside it, each read as it stands open: Settings with its rows
 # open (Your rules among them), Claude's work as a sheet where it is not beside the screen, an
-# application's own page, and the live prep.
+# application's own page, the live prep and a prep in its own place.
 OPENED = [
     {"key": "settings/open", "hash": "settings", "eval": "document.querySelectorAll('#main details:not([open])').forEach((d) => { d.open = true; })"},
     {"key": "work", "hash": "todo", "unless": "#rail .work-card", "click": "#pill", "wait": "dialog.work-sheet[open] .work-card", "optional": True},
     {"key": "application", "hash": "jobs/app-fernhill-ops/open", "wait": "dialog.detail[open]"},
     {"key": "interview", "hash": "interviews/int-copperleaf-payments/open", "wait": "dialog.detail[open]"},
+    # A prep in its own place (issue 365), where the page holds one to read.
+    {"key": "prep", "hash": "interviews/prep~int-larkspur-supply/open", "wait": "dialog.detail[open] .lp.pv", "optional": True},
 ]
 
 

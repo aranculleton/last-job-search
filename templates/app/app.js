@@ -13248,7 +13248,16 @@
   // Follow-ups as choices, never folds (the maintainer, 2026-11-11): each question shows the ones
   // it may bring; picking one shows its answer and its own follow-ups in the same place, three
   // deep, with the way back above it. A pick lasts as long as the view and is never kept.
+  // How deep follow-ups are drawn as choices (DESIGN.md: three deep), and each one as a record:
+  // a follow-up written as a question alone, or with follow-ups of its own any depth down, is
+  // read the same way, copied (the store hands its records over frozen).
+  const LP_FU_DEPTH = 3;
+  function lpFuList(list, depth) {
+    return arr(list).map((f) => (typeof f === "string" ? {q: f} : obj(f))).filter((f) => txt(f.q || f.question))
+      .map((f) => Object.assign({}, f, {q: f.q || f.question, follow: depth < LP_FU_DEPTH ? lpFuList(f.follow || f.follows, depth + 1) : []}));
+  }
   function lpFollows(lv, list, key, mode, label) {
+    list = lpFuList(list, 1);
     const box = h("div", {class: "lp-fu", "data-fu": key});
     box._path = [];
     // Every follow-up under here at any depth, for search: it is in the prep, not on the screen.
@@ -13256,7 +13265,7 @@
     const walk = (l, p, depth) => arr(l).forEach((f, i) => {
       const q = p.concat(i);
       box._find.push([q, [lpPlain(lv, f.q), lpCueList(f.simple).join(" "), lpPlain(lv, f.detailed)].join(" ").toLowerCase()]);
-      if (depth < 3) walk(obj(f).follow, q, depth + 1);
+      if (depth < LP_FU_DEPTH) walk(obj(f).follow, q, depth + 1);
     });
     walk(list, [], 1);
     box._show = (p, focus, at) => { box._path = p; lpFuDraw(lv, box, list, key, mode, label, focus ? at || p : null); };
@@ -13281,7 +13290,7 @@
       const row = h("button", {type: "button", class: "lp-choice", "aria-expanded": String(open), "data-path": here.join("."), "data-k": "lpf:" + k2,
         onclick: () => (open ? go(before, here) : go(here))}, lpPlain(lv, f.q), " ", h("span", {class: "lp-who"}, lpWho(lv, f.who)));
       if (!open) return h("li", {class: "lp-fu-item"}, row);
-      const kids = depth < 3 ? arr(f.follow) : [];
+      const kids = depth < LP_FU_DEPTH ? arr(f.follow) : [];
       const node = h("div", {class: "lp-fu-node", "data-depth": String(depth)},
         lpAnswer(lv, f, k2, mode),
         lpStoryLink(lv, f.story ? stories.find((s) => s.id === f.story) : null, k2),

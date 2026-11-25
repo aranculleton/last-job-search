@@ -3015,6 +3015,10 @@ S.prep_reader = async (a) => {
   r.bodyFont = await o.page.$eval("dialog[open] .pq-a, dialog[open] .pi-list", (e) => parseFloat(getComputedStyle(e).fontSize)).catch(() => 0);
   r.overflow = await o.page.evaluate(() => { const b = document.querySelector("dialog[open] .detail-body"); return b ? {sw: b.scrollWidth, cw: b.clientWidth} : null; });
   if (a.shot) await shot(o.page, a.shot, false);
+  // The interview's own card, beside its prep: what was sent and its stages.
+  await throughNav(o.page, () => o.page.evaluate((h) => { location.hash = h; }, "interviews/" + a.id + "/open"));
+  await turn(o.page, 8);
+  r.card = await one(o.page, "dialog[open] .detail-body");
   await o.ctx.close();
   return r;
 };

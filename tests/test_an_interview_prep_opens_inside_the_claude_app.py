@@ -114,6 +114,7 @@ def test_back_still_closes_the_prep_once_it_is_open(run, tmp_path, vp):
         {"ready": "!document.querySelector('dialog.detail')", "eval": SHEET},
     ], vp)
     opened, closed = got["after"][2]["eval"], got["after"][4]["eval"]
-    assert opened["open"] and opened["hash"] == "#interviews/int-larkspur-supply/open", opened
+    # The prep at its own address (issue 365), Back closing it as it closed the card.
+    assert opened["open"] and opened["hash"] == "#interviews/prep~int-larkspur-supply/open", opened
     assert not closed["open"] and closed["hash"] == "#interviews", closed
 

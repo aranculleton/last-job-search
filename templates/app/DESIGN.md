@@ -325,9 +325,21 @@ next?" in its first lines, and nothing asks for a decision a default could make.
   stage in Jobs' words, "71 fit · Manchester · not applied yet" (`relLabel`, `alsoJobLine`).
   Why: "Your draft" named nothing and "A role found there" said nothing the row did not (the
   redesign's second round, 2026-11-17). (name cards test)
-- Every card's sheet is 680 wide on a computer. An interview's is wide only with a prep to read
-  beside its stages, and without one it says nothing of the prep but its Next ("Get your prep:
-  ..."): a lone "No prep yet." in an empty column of a 960 sheet said it twice. (name cards test)
+- Every card's sheet is 680 wide on a computer. An interview's card never holds its prep: its
+  Next says where the prep is, with Read your prep, or "Get your prep: ..." while there is none
+  (a lone "No prep yet." in an empty column of a 960 sheet said it twice). (name cards test)
+- **A prep is a place of its own** (issue 365: the whole prep sat at the foot of a card, under
+  everything else, minutes before a call). Read your prep, wherever it is offered (an
+  employer's card, an interview's, To do, Coming up, the Brief), opens it full screen at its own
+  address (`#interviews/prep~<interview>/open`): the live prep below where there is one, else
+  the prep as the engine read it, opening on the one-screen summary ("Before you go in", then
+  "Likely questions", each a plain line in the ink and a tap to its answer), then every part
+  in view under its own heading, nothing folded, with the live prep's bar of chips to each part
+  staying at the top and its head's one pill, Practise with Claude (Update my prep quiet beside
+  it). A question's follow-ups are drawn under it, each with its own, a step in a level, any
+  depth. A prep the engine could not read into parts is parted by its own headings, its
+  one-screen summary first and the questions under its questions heading listed there.
+  (prep place test)
 - A job's fit is one ring wherever a fit is shown (a job's card, the Brief's jobs, a sheet's
   rows; app.js `fitRing`, app.css `.fit-ring`): its number in the ink inside, drawn as far round
   as the fit goes, green for a strong fit and grey below it (the muted grey for good, the edge
