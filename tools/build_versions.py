@@ -1252,8 +1252,9 @@ METHODS: dict[str, dict] = {
             (221, "2026-11-19", True, "a quiet button leading its line is drawn in by its padding, never laid out in, so it never fits back over the gauge on the line above"),
             (222, "2026-11-19", False, "the tour's To do step says Later puts a card off, and its Contacts step names each person's card, not the Messages view the redesign took away"),
             (223, "2026-11-25", True, "an interview's prep is a place of its own: Read your prep on an employer's or an interview's card, To do, Coming up and the Brief opens it full screen at its own address, the role and the round said under its day, on the one-screen summary with every likely question one tap away, each part in view under a bar that goes to it, follow-ups under their question at any depth; the cards no longer hold the prep (issue 365)"),
+            (224, "2026-11-25", True, "an interview's round is the prep's own screen: how long to go, where and who, today's step, how ready you are and the next step, who you meet and what each may ask, the cheat sheet; in person the plan for the day with what is not known said so and Confirm the plan; flashcards with filters, a 90-second clock and marks that bring each card back in 1, 3, 7 or 14 days; the story grid, the numbers drill, cases with their steps and bars, where you sit on the project and the plan to the day (issue 367); a table in a prep reads as a table, stacked on a phone (issue 368)"),
         ),
-        "fingerprint": "a9dfa438739390b3",
+        "fingerprint": "0f0f146106ef5102",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",

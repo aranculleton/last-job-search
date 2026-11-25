@@ -98,7 +98,7 @@ def test_a_round_with_nothing_built_keeps_the_prep_as_it_was(run, tmp_path):
     assert "halfway ready" not in s["text"] and "Who you meet" not in s["text"] and s["prim"] == ["Practise with Claude"]
 
 
-DAY = {"address": "4 Mill Lane, Leeds", "entrance": None, "floor": "Third floor", "travel": "Train to Leeds, then a ten-minute walk",
+DAY = {"address": "the head office, Leeds", "entrance": None, "floor": "Third floor", "travel": "Train to Leeds, then a ten-minute walk",
        "arrive_by": "12:40", "bring": [], "wear": None, "timeline": [{"at": "12:40", "what": "Sign in at the front desk"},
                                                                     {"at": "13:00", "what": "Interview with Kit"}],
        "time_zone": "UK time", "final_five": ["Read your cheat sheet once."], "whiteboard": ["Say what you will draw before you draw it."],
@@ -125,7 +125,7 @@ def test_in_person_the_day_is_planned_and_what_is_not_known_is_said_so(run, tmp_
     day = got["after"][0]["eval"]
     assert day["chips"][:3] == ["On one screen", "On the day", "Questions"], day["chips"]
     text = day["text"]
-    for said in ("4 Mill Lane, Leeds", "Third floor", "12:40 (UK time)", "Sign in at the front desk", "Read your cheat sheet once.",
+    for said in ("the head office, Leeds", "Third floor", "12:40 (UK time)", "Sign in at the front desk", "Read your cheat sheet once.",
                  "Say what you will draw before you draw it.", "Not confirmed yet"):
         assert said in text, said
     # The way in, what to bring and what to wear are not known: said so, nothing filled in.
