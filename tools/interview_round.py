@@ -180,18 +180,29 @@ def card_id(interview: str, question: str) -> str:
     return "%s~q%s" % (interview, h)
 
 
-# How a card ranks for practice: shaky first, then missed, then never practised, then the
-# ones due again, then the ones got and not due.
-_RANK = {"shaky": 0, "missed": 1, None: 2}
+def practice_rank(sched: dict, now) -> int:
+    """Where a card falls in practice, as the page orders it (practiseDue in the page's own
+    code, which mirrors this): missed first, then any card due again, then shaky ones not due
+    yet, then the ones never practised, then the ones got and not due."""
+    if sched["last"] == "missed":
+        return 0
+    if sched["last"] is not None and is_due(sched, now):
+        return 1
+    if sched["last"] == "shaky":
+        return 2
+    if sched["last"] is None:
+        return 3
+    return 4
 
 
 def order_cards(cards, marks_by_card: dict, now) -> list:
-    """The cards in the order to practise them (shaky first), each carrying its schedule."""
+    """The cards in the order to practise them (practice_rank), each carrying its schedule;
+    cards that rank alike keep the pack's order."""
     out = []
     for i, c in enumerate(cards):
         sched = schedule(marks_by_card.get(c["id"]) or [])
         c = dict(c, last=sched["last"], due=sched["due"])
-        rank = _RANK.get(sched["last"], 3 if is_due(sched, now) else 4)
+        rank = practice_rank(sched, now)
         out.append((rank, i, c))
     return [c for _r, _i, c in sorted(out, key=lambda x: (x[0], x[1]))]
 
@@ -400,6 +411,8 @@ def cards(reading, interview: str, story_list=()) -> list:
         trigger = q.get("cue") or (st or {}).get("title") or _clip(question, 40)
         out.append({"id": card_id(interview, question), "q": question, "trigger": trigger,
                     "bullets": bullets, "follow": _nested(follow),
+                    "section": "Your answers" if q.get("added") else "Likely questions",
+                    "why": q.get("why") or None,
                     **({"story": st["id"]} if st else {})})
     return out
 
@@ -471,8 +484,28 @@ def who(with_text, step="", outcome="") -> list:
             rx = re.compile(r"\b%s\b" % re.escape(first[0]), re.I)
             probes += ["Last time: " + _clip(ln, 160) for _h, ln in interview_pack._record(outcome)
                        if rx.search(ln)][:2]
-        out.append({"name": w.get("name") or title, "role": title or None, "probes": probes})
+        said = [p[len("Last time: "):] for p in probes if p.startswith("Last time: ")]
+        out.append({"name": w.get("name") or title, "role": title or None, "probes": probes,
+                    "kind": kind, "about": "; ".join(said) or None})
     return out
+
+
+def likely_asker(question, who_list) -> str | None:
+    """Who in the room is likely to ask a question: the one person there is, a practitioner
+    or manager for a technical one, a senior leader or the recruiter for the rest, else
+    "Either". None when nobody is named."""
+    import interview_pack
+    if not who_list:
+        return None
+    if len(who_list) == 1:
+        return who_list[0]["name"]
+    want = ("practitioner", "manager") if interview_pack.technical(question) else \
+        ("senior", "screener", "manager")
+    for kind in want:
+        hit = [w for w in who_list if w.get("kind") == kind]
+        if len(hit) == 1:
+            return hit[0]["name"]
+    return "Either"
 
 
 # ------------------------------------------------------------------ logistics
@@ -636,12 +669,19 @@ def on_the_day_lines(day: dict) -> list:
 
 # ------------------------------------------------------------------ cases
 
-def cases_for(kind) -> list:
+CASE_KINDS = {"bank": "finance", "consulting": "consulting", "product": "analytics",
+              "startup": "analytics", "public sector": "general"}
+
+
+def cases_for(kind, text="") -> list:
     """The cases to practise for this kind of employer, from tools/interview_cases.py when it
-    is there, else []."""
+    is there, else []. Its own reading of the employer and role (`kind_of`) first, then the
+    kind of employer this file knows."""
     try:
         import interview_cases
-        got = interview_cases.cases_for(str(kind or ""))
+        kind_of = getattr(interview_cases, "kind_of", None)
+        named = kind_of(text) if kind_of and text else ""
+        got = interview_cases.cases_for(str(named or CASE_KINDS.get(kind, "general")))
         return [c for c in got or [] if isinstance(c, dict)]
     except Exception:  # noqa: BLE001  no cases module, or none for this kind
         return []
@@ -760,9 +800,14 @@ def build(folder, text, stage: dict, row: dict, interview: str, docs=(), now=Non
         s["questions"] = [c["id"] for c in card_list if c.get("story") == s["id"]
                           or any(interview_pack.similar(c["q"], t) >= interview_pack.MATCH
                                  for t in s.get("use_for") or [])]
+        mains = [c["id"] for c in card_list if c.get("story") == s["id"]]
+        s["home"] = (mains or s["questions"] or [None])[0]
     who_list = who(stage.get("with"), interview_pack.what_works.stage_step(label), outcome)
+    for c in card_list:
+        c["who"] = likely_asker(c["q"], who_list)
     day = logistics(stage, held, etype, home_zone) if on_site else None
-    case_list = cases_for(etype)
+    case_list = cases_for(etype, " ".join(str(x or "") for x in (
+        row.get("sector"), row.get("company"), row.get("role"))))
     ready = readiness(card_list, mine["cards"], mine["mocks"], mine["cases"], len(case_list),
                       on_site, bool(held.get("confirmed")), now)
     fmt_names = ((reading or {}).get("glance") or {}).get("assessing")
@@ -772,14 +817,64 @@ def build(folder, text, stage: dict, row: dict, interview: str, docs=(), now=Non
         "in_person": on_site,
         "cheat_sheet": cheat_sheet(reading, story_list, nums, who_list, day,
                                    [c["q"] for c in card_list if c["id"] in hard]),
-        "stories": [{k: s[k] for k in ("id", "title", "trigger", "bullets", "source", "questions")}
-                    for s in story_list],
+        "stories": [{k: s[k] for k in ("id", "title", "trigger", "bullets", "source", "questions",
+                                       "home")} for s in story_list],
         "numbers": nums,
         "cards": card_list,
         "logistics": day,
         "cases": case_list,
         "readiness": ready,
+        "plan": plan(stage, card_list, story_list, nums, case_list, on_site, ready, now),
+        # Where the person sits on the project the round is about: nothing records it yet.
+        "project": None,
     }
+
+
+MAX_PLAN_DAYS = 14
+
+
+def plan(stage: dict, card_list, story_list, nums, case_list, on_site, ready: dict, now) -> list:
+    """[{day, focus}] from today to the interview's day: one thing a day, the hardest first,
+    a mock near the end, the day before light. [] when the round has no day yet or it is gone."""
+    try:
+        when = dt.date.fromisoformat(str(stage.get("date") or "")[:10])
+    except ValueError:
+        return []
+    today = now.date()
+    if when < today:
+        return []
+    weak = [c for c in card_list if c.get("last") in ("missed", "shaky")]
+    fresh = [c for c in card_list if c.get("last") is None]
+    todo = []
+    if fresh:
+        todo.append("Go through all %d answer cards once, out loud" % len(card_list))
+    if weak:
+        todo.append("The %d card%s you were shaky on or missed" % (len(weak), "" if len(weak) == 1 else "s"))
+    if story_list:
+        todo.append("Tell your stories out loud: %s" % "; ".join(s["title"] for s in story_list[:3]))
+    if nums:
+        todo.append("Drill your numbers until you can say them without looking")
+    if any(c.get("follow") for c in card_list):
+        todo.append("The follow-ups on your technical answers, three deep")
+    if case_list:
+        todo.append("Work through one practice case: %s" % (case_list[0].get("title") or "the first"))
+    if on_site and not ready.get("logistics_confirmed"):
+        todo.append("Check the address, entrance and time against the invite")
+    if not ready.get("mocks_done"):
+        todo.append("One mock interview with Claude")
+    days = [today + dt.timedelta(days=n) for n in range(min((when - today).days, MAX_PLAN_DAYS) + 1)]
+    out = []
+    for i, d in enumerate(days):
+        if d == when:
+            focus = "The interview: read your cheat sheet once, then go"
+        elif d == when - dt.timedelta(days=1) and len(days) > 2:
+            focus = "Light: the cheat sheet and the cards due, then rest"
+        elif todo:
+            focus = todo[i % len(todo)]
+        else:
+            focus = "The cards due today"
+        out.append({"day": d.isoformat(), "focus": focus})
+    return out
 
 
 def brief_line(company, stage_label, day, ready: dict) -> str:

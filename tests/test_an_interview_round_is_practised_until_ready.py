@@ -80,6 +80,18 @@ def test_a_card_comes_back_after_1_3_7_and_14_days():
 
 # ------------------------------------------------------------------ readiness
 
+def test_practice_order_is_missed_then_due_then_shaky_then_new():
+    now = dt.datetime(2026, 3, 10, 12, tzinfo=dt.timezone.utc)
+    cards = [{"id": i} for i in ("new", "got_later", "shaky_later", "due", "missed")]
+    marks = {"got_later": [_mark("2026-03-08T09:00:00Z", "got"), _mark("2026-03-10T09:00:00Z", "got")],
+             "shaky_later": [_mark("2026-03-08T09:00:00Z", "got"),
+                             _mark("2026-03-10T09:00:00Z", "shaky")],
+             "due": [_mark("2026-03-08T09:00:00Z", "got")],
+             "missed": [_mark("2026-03-10T11:00:00Z", "missed")]}
+    assert [c["id"] for c in R.order_cards(cards, marks, now)] == [
+        "missed", "due", "shaky_later", "new", "got_later"]
+
+
 def test_readiness_is_read_from_the_practice_marks():
     cards = [{"id": "int-x~q1", "q": "A"}, {"id": "int-x~q2", "q": "B"},
              {"id": "int-x~q3", "q": "C"}]
@@ -160,6 +172,14 @@ def test_every_upcoming_round_carries_the_whole_contract(tmp_path):
     assert rnd["readiness"]["practised"] == [0, 2]
     # A stage already held has no round.
     assert all(i["round"] is None for i in model["interviews"] if i["past"])
+    # The fields the page reads besides: each story's home question, each card's part of the
+    # prep and who asks it, a plan a day up to the interview, and nothing invented.
+    assert all(s["home"] is None or s["home"] in s["questions"] for s in rnd["stories"])
+    assert all(c["section"] == "Likely questions" for c in rnd["cards"])
+    assert all("about" in w for w in rnd["who"]) and rnd["project"] is None
+    assert [p["day"] for p in rnd["plan"]] == ["2026-10-25", "2026-10-26", "2026-10-27",
+                                               "2026-10-28"]
+    assert rnd["plan"][-1]["focus"].startswith("The interview")
 
 
 def test_the_round_reads_the_marks_and_puts_shaky_cards_first(tmp_path):
@@ -169,14 +189,16 @@ def test_the_round_reads_the_marks_and_puts_shaky_cards_first(tmp_path):
     where = tmp_path / "mirror"
     (where / "practice").mkdir(parents=True)
     _keep(where, first, {"card": first, "interview": iid,
-                         "marks": [_mark("2026-10-24T09:00:00Z", "got")]})
+                         "marks": [_mark("2026-10-22T09:00:00Z", "got"),
+                                   _mark("2026-10-24T09:00:00Z", "got")]})
     _keep(where, second, {"card": second, "interview": iid,
                           "marks": [_mark("2026-10-24T09:00:00Z", "shaky")]})
     _keep(where, "mock~1", {"kind": "mock", "interview": iid, "at": "2026-10-24", "score": 3})
     rnd = next(i for i in _model(tmp_path, where)["interviews"]
                if i["company"] == "Thornbury Bank")["round"]
     assert [c["id"] for c in rnd["cards"]] == [second, first]
-    assert rnd["cards"][0]["last"] == "shaky"
+    assert rnd["cards"][0]["last"] == "shaky"            # due again; the got one is not
+    assert all(c["who"] == "the head of risk" for c in rnd["cards"])
     assert rnd["readiness"]["practised"] == [1, 2] and rnd["readiness"]["mocks_done"] == 1
     assert "shaky" in rnd["readiness"]["next"]
     assert any(line.startswith("Shaky last time") for line in rnd["cheat_sheet"])

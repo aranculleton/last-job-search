@@ -1,7 +1,7 @@
 {
  "model": 1,
  "made_at": "2026-10-25T18:00:00Z",
- "rev": "18297f03cd11",
+ "rev": "88da3162e8eb",
  "app": {
   "version": "4.17.0",
   "url": null,
@@ -77,7 +77,7 @@
  ],
  "jobs": {
   "round": "r9",
-  "made_at": "2026-11-25T17:09:00Z",
+  "made_at": "2026-11-25T17:14:36Z",
   "met": false,
   "summary": "3 roles from the last search to look at, 1 of them scoring 75 or more. 3 left out, each with its reason.",
   "rows": [
@@ -1013,7 +1013,7 @@
    "when": "2026-10-28",
    "prep": {
     "path": "documents/applications/thornbury_bank_risk_analyst_thornbury/interview_prep.md",
-    "updated": "2026-11-25T17:09:00Z"
+    "updated": "2026-11-25T17:14:36Z"
    },
    "questions": 2,
    "all_day": true,
@@ -1114,7 +1114,9 @@
        "Judgement and why: what you would do in their first months, and why you",
        "Wants to hear judgement and commercial sense: what you would do, why, and what it would change for them",
        "In this round: whether they would hire you over the others, and why now"
-      ]
+      ],
+      "kind": "senior",
+      "about": null
      }
     ],
     "format": null,
@@ -1138,7 +1140,8 @@
       "source": "Senior Operations Analyst at Brindle & Hart Logistics: Built weekly demand-forecasting models in Python and SQL across 2,400 SKUs and 6…",
       "questions": [
        "int-thornbury_bank_risk_analyst~q8b1a502b17"
-      ]
+      ],
+      "home": "int-thornbury_bank_risk_analyst~q8b1a502b17"
      },
      {
       "id": "story-72c2b049",
@@ -1153,7 +1156,8 @@
       "source": "Senior Operations Analyst at Brindle & Hart Logistics: Rebuilt the warehouse-management data feed as dbt models with data-quality tests, ending…",
       "questions": [
        "int-thornbury_bank_risk_analyst~qb94f86a409"
-      ]
+      ],
+      "home": "int-thornbury_bank_risk_analyst~qb94f86a409"
      },
      {
       "id": "story-e93d7e46",
@@ -1166,7 +1170,8 @@
        "Result: one report used by 30+ operations managers, in place of eleven spreadsheets."
       ],
       "source": "Senior Operations Analyst at Brindle & Hart Logistics: Owned the Power BI service-level reporting used by 30+ operations managers, replacing…",
-      "questions": []
+      "questions": [],
+      "home": null
      },
      {
       "id": "story-477b1f2c",
@@ -1179,7 +1184,8 @@
        "Result: write-offs fell 18% over two quarters."
       ],
       "source": "Supply Chain Data Analyst at Oakmere Foods: Modelled shelf-life and order patterns for chilled lines; write-offs fell 18% over two…",
-      "questions": []
+      "questions": [],
+      "home": null
      },
      {
       "id": "story-510710cd",
@@ -1191,7 +1197,8 @@
        "FILL IN: what did you do yourself, step by step?"
       ],
       "source": "Supply Chain Data Analyst at Oakmere Foods: Segmented 140 suppliers by on-time-in-full performance and cost to serve",
-      "questions": []
+      "questions": [],
+      "home": null
      },
      {
       "id": "story-4eb008a1",
@@ -1203,7 +1210,8 @@
        "FILL IN: what did you do yourself, step by step?"
       ],
       "source": "Supply Chain Data Analyst at Oakmere Foods: Ran a replenishment-rules pilot in 12 stores against matched controls",
-      "questions": []
+      "questions": [],
+      "home": null
      }
     ],
     "numbers": [
@@ -1317,9 +1325,12 @@
         ]
        }
       ],
+      "section": "Likely questions",
+      "why": "screen",
       "story": "story-6a3c5889",
       "last": null,
-      "due": null
+      "due": null,
+      "who": "the head of risk"
      },
      {
       "id": "int-thornbury_bank_risk_analyst~qb94f86a409",
@@ -1332,9 +1343,12 @@
        "Result: the daily two-hour reconciliation ended."
       ],
       "follow": [],
+      "section": "Likely questions",
+      "why": "screen",
       "story": "story-72c2b049",
       "last": null,
-      "due": null
+      "due": null,
+      "who": "the head of risk"
      }
     ],
     "logistics": null,
@@ -1349,7 +1363,26 @@
      "mocks_done": 0,
      "logistics_confirmed": false,
      "next": "Go through your 2 answer cards once"
-    }
+    },
+    "plan": [
+     {
+      "day": "2026-10-25",
+      "focus": "Go through all 2 answer cards once, out loud"
+     },
+     {
+      "day": "2026-10-26",
+      "focus": "Tell your stories out loud: The forecast that freed safety stock; Ending a daily reconciliation; One report in place of eleven spreadsheets"
+     },
+     {
+      "day": "2026-10-27",
+      "focus": "Light: the cheat sheet and the cards due, then rest"
+     },
+     {
+      "day": "2026-10-28",
+      "focus": "The interview: read your cheat sheet once, then go"
+     }
+    ],
+    "project": null
    },
    "sent_files": [
     {
