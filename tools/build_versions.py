@@ -1250,7 +1250,7 @@ METHODS: dict[str, dict] = {
             (222, "2026-11-19", False, "the tour's To do step says Later puts a card off, and its Contacts step names each person's card, not the Messages view the redesign took away"),
             (223, "2026-11-25", True, "an interview's prep is a place of its own: Read your prep on an employer's or an interview's card, To do, Coming up and the Brief opens it full screen at its own address, on the one-screen summary with every likely question one tap away, each part in view under a bar that goes to it, follow-ups under their question at any depth; the cards no longer hold the prep (issue 365)"),
         ),
-        "fingerprint": "04af0cd58fb2003e",
+        "fingerprint": "c96c0c550db2502a",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",
