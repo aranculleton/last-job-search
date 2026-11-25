@@ -514,7 +514,7 @@ METHODS: dict[str, dict] = {
             (62, "2026-11-25", False, "a prep built for a new round leaves out the answers written only for the round held, kept apart beside it in earlier_answers.md, puts first the questions found hard there (asked --landed no or partly), and fails its check over MAX_PACK_CHARS characters; book says to record what was hard and build for the round booked only (issue 364); the rerun of version 60 makes each prep ahead again"),
             (63, "2026-11-25", True, "each round still to come is practised on the page: who you meet and what they dig into, a one-screen cheat sheet, your stories and every number from your profile, answer cards with follow-ups three deep on every technical question (the third about the method your profile records, or a FILL IN asking for it), marks that bring a card back after 1, 3, 7 or 14 days, and how ready you are; a round in person gains On the day (interview_pack.py logistics records the address and the rest); the next pack starts from the cards you were shaky on; issue 367"),
         ),
-        "fingerprint": "5d30cd3fc50d6f15",
+        "fingerprint": "9657a018f78511ca",
     },
     "research": {
         "by": "upgrade", "priority": 3, "applies": "live_applications", "time": "~5 min each",

@@ -1,7 +1,7 @@
 {
  "model": 1,
  "made_at": "2026-10-25T18:00:00Z",
- "rev": "b6b5eb9943a6",
+ "rev": "18297f03cd11",
  "app": {
   "version": "4.17.0",
   "url": null,
@@ -77,7 +77,7 @@
  ],
  "jobs": {
   "round": "r9",
-  "made_at": "2026-11-25T16:52:51Z",
+  "made_at": "2026-11-25T16:55:52Z",
   "met": false,
   "summary": "3 roles from the last search to look at, 1 of them scoring 75 or more. 3 left out, each with its reason.",
   "rows": [
@@ -1013,7 +1013,7 @@
    "when": "2026-10-28",
    "prep": {
     "path": "documents/applications/thornbury_bank_risk_analyst_thornbury/interview_prep.md",
-    "updated": "2026-11-25T16:52:51Z"
+    "updated": "2026-11-25T16:55:52Z"
    },
    "questions": 2,
    "all_day": true,
@@ -1259,7 +1259,10 @@
       "q": "Tell me about a forecast you built",
       "trigger": "The forecast that freed safety stock",
       "bullets": [
-       "FILL IN: what would you say to \"Tell me about a forecast you built\", in a sentence or two?"
+       "Situation: forecast error at 22% across 2,400 SKUs and six distribution centres, and planners covering the gap with extra safety stock.",
+       "Task: a weekly demand forecast the planners would trust.",
+       "What you did: rebuilt it in Python and SQL with promotions and seasonality as features, and tracked error by distribution centre so the planners could see where it held.",
+       "Result: error down to 14%, about £1.1M of safety stock released."
       ],
       "follow": [
        {
@@ -1323,7 +1326,10 @@
       "q": "How do you check your data",
       "trigger": "Ending a daily reconciliation",
       "bullets": [
-       "FILL IN: what would you say to \"How do you check your data\", in a sentence or two?"
+       "Situation: every morning someone spent two hours reconciling the warehouse-management data feed against the reports built on it.",
+       "Task: remove the manual step rather than keep absorbing it.",
+       "What you did: rebuilt the feed as dbt models with data-quality tests, so a bad load failed loudly instead of surfacing in a report.",
+       "Result: the daily two-hour reconciliation ended."
       ],
       "follow": [],
       "story": "story-72c2b049",
