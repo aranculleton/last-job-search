@@ -332,8 +332,8 @@ def test_what_was_sent_is_said_even_with_no_file_name(run, tmp_path):
     model = _sample()
     iv = next(i for i in model["interviews"] if i["id"] == "int-larkspur-supply")
     iv["sent_files"] = [{"kind": "resume", "name": None, "path": None, "asset": None, "to": "Juno", "on": "2026-10-20"}]
-    got = _go(run, tmp_path, [{"hash": "interviews/int-larkspur-supply", "click": "Read your prep for your phone screen with Larkspur Retail",
-                               "exact": True, "read": "body"}], model=model)
+    # Said on the interview's card, beside its stages (the prep is a place of its own, issue 365).
+    got = _go(run, tmp_path, [{"hash": "interviews/int-larkspur-supply/open", "read": "body"}], model=model)
     assert "Your CV, to Juno, 20 Oct" in got["after"][0]["text"] or "Your CV, to Juno, Tue 20 Oct" in got["after"][0]["text"], got["after"][0]["text"][-800:]
 
 

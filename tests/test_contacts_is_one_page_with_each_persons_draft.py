@@ -201,7 +201,13 @@ def test_ten_replies_pasted_in_a_row_each_show_on_their_own_card(run, page, mode
     def card_is(cid, sel, there=True):
         return ("(() => { const c = document.querySelector('#main ul.people > li[data-item=\"%s\"]');"
                 " return !!c && %s!!c.querySelector('%s'); })()" % (cid, "" if there else "!", sel))
-    running = card_is(ten[0]["id"], ".going .spin")
+    def says(cid, words):
+        return ("(() => { const w = document.querySelector('#main ul.people > li[data-item=\"%s\"] .going-word');"
+                " return !!w && w.textContent === '%s'; })()" % (cid, words))
+    # The first card spinning is drawn before the rest have taken their place in the queue: on
+    # a busy machine the third still said "Next" when read (CI, 2026-11-25). Wait for all three.
+    running = " && ".join([card_is(ten[0]["id"], ".going .spin"), says(ten[1]["id"], "Next"),
+                           says(ten[2]["id"], "Waiting its turn")])
     drawn = " && ".join(card_is(p["id"], ".going", there=False) for p in written)
     got = run("engine", html=page, viewport=WIDE, clock=CLOCK, shots="contacts-ten" if SHOTS else None, steps=[
         {"hash": "contacts", "quick": quick, "eval": states},

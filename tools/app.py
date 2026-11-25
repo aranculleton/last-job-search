@@ -540,6 +540,18 @@ def _touched_people_since(since: str, me, work: str = "") -> bool:
     return False
 
 
+def live_behind_lines(model) -> list:
+    """For the chat drawing the page: each interview whose live prep is older than a change to
+    the answers in its interview_prep.md (app_model `live_behind`), and how to build it again."""
+    import interview_live
+    out = []
+    for iv in (model or {}).get("interviews") or []:
+        if iv.get("live_behind"):
+            out.append("The live prep for %s: %s." % (iv.get("company") or "", interview_live.BEHIND % (
+                iv.get("company") or "", iv.get("role") or "", iv.get("next_stage") or "")))
+    return out
+
+
 def cmd_view(a) -> int:
     """The model as one document a section (`view/<section>`, in parts when it is too big for
     one: page_db.split) plus `meta/current` (stored as `meta/now`), so an open page updates live with no republish.
@@ -897,6 +909,9 @@ def cmd_view(a) -> int:
         redo = ""
     if redo:
         lines = list(lines or []) + [redo]
+    # A live prep older than a correction to its interview_prep.md: the page shows the prep
+    # itself meanwhile, and this chat builds the live one again from the answers (issue 363).
+    lines = list(lines or []) + live_behind_lines(model)
     if getattr(a, "end", False) and a.dump:
         # The save runs on by itself and wakes nobody: the page's "Saving your work" is
         # cleared with the batch's own page update, never by a later turn.

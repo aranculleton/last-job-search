@@ -701,8 +701,13 @@ def test_the_brief_reads_likely_to_come_up_from_the_live_prep(run, tmp_path, vp)
 
 def test_an_interview_with_no_live_prep_reads_as_before(run, tmp_path, vp):
     m = _sample()
-    got = _go(run, tmp_path, copy.deepcopy(m), [dict(OPEN, eval="document.querySelectorAll('dialog.detail .lp').length")], vp)
-    assert got["after"][0]["eval"] == 0 and "Before you go in" in got["after"][0]["text"]
+    # Its card says where the prep is, and Read your prep opens it in a place of its own (issue
+    # 365), not the live prep's view.
+    got = _go(run, tmp_path, copy.deepcopy(m), [dict(OPEN, eval="document.querySelectorAll('dialog.detail .lp').length"),
+        {"click": "Read your prep", "within": "dialog.detail", "read": "dialog.detail",
+         "eval": "document.querySelectorAll('dialog.detail .lp.pv').length + document.querySelectorAll('dialog.detail .lp-life').length * 10"}], vp)
+    assert got["after"][0]["eval"] == 0 and "Before you go in" not in got["after"][0]["text"]
+    assert got["after"][1]["eval"] == 1 and "Before you go in" in got["after"][1]["text"]
     assert json.dumps(m)  # the sample itself carries no live prep
 
 

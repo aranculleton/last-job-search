@@ -159,7 +159,7 @@ OPEN_ALL = ("(() => { const ds = [...(document.querySelector('dialog[open]') || 
 SCREENS = ["brief", "todo", "jobs", "applied", "contacts", "interviews", "progress", "chat", "settings", "profile"]
 SHEETS = ["contacts/copperleaf_pay_tamsin/open", "contacts/fernhill_freight_halloway/open", "interviews/int-copperleaf-payments/open",
           "interviews/int-larkspur-supply/open", "jobs/app-fernhill-ops/open", "jobs/emp~larkspur-retail/open", "interviews/emp~copperleaf-pay/open",
-          "past job"]
+          "interviews/prep~int-larkspur-supply/open", "past job"]
 PAST_JOB = "you-job:you-job-Brindle---Hart-Logistics-Senior-Operations-Analyst"
 
 

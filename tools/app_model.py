@@ -4504,6 +4504,10 @@ def _interviews(ctx: Ctx, targets: dict) -> list:
                 # only for a round still ahead and only the one it was built for; any other
                 # interview draws its prep as before, until /interview makes it again.
                 "live": _live_prep(folder, stage, ctx.names) if live and text else None,
+                # A live prep older than a change to the prep's answers: left out above, so the
+                # page shows the prep as corrected, and the chat that draws the page is told to
+                # build it again (issue 363).
+                **({"live_behind": True} if live and text and _live_behind(folder, stage) else {}),
                 "sent_files": _sent_files(ctx, row),
                 "referrer": referrer_of(ctx, row),
                 "past": not live,
@@ -4544,7 +4548,29 @@ def _live_prep(folder: str, stage: dict, names) -> dict | None:
     label = str(stage.get("label") or "")
     if label and doc.get("stage") and not interview_pack._same_round(doc["stage"], label):
         return None
+    if _live_behind(folder, stage):
+        return None
     return _scrubbed(doc, names)
+
+
+def _live_behind(folder: str, stage: dict) -> bool:
+    """Is the live prep saved for this round older than a change to the answers in its
+    interview_prep.md? Read from what it was written from (interview_live.behind); a prep saved
+    before it kept that is judged by when each file was saved, by its commit (saved_at)."""
+    import interview_live
+    import interview_pack
+    doc = interview_live.load(folder)
+    if not doc:
+        return False
+    label = str(stage.get("label") or "")
+    if label and doc.get("stage") and not interview_pack._same_round(doc["stage"], label):
+        return False
+    got = interview_live.behind(folder, doc)
+    if got is not None:
+        return got
+    made = saved_at(interview_live.path_for(folder))
+    changed = saved_at(os.path.join(folder, interview_pack.LIVING))
+    return made is not None and changed is not None and changed > made
 
 
 def _round_gone(day, clock, zone, ctx: Ctx) -> bool:

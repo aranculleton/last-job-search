@@ -437,7 +437,7 @@ def test_the_model_carries_the_prep_as_parts_and_the_rounds_as_they_stand(built)
     assert thanks == ["Thank-you note after your Copperleaf Pay interview"]
 
 
-def test_the_prep_on_a_phone_is_the_minutes_before_then_folded(run, built):
+def test_the_prep_on_a_phone_is_the_minutes_before_then_every_part_in_view(run, built):
     r = run("prep_reader", html=built["page"], id=LARKSPUR, viewport=PHONE, clock=NOW)
     assert not r["errors"], r["errors"]
     assert r["title"] == "Phone screen with Larkspur Retail"
@@ -452,11 +452,13 @@ def test_the_prep_on_a_phone_is_the_minutes_before_then_folded(run, built):
     assert "never joins, helps during" not in r["text"], r["text"][-300:]
     assert 2 <= r["parts"][0]["n"] <= 5 and 2 <= r["parts"][1]["n"] <= 3
     assert r["parts"][-1]["n"] <= 2
-    # Big type for the minutes before; the rest folded, one tap each.
+    # Big type for the minutes before; then every part in view under its own heading, a chip in
+    # the bar to each and nothing folded (issue 365: a fold a part, under the card, was a scroll
+    # and a tap away minutes before a call).
     assert r["glanceFont"] > r["bodyFont"]
     assert r["folds"][0] == "Likely questions" and "Stories" in r["folds"]
-    assert r["openAtFirst"] == 0 and r["openAfterTap"] == 1
-    # Everything once every fold is open: plain words, "Draft" above the one answer that is
+    assert r["openAtFirst"] == 0 and r["chips"][:2] == ["On one screen", "Questions"]
+    # Everything, nothing to open: plain words, "Draft" above the one answer that is
     # one, and no link but an employer's own page.
     assert not INTERNAL.search(r["text"]), INTERNAL.search(r["text"]).group(0)
     assert "(source:" not in r["text"] and "**" not in r["text"] and "->" not in r["text"]
@@ -464,7 +466,8 @@ def test_the_prep_on_a_phone_is_the_minutes_before_then_folded(run, built):
     assert r["text"].count("Draft") == 1
     outside = [h for h in r["links"] if not h.startswith("#")]
     assert outside and all(h.startswith("https://larkspur.example/") for h in outside), r["links"]
-    assert "Your CV, " in r["text"] and "Morgan_Ellis" not in r["text"]
+    # What was sent is on the interview's card, beside the prep, by its kind, never a file's name.
+    assert "Your CV, " in r["card"] and "Morgan_Ellis" not in r["card"] + r["text"]
     assert r["overflow"]["sw"] <= r["overflow"]["cw"]
 
 

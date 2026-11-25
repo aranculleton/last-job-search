@@ -509,8 +509,11 @@ METHODS: dict[str, dict] = {
             (57, "2026-11-11", False, "each answer in a live prep shows its points first and the script under them unless you say you would rather have the script first, and a change to that setting reaches the page without the prep being made again"),
             (58, "2026-11-12", False, "a live prep reads as you would say it: an answer ends where it ends, never on a line added to lead into a follow-up, and its points are whole phrases in your own words that may sum the script up, never pieces cut from it; the introduction is said once, as the answer to Tell me about yourself; the questions to ask them are a short reason and then the question, with nothing pasted in brackets; and a question about the work in a mixed round is asked in its coding part, never in the story part or the hello; a prep already made is kept as it is"),
             (59, "2026-11-16", False, "booking an interview's day (interview_pack.py book or process) adds it to the application's tracker notes too, so a note saying the day was still to choose is never the last word (issue 274); booked-days, an instant profile upgrade, puts right a tracker an older version left so; no prep changes"),
+            (60, "2026-11-25", True, "a question added to a prep under Your answers, and the follow-ups written under any answer, reach the page, the follow-ups no longer read as part of the answer above (issue 362); a technical question's prep carries the follow-ups an interviewer digs into, two deep, and a modelling answer is said from the model and method the profile records; each prep for a round still ahead is made again to carry them"),
+            (61, "2026-11-25", False, "a live prep keeps what the prep's answers said when it was written, and while one has changed since, the page shows the prep itself and the chat drawing the page is told to make the live one again; one saved before is judged by when each file was saved; a technical question's follow-ups go four or five deep, and a modelling answer names the model the profile records (issue 363); a live prep already made is shown as it is until then"),
+            (62, "2026-11-25", False, "a prep built for a new round leaves out the answers written only for the round held, kept apart beside it in earlier_answers.md, puts first the questions found hard there (asked --landed no or partly), and fails its check over MAX_PACK_CHARS characters; book says to record what was hard and build for the round booked only (issue 364); the rerun of version 60 makes each prep ahead again"),
         ),
-        "fingerprint": "59cc176ca7e5cd21",
+        "fingerprint": "5d30cd3fc50d6f15",
     },
     "research": {
         "by": "upgrade", "priority": 3, "applies": "live_applications", "time": "~5 min each",
@@ -1248,8 +1251,9 @@ METHODS: dict[str, dict] = {
             (220, "2026-11-19", True, "a day's card holds its own time column, 5rem only where one of its rows says End of day or All day, so the other days keep their titles' width on a phone"),
             (221, "2026-11-19", True, "a quiet button leading its line is drawn in by its padding, never laid out in, so it never fits back over the gauge on the line above"),
             (222, "2026-11-19", False, "the tour's To do step says Later puts a card off, and its Contacts step names each person's card, not the Messages view the redesign took away"),
+            (223, "2026-11-25", True, "an interview's prep is a place of its own: Read your prep on an employer's or an interview's card, To do, Coming up and the Brief opens it full screen at its own address, the role and the round said under its day, on the one-screen summary with every likely question one tap away, each part in view under a bar that goes to it, follow-ups under their question at any depth; the cards no longer hold the prep (issue 365)"),
         ),
-        "fingerprint": "04af0cd58fb2003e",
+        "fingerprint": "a9dfa438739390b3",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",

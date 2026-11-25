@@ -146,15 +146,19 @@ def test_what_tamsin_asked_for_is_one_task_in_one_wording_on_every_screen(run, t
 WIDTH = r"""(() => { const d = document.querySelector('dialog.detail[open]'); return d ? [Math.round(d.getBoundingClientRect().width), d.innerText] : null; })()"""
 
 
-def test_an_interview_card_is_680_wide_without_a_prep_and_never_says_no_prep_twice(run, tmp_path):
+def test_an_interview_card_is_680_wide_and_never_says_no_prep_twice(run, tmp_path):
     got = _go(run, tmp_path, [
         {"hash": "interviews/int-copperleaf-payments/open", "ready": "!!document.querySelector('dialog.detail[open]')", "eval": WIDTH},
-        {"hash": "interviews/int-larkspur-supply/open", "ready": "!!document.querySelector('dialog.detail[open] .prep-main')", "eval": WIDTH},
+        {"hash": "interviews/int-larkspur-supply/open", "ready": "!!document.querySelector('dialog.detail[open] .prep-side')", "eval": WIDTH},
+        {"hash": "interviews/prep~int-larkspur-supply/open", "ready": "!!document.querySelector('dialog.detail[open] .lp.pv')", "eval": WIDTH + ".concat([innerWidth])"},
     ], WIDE, clock=T)
-    (w0, text0), (w1, _text1) = got["after"][0]["eval"], got["after"][1]["eval"]
+    (w0, text0), (w1, text1), (w2, _text2, vw) = (a["eval"] for a in got["after"])
     assert w0 == 680 and "No prep yet" not in text0 and "Get your prep" in text0, (w0, text0[:300])
-    # With a prep to read beside its stages, it is wide.
-    assert w1 > 680, w1
+    # With a prep to read, the card is a card as every other is, its Next saying where the prep
+    # is; the prep is read in a place of its own, the whole screen (issue 365: wide, the prep
+    # still sat in the card under its stages, a scroll away minutes before a call).
+    assert w1 == 680 and "Read your prep" in text1 and "Before you go in" not in text1, (w1, text1[:300])
+    assert w2 == vw, (w2, vw)
 
 
 # ------------------------------------------------------------------ names in a card's facts

@@ -383,7 +383,13 @@ def test_a_follow_up_four_deep_is_caught(ready_doc):
     def deep(d):
         node = {"who": "peer", "q": "And then?", "simple": "Then the planners took it on. They "
                                                          "still run it.", "follow": []}
-        d["questions"][0]["follow"] = [dict(node, follow=[dict(node, follow=[dict(node, follow=[dict(node)])])])]
+        # A question a technical interviewer digs into goes five deep at most (issue 363,
+        # tests/test_a_live_prep_follows_the_answers_it_was_made_from.py); any other, three.
+        kinds = {p["id"]: p["kind"] for p in d["parts"]}
+        q = next(x for x in d["questions"] if not L.is_technical(dict(x, who="manager"), kinds[x["part"]])
+                 and kinds[x["part"]] not in ("close",))
+        q["who"] = "manager"
+        q["follow"] = [dict(node, follow=[dict(node, follow=[dict(node, follow=[dict(node)])])])]
     assert any("three deep" in w for w in _one(ready_doc, deep))
 
 

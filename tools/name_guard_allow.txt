@@ -825,3 +825,4 @@ Bramblegate Lending     # invented employer, tests/test_an_interview_that_ended_
 Brindlemoor Freight     # invented employer, tests/test_an_interview_that_ended_is_finished_in_coming_up.py
 Quillfeather Health     # invented employer, tests/test_an_interview_that_ended_is_finished_in_coming_up.py
 Larchmere Insurance     # invented employer, tests/test_an_interview_that_ended_is_finished_in_coming_up.py
+Monte Carlo             # a method, not a person: tools/interview_pack.py _METHODS

@@ -293,6 +293,15 @@ DANGLING = frozenset((
 # Follow-ups a node: two or three under a question, then up to three, then up to two.
 FOLLOW_N = (2, 3)
 FOLLOW_MAX = {2: 3, 3: 2}
+# A technical question goes deeper: a technical interviewer digs three to five layers into one
+# answer (why that model, then how it was compared, then how the split was made...), so its
+# follow-ups are two to four, the likeliest line of them at least four deep and at most five
+# (issue 363: every question had exactly two follow-ups, three deep at most).
+TECH_PARTS = ("technical", "probes", "presenting")
+FOLLOW_N_TECH = (2, 4)
+FOLLOW_MAX_TECH = {2: 3, 3: 2, 4: 2, 5: 2}
+TECH_DEPTH = 4
+MAX_DEPTH_TECH = 5
 FOLLOW_Q_WORDS = 12
 TERM_PLAIN_WORDS = 25
 TERM_LIKE_WORDS = 30
@@ -1896,27 +1905,66 @@ def intro_question(doc, part):
                  if q.get("part") == part.get("id") and kind_of(q.get("q")) == "opening"), None)
 
 
-def _tree_checks(q, where) -> list:
+def is_technical(q, kind="") -> bool:
+    """Is this a question a technical interviewer digs into: one in a technical part, or one
+    the technical interviewer asks? A problem set to work aloud is not: what comes after it is
+    its own steps, cases and what next (`_coding_checks`)."""
+    if _TASK.search(_t((q or {}).get("q"))):
+        return False
+    return kind in TECH_PARTS or (q or {}).get("who") == "technical"
+
+
+def depth_for(tech) -> tuple:
+    """(how few and how many follow-ups a question has, how many under each by depth, how deep
+    its likeliest line must go, how deep any may go)."""
+    if tech:
+        return FOLLOW_N_TECH, FOLLOW_MAX_TECH, TECH_DEPTH, MAX_DEPTH_TECH
+    return FOLLOW_N, FOLLOW_MAX, MAX_DEPTH, MAX_DEPTH
+
+
+def _tree_checks(q, where, tech=False) -> list:
     """A question written the live way has two or three follow-ups, then up to three under
     each, then up to two, and at least one line of them three deep, so whatever they ask next
-    has its answer ready."""
+    has its answer ready. A technical one has two to four, and its likeliest line goes four or
+    five deep: follow-ups to the follow-ups, as far as a technical interviewer digs."""
     out = []
-    lo, hi = FOLLOW_N
+    (lo, hi), most_at, need, deepest_allowed = depth_for(tech)
     own = [f for f in q.get("follow") or [] if isinstance(f, dict)]
     if not lo <= len(own) <= hi:
-        out.append((where, "it has %d follow-up%s: give it %d or %d, the likeliest first"
-                    % (len(own), "" if len(own) == 1 else "s", lo, hi)))
+        out.append((where, "it has %d follow-up%s: give it %d %s %d, the likeliest first"
+                    % (len(own), "" if len(own) == 1 else "s", lo,
+                       "or" if hi == lo + 1 else "to", hi)))
     deepest = 0
     for f, depth, here in _nodes(q, where=where):
         deepest = max(deepest, depth)
         n = len([x for x in f.get("follow") or [] if isinstance(x, dict)])
-        most = FOLLOW_MAX.get(depth + 1, 0)
-        if depth < MAX_DEPTH and n > most:
+        most = most_at.get(depth + 1, 0)
+        if depth < deepest_allowed and n > most:
             out.append((here, "it has %d follow-ups: keep it to %d" % (n, most)))
-    if own and deepest < MAX_DEPTH:
+    if own and deepest < need:
         out.append((where, "no line of its follow-ups goes %d deep: take the likeliest one "
-                           "further, a question and its answer at each step" % MAX_DEPTH))
+                           "further, a question and its answer at each step%s"
+                    % (need, ", as a technical interviewer digs" if tech else "")))
     return out
+
+
+def _method_checks(q, where, doc) -> list:
+    """A modelling answer told with a story says the model and method the profile records for
+    that story, never only the language it was written in ("in SQL and Python") (issues 362
+    and 363). Only where the profile records one: the person is never pushed to name a model
+    their records do not hold."""
+    import interview_pack as P
+    if not q.get("story") or not P.technical(q.get("q")):
+        return []
+    st = next((s for s in doc.get("stories") or [] if s.get("id") == q["story"]), None)
+    if not st:
+        return []
+    recorded = P.recorded_methods(" ".join(_t(v) for v in (st.get("star") or {}).values()))
+    said = " ".join(_t(x) for x in (_said(q), q.get("detailed")) if _t(x))
+    if recorded and said and P.language_only(said, recorded):
+        return [(where, "it says what the model was written in and not the model: say the model "
+                        "and method your profile records for it (%s)" % ", ".join(recorded))]
+    return []
 
 
 def _coding_checks(p) -> list:
@@ -2192,18 +2240,21 @@ def problems(doc, ctx=None) -> list:
             out.append((where, "it is in no part of the interview"))
         if q.get("who") not in PERSONAS:
             out.append((where, "say who is likely to ask it"))
+        tech = is_technical(q, kind)
         if _live_way(q):
             out += _live_checks(q, where, terms, 0, kind in _NO_DETAIL)
             if kind not in _NO_DETAIL:
-                out += _tree_checks(q, where)
+                out += _tree_checks(q, where, tech)
         else:
             out += _answer_checks(q, where, terms, kind not in _NO_DETAIL)
         if q.get("story") and not any(s["id"] == q["story"] for s in doc.get("stories") or []):
             out.append((where, "it is answered with a story that is not among yours"))
+        out += _method_checks(q, where, doc)
+        top = depth_for(tech)[3]
         for f, depth, here in _nodes(q, where=where):
-            if depth > MAX_DEPTH:
-                out.append((here, "follow-ups go three deep at most: fold this one into the one "
-                                  "above"))
+            if depth > top:
+                out.append((here, "follow-ups go %s deep at most: fold this one into the one "
+                                  "above" % ("five" if tech else "three")))
             if f.get("who") not in PERSONAS:
                 out.append((here, "say who is likely to ask it"))
             out += (_live_checks(f, here, terms, depth, False) if _live_way(f)
@@ -2408,6 +2459,48 @@ def ready(doc) -> bool:
             and (doc.get("checked") or {}).get("problems") == 0)
 
 
+def prep_signature(folder) -> str:
+    """What the answers in the living document say now, as one short fingerprint: every
+    question under Your answers with what is written to say under it and under each of its
+    follow-ups. A rebuild of the document that changes none of those (its date, a source, a
+    follow-up still to write) leaves it as it was; a corrected answer changes it."""
+    import hashlib
+    import interview_pack as P
+    try:
+        with open(os.path.join(folder, P.LIVING), encoding="utf-8") as fh:
+            text = fh.read()
+    except OSError:
+        return ""
+    rows = []
+    for key, (_q, body) in sorted(P.answer_blocks(P.owned_sections(text).get("Your answers")).items()):
+        said = [" ".join(" ".join(P.spoken(body)).split())]
+        said += ["%s: %s" % (_norm(fq), " ".join(" ".join(lines).split()))
+                 for fq, lines in P._follow_said(body) if " ".join(lines).strip()]
+        if any(said):
+            rows.append("%s\n%s" % (key, "\n".join(said)))
+    return hashlib.sha1("\n\n".join(rows).encode("utf-8")).hexdigest()[:16] if rows else ""
+
+
+def behind(folder, doc=None):
+    """Has an answer in the living document changed since this live prep was written from it?
+    True or False; None for a prep written before it kept what it was written from (the page
+    judges that one by when each file was saved). The live screen draws its questions, points
+    and follow-ups from this file, so a correction made only to interview_prep.md never reached
+    it, and nothing said so (issue 363)."""
+    doc = doc if doc is not None else load(folder)
+    if not doc:
+        return False
+    if "prep_sig" not in doc:
+        return None
+    return _t(doc.get("prep_sig")) != prep_signature(folder)
+
+
+BEHIND = ("the answers in its interview_prep.md changed after it was written, so the page shows "
+          "the prep itself until it is built again: carry the changed answers into its words "
+          "(python3 tools/interview_pack.py live \"%s\" --role \"%s\" --stage \"%s\" --out "
+          "<scratch>/live.json, then live --fill <your words file> --write)")
+
+
 def write(ctx, filled) -> tuple:
     """(path or "", problems): the records' prep with Claude's words, written beside the
     living document only once every check passes."""
@@ -2417,6 +2510,9 @@ def write(ctx, filled) -> tuple:
         return "", found
     doc["checked"] = {"on": ctx.get("today") or dt.date.today().isoformat(), "problems": 0,
                       "drafts": len(drafts(doc))}
+    # What the living document's answers said when this was written from them: the page and
+    # every check can tell when one has changed since (`behind`).
+    doc["prep_sig"] = prep_signature(ctx["folder"])
     path = path_for(ctx["folder"])
     os.makedirs(ctx["folder"], exist_ok=True)
     with open(path, "w", encoding="utf-8", newline="\n") as fh:
@@ -2440,6 +2536,7 @@ def for_page(doc) -> dict | None:
         _follow_once(p, [q for qid in p.get("questions") or [] for q in out["questions"] if q["id"] == qid])
     for q in out["questions"]:
         q.pop("from", None)
+    out.pop("prep_sig", None)
     out["drafts"] = (out.pop("checked", None) or {}).get("drafts", 0)
     out["personas"] = dict(PERSONAS)
     # The person's own setting as it is now, so a change reaches the page without making the

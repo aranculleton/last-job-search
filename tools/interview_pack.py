@@ -1856,7 +1856,17 @@ def likely_questions(ctx) -> list:
             out.append(dict({"question": q, "why": why, "source": source}, **extra))
 
     bank_src = "/".join(what_works.BANK)
+    # A question the person found hard in a round here (`asked --landed no` or `partly`, from
+    # the debrief) comes back first, as one to prepare again: lessons from a round never fed
+    # the next (issue 364).
+    hard = [r for r in ctx["bank"] if company_key(r.get("company")) == k
+            and _text(r.get("question")) and not _text(r.get("source"))
+            and _text(r.get("landed")).lower() in HARD_LANDED]
     group = {
+        "hard": [(r["question"], "you found it hard at %s, %s: prepare it again%s" % (
+                      _text(r.get("stage")) or "a stage", _text(r.get("date")) or "undated",
+                      " (%s)" % _text(r.get("note")) if _text(r.get("note")) else ""),
+                  bank_src, {}) for r in hard],
         "map": [],
         "here": [(r["question"], "%s (%s, %s)" % (
                       "reported by " + _text(r.get("source")) if _text(r.get("source"))
@@ -1917,11 +1927,11 @@ def likely_questions(ctx) -> list:
     # "Tell me about yourself" (2026-10-20). A later stage leads on what came back from
     # the one before.
     order = {
-        "screen": [stage[:3], "map", "here", group["gaps"][:1], stage[3:6], "cond", "format",
-                   stage[6:], "reqs", group["gaps"][1:], "again"],
-        "technical": ["map", "here", "reqs", "gaps", "format", "stage", "again"],
-        "final": ["map", "here", stage[:1], group["gaps"][:1], stage[1:], "format", "reqs",
-                  group["gaps"][1:], "again"],
+        "screen": [stage[:3], "hard", "map", "here", group["gaps"][:1], stage[3:6], "cond",
+                   "format", stage[6:], "reqs", group["gaps"][1:], "again"],
+        "technical": ["hard", "map", "here", "reqs", "gaps", "format", "stage", "again"],
+        "final": ["hard", "map", "here", stage[:1], group["gaps"][:1], stage[1:], "format",
+                  "reqs", group["gaps"][1:], "again"],
         "offer": ["map", "here"],
     }[step if step in STAGE_QUESTIONS else "technical"]
     for part in order:
@@ -1929,6 +1939,10 @@ def likely_questions(ctx) -> list:
             add(question, why, source, **extra)
     # "Everything" (Tweak I2) shows a third more questions; the rest of the pack is the same.
     return out[:MAX_QUESTIONS + (6 if person.get("prep.detail", "") == "everything" else 0)]
+
+
+# How a question the person found hard is recorded in the bank (`asked --landed`).
+HARD_LANDED = ("no", "partly")
 
 
 # A question about pay, by whole word: "payments data" and "Payward" are not pay.
@@ -2170,6 +2184,16 @@ def answer_for(item, ctx) -> dict:
         lines.insert(0, ask)
     if story:
         lines.append("Story: %s (%s; source: %s)" % (story["title"], how, story["source"]))
+        if technical(q):
+            star = " ".join(_text(v) for v in story["star"].values())
+            found = recorded_methods(star)
+            if found:
+                lines.append("%s %s (source: %s). Name them, never only the language it was "
+                             "written in." % (METHOD_MARK, ", ".join(found), story["source"]))
+            elif _LANGUAGE_ONLY.search(star):
+                lines.append("%s, only the language it was written in: say which model it was "
+                             "and how you checked it, and tell Claude so the profile records it, "
+                             "or ask Claude for a draft to confirm." % NO_METHOD_MARK)
     elif mapped:
         lines.append("Matched to \"%s\", which is not one of your stories: check its title."
                      % mapped)
@@ -4377,8 +4401,162 @@ OLD_ANSWERS_INTRO = ("What you will say goes under each question, as sentences. 
 
 
 def spoken(body) -> list:
-    """The lines of an answer the person will say: their own words with every note out."""
-    return prep.spoken_lines(_own_words(body))
+    """The lines of an answer the person will say: their own words with every note out, and
+    never the follow-ups written under it (`follow_ups`), which are answers of their own."""
+    return prep.spoken_lines(split_follow(_own_words(body))[0])
+
+
+# A follow-up written under an answer, as a chat writes one when the person asks for deeper
+# prep: `**If they follow up: "Why that model?"**`, its answer on the lines under it, and one
+# asked after it indented two spaces a level deeper. Added hours before an interview, these
+# never reached the page, and their lines were read as part of the answer above (issue 362).
+_FOLLOW_LINE = re.compile(
+    r"^(?P<indent>[ \t]*)(?:[-*+][ \t]+)?If (?:they|the interviewer|he|she) "
+    r"(?:follows? up|asks?|press(?:es)?|push(?:es)?|probes?|digs?)\b[^:\"“]*:[ \t]*"
+    r"(?:[\"“](?P<quoted>[^\"”]+)[\"”]|(?P<bare>[^\"“”]+?\?))[ \t]*(?P<rest>.*)$", re.I)
+FOLLOW_MARK = "**If they follow up: \"%s\"**"
+
+
+def follow_line(line):
+    """(depth from 1, the question, the words on the same line) for a follow-up's line, else
+    None."""
+    m = _FOLLOW_LINE.match(str(line or "").replace("**", "").replace("__", ""))
+    if not m:
+        return None
+    indent = len(m.group("indent").expandtabs(2))
+    q = (m.group("quoted") or m.group("bare") or "").strip()
+    return (indent // 2 + 1, q, m.group("rest").strip(" :")) if q else None
+
+
+def split_follow(lines) -> tuple:
+    """(the answer's own lines, its follow-ups as [{q, lines, follow}]) for an answer block: a
+    follow-up's lines run to the next follow-up, at any depth, each under the nearest one above
+    it that is less deep."""
+    head, roots, stack = [], [], []
+    for ln in lines or ():
+        got = follow_line(ln)
+        if got:
+            depth, q, rest = got
+            node = {"q": q, "lines": [rest] if rest else [], "follow": [], "depth": depth}
+            while stack and stack[-1]["depth"] >= depth:
+                stack.pop()
+            (stack[-1]["follow"] if stack else roots).append(node)
+            stack.append(node)
+        elif stack:
+            stack[-1]["lines"].append(ln.strip() if ln.strip() else "")
+        else:
+            head.append(ln)
+    return head, roots
+
+
+def follow_ups(body) -> list:
+    """The follow-ups written under an answer, as the page shows them: [{question, answer,
+    draft, follow}], `answer` None while one is unwritten, `follow` the ones asked after it."""
+    def said(node):
+        words = [prep.uncue(x).strip() for x in prep.spoken_lines(node["lines"]) if x.strip()]
+        return {"question": _plain(node["q"]), "answer": " ".join(words) or None,
+                "draft": prep.drafted(node["lines"]), "follow": [said(f) for f in node["follow"]]}
+    return [said(f) for f in split_follow(_own_words(body))[1]]
+
+
+def _follow_said(body) -> list:
+    """[(question, [lines said])] for every follow-up under an answer, at any depth: what the
+    checks read as the person's own words, as they read the answer above."""
+    out = []
+
+    def walk(nodes):
+        for n in nodes:
+            out.append((n["q"], prep.spoken_lines(n["lines"])))
+            walk(n["follow"])
+    walk(split_follow(_own_words(body))[1])
+    return out
+
+
+# Likely follow-ups to a technical or modelling answer, the likeliest first, each with the one
+# asked after it: what a technical interviewer digs into (issue 362: model choice, class
+# imbalance, overfitting, monitoring after launch, sign-off). Written under each technical
+# question of a pack as follow-ups to answer, never as words to say.
+TECH_FOLLOW = (
+    (r"\bwhy\b|choos|chose|approach|model", "Why that model, and not a simpler one?",
+     "What did you compare it against, and how?"),
+    (r"validat|check|test|accura|error|overfit|work", "How did you know it wasn't overfitting?",
+     "How did you split the data, and why that way?"),
+    (r"product|deploy|launch|live|monitor|pipeline", "How was it monitored after launch?",
+     "What would have made you retrain it?"),
+    (r"imbalanc|rare|fraud|risk|default|churn|classif|rank", "How did you handle the rare cases, "
+     "the class imbalance?", "How did you pick the cut-off?"),
+    (r"stakeholder|business|sign|decision|trust", "Who signed it off, and what did they need "
+     "to see?", "What did you do when they pushed back?"),
+)
+TECH_FOLLOW_N = 3
+_TECHNICAL_Q = re.compile(r"\bmodel|forecast|predict|machine learning|validat|algorithm|"
+                          r"check the result|"
+                          r"statistic|overfit|\bfeatures?\b|a/b test|experiment|\bsql\b|"
+                          r"\bpython\b|pipeline|data quality|\bdeploy|production", re.I)
+
+
+def technical(question) -> bool:
+    """Is this a question a technical interviewer digs into, a layer at a time?"""
+    return bool(_TECHNICAL_Q.search(_text(question)))
+
+
+def tech_follow_lines(question) -> list:
+    """The follow-ups to prepare under a technical question, two deep: the likeliest for what
+    it asks first, as lines of the document (`FOLLOW_MARK`), each answered under it."""
+    q = _text(question)
+    ranked = sorted(TECH_FOLLOW, key=lambda t: not re.search(t[0], q, re.I))[:TECH_FOLLOW_N]
+    out = []
+    for _rx, first, second in ranked:
+        out += [FOLLOW_MARK % first, "  " + FOLLOW_MARK % second]
+    return out
+
+
+# The model and the method a modelling story was done with, as a profile records them: an
+# answer names these, never only the language it was written in (issue 362, "in SQL and
+# Python" said for a risk model the profile records as gradient-boosted trees).
+_METHODS = re.compile(
+    r"\b(?:(?:logistic|linear|ridge|lasso|poisson|quantile|multiple)\s+regression|regression|"
+    r"XGBoost|LightGBM|CatBoost|gradient[- ]boost(?:ed|ing)?(?:\s+trees?)?|random forests?|"
+    r"decision trees?|neural (?:net|network)s?|deep learning|S?ARIMA|exponential smoothing|"
+    r"Holt-Winters|Prophet|k-means|clustering|survival analys[ie]s|Bayesian|Monte Carlo|SHAP|"
+    r"cross[- ]validation|backtest(?:ing|s)?|hold-?out|A/B tests?|difference[- ]in[- ]differences|"
+    r"propensity|uplift|scorecards?|isolation forest|naive Bayes|transformers?|elasticity|"
+    r"linear programming|MAPE|RMSE|AUC)\b", re.I)
+_LANGUAGE_ONLY = re.compile(r"\b(?:in|with|using)\s+(?:Python|SQL|R|Excel)\b"
+                            r"(?:,?\s+(?:and|&)\s+(?:Python|SQL|R|Excel)\b)?", re.I)
+METHOD_MARK = "The model and method your profile records for it:"
+NO_METHOD_MARK = "Your profile records no model or method for this story"
+_NUMBER = re.compile(r"\d[\d,.]*\s?(?:%|k|K|M|B|bn|x)?")
+
+
+def methods_in(text) -> list:
+    """The models and methods a text names, each once, as it names them."""
+    out = []
+    for m in _METHODS.finditer(_text(text)):
+        if m.group(0).lower() not in {x.lower() for x in out}:
+            out.append(m.group(0))
+    return out
+
+
+def recorded_methods(star_text, profile_text=None) -> list:
+    """The models and methods the profile records for one story: those its own words name, and
+    those of a profile line about the same work (one sharing a figure with it)."""
+    found = methods_in(star_text)
+    if profile_text is None:
+        profile_text = _read(person.file("candidate_profile", "01-candidate-profile.md"))
+    figures = {n.strip() for n in _NUMBER.findall(_text(star_text)) if len(n.strip()) > 1}
+    for ln in str(profile_text or "").splitlines():
+        if figures & {n.strip() for n in _NUMBER.findall(ln)}:
+            found += [x for x in methods_in(ln) if x.lower() not in {f.lower() for f in found}]
+    return found
+
+
+def language_only(text, methods=()) -> bool:
+    """Does an answer say what a model was written in and none of the models or methods it
+    was done with?"""
+    t = _text(text)
+    named = methods_in(t) or [m for m in methods if m.lower() in t.lower()]
+    return bool(_LANGUAGE_ONLY.search(t)) and not named
 
 
 def _restates(body, checking, hear) -> bool:
@@ -4418,20 +4596,34 @@ def answer_lines(ctx, answered) -> list:
         if spoken(body):
             out += body
         else:
-            # Notes kept, and still to write: the marker and what to say it from.
+            # Notes kept, and still to write: the marker and what to say it from, the model
+            # and method a modelling story was done with among them wherever it falls.
             out.append(TO_WRITE)
-            out += ["- From: %s" % plain_sources(re.sub(r"^Say: ", "", ln))
-                    for ln in a["lines"][:ANSWER_NOTES]]
+            froms = a["lines"][:ANSWER_NOTES] + [ln for ln in a["lines"][ANSWER_NOTES:]
+                                                 if ln.startswith((METHOD_MARK, NO_METHOD_MARK))]
+            out += ["- From: %s" % plain_sources(re.sub(r"^Say: ", "", ln)) for ln in froms]
             out += ([""] + body) if body else []
+        # A technical question has the follow-ups an interviewer digs into beneath it, two
+        # deep, each to answer under its own line; once written (or any written by hand),
+        # they are the person's and are kept as they are.
+        if technical(q["question"]) and not split_follow(body)[1]:
+            out += [""] + tech_follow_lines(q["question"])
         out.append("")
     # An answer written for a question this stage does not list (an earlier stage's, one the
     # person added, one reworded since) is never dropped: it follows, as they wrote it.
     asked = {what_works._norm(q["question"]) for q, _a in answered}
     for key, (q, body) in kept.items():
         mine = _own_words(body)
-        if key not in asked and mine:
+        if key not in asked and (written_answer(body) or any(
+                ln.strip() and not follow_line(ln) for ln in mine)):
             out += ["### %s" % q] + mine + [""]
     return out
+
+
+def written_answer(body) -> bool:
+    """Has anything under a question been written to say: its answer, or a follow-up's?"""
+    return bool(" ".join(spoken(body)).strip()) or any(
+        " ".join(said).strip() for _q, said in _follow_said(body))
 
 
 def check(path) -> list:
@@ -4488,6 +4680,16 @@ def check(path) -> list:
     # to confirm, and listed as one.
     said = [(q, body) for q, body in list(blocks.values()) + list(elsewhere.values())
             if not drafted(body) and " ".join(spoken(body)).strip()]
+    # The follow-ups written under an answer are said as the person's own too, and read the
+    # same way: the place this employer heard, and every number the profile's.
+    for q, body in list(blocks.values()) + list(elsewhere.values()):
+        for fq, lines in _follow_said(body):
+            if not " ".join(lines).strip() or drafted(lines):
+                continue
+            where = places_told.clash(" ".join(lines), company) if company else ""
+            if where:
+                out.append(("%s, then \"%s\"" % (q, fq), where))
+            said.append(("%s, then \"%s\"" % (q, fq), lines))
     out += _ungrounded_numbers(text, said)
     # A gap to fill anywhere in the document, under any heading: "[FILL IN: the hardest
     # moment]" sat in an answer under a story's heading, which no question block reads.
@@ -4499,6 +4701,12 @@ def check(path) -> list:
     # A label on a line of its own above the words to say ("SAY."): shown as a bullet of
     # its own among them (2026-11-07).
     out += prep.cue_lines(text)
+    # Short, and for the next round: a pack that only grew reached about 68 KB (issue 364).
+    if len(text) > MAX_PACK_CHARS:
+        out.append(("the document", "it is %d characters long, over the %d a prep for the next "
+                    "round keeps to: cut what this round does not need (notes kept from older "
+                    "builds, sections of your own that repeat the stories)"
+                    % (len(text), MAX_PACK_CHARS)))
     # What it says an employer heard, against what the profile says now: a pack built when
     # one employer heard one city kept saying so after the person told it another (2026-11-03).
     for m in _TOLD_LINE.finditer(text):
@@ -4980,7 +5188,11 @@ def pack_markdown(ctx, never_say=None) -> str:
                       "Nothing researched to anchor a question on.")
     lines += _section("Warm route", prep._flag_banned(warm_lines(ctx), banned),
                       "Nobody in the contact book at %s." % ctx["company"])
-    lines += _section("Earlier stages", earlier_lines(ctx), "No earlier stage on record.")
+    earlier = earlier_lines(ctx)
+    if (ctx.get("retired") or ("", []))[1] or os.path.exists(os.path.join(ctx["folder"],
+                                                                         EARLIER_ANSWERS)):
+        earlier.append(EARLIER_LINE)
+    lines += _section("Earlier stages", earlier, "No earlier stage on record.")
     lines += _section("To rework", ctx["rework"], REWORK_EMPTY)
     notes = [ln for ln in owned.get("Notes", []) if ln.strip() != NOTES_EMPTY]
     while notes and not notes[0].strip():
@@ -5383,14 +5595,87 @@ def _missing(lines, text) -> list:
     return out
 
 
+# A pack is for the next round only (issue 364: one built round after round kept every
+# answer of every round and reached about 68 KB, leading with rounds already held). Answers
+# written only for a round already held are moved out of it, into this file beside it, when it
+# is built for another round; nothing is lost, and Claude brings any back the person wants.
+EARLIER_ANSWERS = "earlier_answers.md"
+EARLIER_HEAD = ("# Answers from earlier rounds\n\nWhat you wrote for rounds already held, moved "
+                "out of the prep for the round to come. Nothing here is lost: ask Claude to "
+                "bring any back.\n")
+EARLIER_LINE = ("- Your answers written only for earlier rounds are kept apart from this one; "
+                "ask Claude to bring any back.")
+# How long a pack may grow, in characters: one for the next round, read the night before.
+MAX_PACK_CHARS = 45000
+
+
+def retired(ctx) -> tuple:
+    """(the living document without the answers only an earlier round asked, those answers as
+    [(question, lines)], the round they were written for). Nothing moves while the pack is
+    built for the round it was last built for, or for a round not named: an answer added for
+    this round stays where it was written."""
+    text = str(ctx.get("living") or "")
+    was = _text(last_build(ctx["folder"]).get("stage")) if text else ""
+    if not was or not _text(ctx.get("stage")) or _same_round(was, ctx["stage"]):
+        return text, [], was
+    asked = {what_works._norm(q["question"]) for q in likely_questions(ctx)}
+    lines = text.splitlines()
+    out, moved, i, here, fenced = [], [], 0, False, False
+    while i < len(lines):
+        ln = lines[i]
+        if re.match(r"^\s*(```|~~~)", ln):
+            fenced = not fenced
+        if not fenced and ln.startswith("## "):
+            here = ln.strip() == "## Your answers"
+        head = re.match(r"^### (.*)$", ln) if here and not fenced else None
+        if head:
+            j = i + 1
+            while j < len(lines) and not re.match(r"^#{2,3} ", lines[j]):
+                j += 1
+            body = lines[i + 1:j]
+            if what_works._norm(head.group(1).strip()) not in asked and written_answer(body):
+                moved.append((head.group(1).strip(), _own_words(
+                    [b for b in body if not b.startswith(INTENT_MARK)])))
+                i = j
+                continue
+        out.append(ln)
+        i += 1
+    if not moved:
+        return text, [], was
+    return "\n".join(out) + ("\n" if text.endswith("\n") else ""), moved, was
+
+
+def keep_earlier(folder, was, moved, today) -> str:
+    """Append answers moved out of the living document to EARLIER_ANSWERS beside it, under the
+    round they were written for; an answer already kept there is not added twice."""
+    path = os.path.join(folder, EARLIER_ANSWERS)
+    old = _read(path) or EARLIER_HEAD
+    block = ["", "## %s (moved out %s)" % (was or "An earlier round", today), ""]
+    for q, body in moved:
+        piece = "\n".join(["### %s" % q] + body).strip()
+        if piece and piece not in old:
+            block += [piece, ""]
+    if len(block) > 3:
+        with open(path, "w", encoding="utf-8", newline="\n") as fh:
+            fh.write(old.rstrip("\n") + "\n" + "\n".join(block).rstrip("\n") + "\n")
+    return path
+
+
 def _rebuild(ctx, never_say=None) -> tuple:
     """(the document a rebuild writes, the lines kept at the end of Notes from an older build,
-    what the tool itself wrote)."""
-    new = pack_markdown(ctx, never_say)
+    what the tool itself wrote). Built for another round than the last build, the answers only
+    the earlier round asked are left out (`retired`), and listed in ctx["retired"]."""
     path = living_path(ctx)
+    old = _read(path)
+    trimmed, moved, was = retired(ctx)
+    ctx["retired"] = (was, moved)
+    if moved:
+        ctx = dict(ctx, living=trimmed)
+        old = trimmed
+    new = pack_markdown(ctx, never_say)
     record = built_record(ctx["folder"])
     try:
-        text, leftovers = merge_living(_read(path), new, record["generated"] if record else None)
+        text, leftovers = merge_living(old, new, record["generated"] if record else None)
     except WouldLose as exc:
         raise WouldLose("%s: %s" % (_rel(path), exc)) from None
     return text, leftovers, new
@@ -5411,6 +5696,9 @@ def write_pack(ctx, never_say=None) -> str:
     path = living_path(ctx)
     os.makedirs(ctx["folder"], exist_ok=True)
     text, leftovers, new = _rebuild(ctx, never_say)
+    was, moved = ctx.get("retired") or ("", [])
+    if moved:
+        keep_earlier(ctx["folder"], was, moved, ctx.get("today") or person.today().isoformat())
     with open(path, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(text)
     # The stories the session chose (--map), kept for this round alone: a later round
@@ -5683,7 +5971,20 @@ def practice(text) -> dict:
         mine = (written.get(what_works._norm(q)) or ("", []))[1]
         said = [prep.uncue(x).strip() for x in spoken(mine) if x.strip()]
         qs.append({"question": q, "why": _plain(why) or None,
-                   "answer": " ".join(said) or None, "draft": prep.drafted(mine)})
+                   "answer": " ".join(said) or None, "draft": prep.drafted(split_follow(mine)[0]),
+                   "follow": follow_ups(mine), "added": False})
+    # A question written under Your answers that Likely questions does not list (one a chat
+    # added for deeper prep, an earlier round's, one reworded) is practised and shown too:
+    # only the listed ones reached the page (issue 362).
+    listed = {what_works._norm(x["question"]) for x in qs}
+    for key, (q, mine) in written.items():
+        if key in listed or not (written_answer(mine) or split_follow(_own_words(mine))[1]):
+            continue
+        listed.add(key)
+        said = [prep.uncue(x).strip() for x in spoken(mine) if x.strip()]
+        qs.append({"question": _plain(q), "why": None, "answer": " ".join(said) or None,
+                   "draft": prep.drafted(split_follow(mine)[0]), "follow": follow_ups(mine),
+                   "added": True})
     return {"questions": qs, "reworked": rework_lines(text),
             "bands": list(BANDS), "min_quote_words": MIN_QUOTE_WORDS}
 
@@ -5924,10 +6225,13 @@ def _doc_parts(text) -> list:
 def reading(text, company="") -> dict | None:
     """The prep as the page reads it, in plain words, from any version of the document:
     {glance {assessing, hear, say [text], ask [text], money, careful [text], hooks [{text,
-    link}]}, questions [{question, why, answer, draft, cue, checking, notes [text]}],
+    link}]}, questions [{question, why, answer, draft, cue, checking, notes [text], follow
+    [{question, answer, draft, follow}], added}],
     sections [{key, title, items}], live}. `answer` is what the person wrote to say, `draft`
     true only where that answer still carries a draft's mark, `cue` what to answer with
-    while it is unwritten. None for an empty document."""
+    while it is unwritten, `follow` the follow-ups written under it at every depth, `added`
+    true for a question written under Your answers that Likely questions does not list. None
+    for an empty document."""
     text = str(text or "")
     if not text.strip():
         return None
@@ -5990,7 +6294,7 @@ def reading(text, company="") -> dict | None:
         questions.append({"question": q["question"], "why": plain(q["why"] or "") or None,
                           "answer": q["answer"], "draft": bool(q["answer"]) and q["draft"],
                           "cue": cue, "checking": checks.get(key) or None,
-                          "notes": notes})
+                          "notes": notes, "follow": q["follow"], "added": q["added"]})
     sections = []
     order = [t for t in READ_ORDER if t in found] + [t for t, _ls in parts if t not in READ_ORDER
                                                      and t not in _READ_ELSEWHERE]
@@ -6280,6 +6584,15 @@ def main(argv=None) -> int:
                 print("and on the tracker's notes: %s" % g["note"])
             _touched(company, role)
             print("The page shows it once it is brought up to date (python3 tools/app.py view).")
+            # A round held before this one: what came up and what was hard feeds the next
+            # pack, which is built for this round only (issue 364).
+            if any(s.get("done") for s in stages):
+                print("next: record each question the round before asked, a hard one with "
+                      "--landed no (python3 tools/interview_pack.py asked --company \"%s\" "
+                      "--role \"%s\" --stage \"<the round held>\" --question \"...\" "
+                      "--landed no --note \"<what was hard>\"), then build the pack for %s "
+                      "only: python3 tools/interview_pack.py pack \"%s\" --role \"%s\" "
+                      "--stage \"%s\" --write" % (company, role, label, company, role, label))
             return 0
         if a.cmd == "postings":
             done = missing_postings()
@@ -6435,6 +6748,9 @@ def _live(a) -> int:
             return 1
         found = interview_live.problems(interview_live.merge(interview_live.build(ctx), doc), ctx)
         now = interview_live.kind_changed(ctx["folder"], ctx["stage"])
+        if interview_live.behind(ctx["folder"], doc):
+            found.insert(0, ("the answers", interview_live.BEHIND
+                             % (ctx["company"], ctx["role"], ctx["stage"])))
         if now:
             found.insert(0, ("the round", "its record now says it is %s, and this prep was made for "
                              "another kind of round (%s): build it again" % (now, doc.get("format") or "no format said")))
@@ -6472,6 +6788,13 @@ def _live(a) -> int:
         print("the kind of interview is a guess (%s): where the invite, the recruiter or the "
               "person says what the round is, build again with --format \"<what they said>\", "
               "and it is kept on the round's record" % doc["assumed"])
+    if a.write and not a.fill and interview_live.behind(ctx["folder"]):
+        # Kept again with no words, a prep behind its answers would be marked as written from
+        # them while it still says the old ones (issue 363).
+        print("interview_pack: not written: %s. Where none of its words need to change, "
+              "--fill a words file holding {} says so." % (interview_live.BEHIND % (
+                  ctx["company"], ctx["role"], ctx["stage"])))
+        return 1
     if a.write:
         path, found = interview_live.write(ctx, filled)
         if path:
@@ -6535,6 +6858,11 @@ def _report(ctx, path) -> None:
     """What is left before the document just written goes to the person."""
     print("\nwritten: %s" % _rel(path))
     _send_line(path)
+    was, moved = ctx.get("retired") or ("", [])
+    if moved:
+        print("the round before (%s) is retired from it: %d answer(s) written only for it moved "
+              "to %s beside it; bring one back only if the person asks" % (
+                  was, len(moved), EARLIER_ANSWERS))
     left = ctx.get("kept_from_before") or []
     if left:
         print("kept from the version before this one: %d line(s) this tool no longer writes "
@@ -6587,6 +6915,8 @@ def _live_line(ctx) -> None:
         print("live prep: not made yet; build it (Step 3b): python3 tools/interview_pack.py live "
               "\"%s\" --role \"%s\" --stage \"%s\" --out <scratch>/live.json"
               % (ctx["company"], ctx["role"], ctx["stage"]))
+    elif interview_live.behind(ctx["folder"], saved):
+        print("live prep: %s" % (interview_live.BEHIND % (ctx["company"], ctx["role"], ctx["stage"])))
     elif found:
         print("live prep: %d thing(s) to write before it is kept again (the saved one still "
               "shows): live --out, fill, then live --fill --write" % len(found))

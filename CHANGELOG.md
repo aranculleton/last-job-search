@@ -22,10 +22,14 @@ make sense to somebody whose repo just received it.
 
 ### Changed
 
+- **Read your prep opens your interview prep in a place of its own.** On an employer's card, an interview's card, To do, Coming up or the Brief, it opens the prep full screen, starting on the one-screen summary with each likely question one tap away and a bar at the top that goes straight to each part; the cards link to it instead of holding it at their foot, and a follow-up's own follow-ups show under it. Your page gets it by itself with its next update (issue 365).
 - **The app's builder hands over to its next chat by itself.** After each release, and after each weekly run, the chat that built it starts the next one, moves its scheduled tasks there and puts itself away, so the maintainer never pastes a prompt. Nothing in your own copy changes.
 
 ### Fixed
 
+- **Deeper interview prep reaches your page.** A question a chat adds to your prep, and the follow-ups written under it, now show on your page with the rest, and the follow-ups are no longer read as part of the answer above them. Technical questions in a prep now come with the follow-ups an interviewer digs into, two deep, and a modelling answer is prepared from the model and method your profile records rather than the language it was written in (issue 362).
+- **A corrected interview answer is never hidden behind an older live prep.** When an answer in your prep changes after the live interview screen was made, your page shows the prep as corrected until the live screen is made again from it, and the chat is told to do that. Technical questions on the live screen now go four or five follow-ups deep, as a technical interviewer does, and a modelling answer must name the model your profile records (issue 363).
+- **An interview prep is for the next round, and stays short.** Built for a new round, it leaves out the answers you wrote only for the round already held (kept apart, never lost, and Claude brings any back you ask for), puts first the questions you found hard last time, and is not ready while it is longer than a prep should be. Booking the next round now reminds the chat to record what was hard and build the prep for that round only (issue 364).
 - **An email reply you logged as sent no longer teaches a false rule.** Its draft's "Subject:" line was read as words you cut, and every later email draft would have lost its subject; a rule already learned that way is no longer followed (issue 357).
 - **A save in the background no longer wakes your chat.** Each one left the chat following its save on GitHub, with nothing for you; the chat now stops that at once (issue 359).
 - **The tour shows you round the page as it is now.** Its Contacts step sent you to "Messages", a view the new look took away: each person's note waits on their card. And its To do step said the trash puts a card away, where a card is put off with Later.
