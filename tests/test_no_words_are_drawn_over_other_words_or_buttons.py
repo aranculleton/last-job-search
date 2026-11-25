@@ -171,9 +171,11 @@ OPENED = [
     {"key": "work", "hash": "todo", "unless": "#rail .work-card", "click": "#pill", "wait": "dialog.work-sheet[open] .work-card", "optional": True},
     {"key": "application", "hash": "jobs/app-fernhill-ops/open", "wait": "dialog.detail[open]"},
     {"key": "interview", "hash": "interviews/int-copperleaf-payments/open", "wait": "dialog.detail[open]"},
-    # A prep in its own place (issue 365), where the page holds one to read.
-    {"key": "prep", "hash": "interviews/prep~int-larkspur-supply/open", "wait": "dialog.detail[open] .lp.pv", "optional": True},
 ]
+# A prep in its own place (issue 365), on the sample, whose interview has no live prep: in the
+# extremes the same interview has one, which its own tests measure (its lifelines stay over the
+# words scrolling under them, by design).
+PREP_OPENED = {"key": "prep", "hash": "interviews/prep~int-larkspur-supply/open", "wait": "dialog.detail[open] .lp.pv"}
 
 
 _PAGES: dict = {}
@@ -201,11 +203,11 @@ def _layout(run, pages, model, size, scheme):
     key = (model, size, scheme)
     if key not in _RUNS:
         got = run("layout", html=pages[model], viewport=SIZES[size], scheme=scheme, fake={"canSend": "available"}, clock=CLOCK,
-                  overlaps=True, allow=ALLOW, drawn=True, drawnAllow=DRAWN_ALLOW, opened=OPENED,
+                  overlaps=True, allow=ALLOW, drawn=True, drawnAllow=DRAWN_ALLOW, opened=OPENED + ([PREP_OPENED] if model == "sample" else []),
                   seed=seeds() if model == "extremes" else {})
         assert not got["errors"], got["errors"]
         assert set(got["overlaps"]) >= {"brief", "todo", "jobs", "contacts", "interviews", "progress", "chat", "settings", "profile",
-                                        "settings/open", "application", "interview"} | ({"work"} if model == "extremes" else set()), got["overlaps"].keys()
+                                        "settings/open", "application", "interview"} | ({"work"} if model == "extremes" else {"prep"}), got["overlaps"].keys()
         _RUNS[key] = got
     return _RUNS[key]
 
