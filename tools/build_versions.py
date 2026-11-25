@@ -1353,6 +1353,8 @@ KEEPS_NOTHING: dict[str, str] = {
                                 "each person; a pack is the day's",
     "tools/cost_meter.py": "development tooling: measures what a run reads, keeps nothing",
     ".claude/agents/news-reader.md": "searches afresh for each brief; keeps nothing",
+    ".claude/agents/request-interpreter.md": "reads a task's messages afresh before each piece of work; keeps nothing",
+    ".claude/agents/result-checker.md": "checks each reply afresh before it is sent; keeps nothing",
     ".claude/agents/employer-judge.md": "judges a round's batch afresh, each round; the "
                                         "judgements are the person's own record "
                                         "(profile/employers_judged.json), never remade",

@@ -3676,6 +3676,37 @@
     "/outcome",
     "/rank"
    ]
+  },
+  {
+   "id": "interpret-then-check",
+   "was": "new in 4.0",
+   "rule": "Before acting on any request bigger than a one-line question, run the request-interpreter agent on every message of the task, run the expert agents it names once in parallel, and run result-checker before replying, fixing whatever it fails (the maintainer, issue 370).",
+   "bold": "Read the whole request first, and check the answer before replying.",
+   "home": "RUNBOOK.md",
+   "anchor": "**Read the whole request first, and check the answer before replying.**",
+   "needed_by": [
+    "routing",
+    "page",
+    "/apply",
+    "/scrape",
+    "/rank",
+    "/network",
+    "/reply",
+    "/prep",
+    "/interview",
+    "/setup"
+   ]
+  },
+  {
+   "id": "interpret-then-check-core",
+   "was": "new in 4.0",
+   "rule": "The core's pointer: any request beyond a one-line question runs request-interpreter first and result-checker before replying (issue 370).",
+   "bold": "",
+   "home": "CLAUDE.md",
+   "anchor": "run the `request-interpreter` agent on all its messages before acting, and `result-checker` before replying",
+   "needed_by": [
+    "every chat"
+   ]
   }
  ]
 }

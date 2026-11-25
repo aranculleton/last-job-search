@@ -197,6 +197,18 @@ class AgentCheckTests(LinterRepoFixture):
         self.assertEqual(result.returncode, 1)
         self.assertIn("does not match the filename", result.stdout)
 
+    def test_a_tools_field_that_names_no_tool_fails(self):
+        self.write_agent("researcher", "---\nname: researcher\ndescription: Finds things\ntools: ''\n---")
+        result = run_linter(self.root)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("comma-separated list of tool names", result.stdout)
+
+    def test_tools_as_a_string_or_a_list_passes(self):
+        self.write_agent("reader", "---\nname: reader\ndescription: Reads\ntools: Read, Grep\n---")
+        self.write_agent("lister", "---\nname: lister\ndescription: Lists\ntools:\n  - Read\n---")
+        result = run_linter(self.root)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
 
 class TheRealAgentsKeepTheirModels(unittest.TestCase):
     def model_of(self, name):
@@ -231,6 +243,17 @@ class TheRealAgentsKeepTheirModels(unittest.TestCase):
         head = (REPO_ROOT / ".claude" / "agents" / "news-reader.md").read_text(
             encoding="utf-8").split("\n---", 1)[0] + "\n"
         self.assertIn("\ntools: WebSearch\n", head)
+
+    def test_the_request_interpreter_and_result_checker_run_on_the_small_model(self):
+        # Issue 370: one interpreter run and one checker run per task, so both stay cheap:
+        # haiku, no project CLAUDE.md, and only the tools reading needs.
+        for name, tools in (("request-interpreter", "Read"),
+                            ("result-checker", "Read, Grep, Glob")):
+            self.assertEqual(self.model_of(name), "haiku", name)
+            head = (REPO_ROOT / ".claude" / "agents" / f"{name}.md").read_text(
+                encoding="utf-8").split("\n---", 1)[0] + "\n"
+            self.assertIn(f"\ntools: {tools}\n", head, name)
+            self.assertIn("\nomitClaudeMd: true\n", head, name)
 
 if __name__ == "__main__":
     unittest.main()

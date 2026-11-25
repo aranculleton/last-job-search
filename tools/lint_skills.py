@@ -11,7 +11,8 @@ Checks:
 - Every .claude/commands/*.md starts with a `# /<name>` title
 - .claude/settings.json is valid JSON with a permissions.allow list
 - Every .claude/agents/*.md has frontmatter whose `name` matches its filename and
-  whose `description` is non-empty, and any `model` is one the Agent tool accepts
+  whose `description` is non-empty, any `model` is one the Agent tool accepts, and any
+  `tools` names at least one tool, as a comma-separated string or a list
 - No skill, command, RUNBOOK.md or routine prompt gives a search window of its own
   (`--jobage <a number>`): the window is the person's (JOB_AGE_DAYS)
 
@@ -131,6 +132,16 @@ def check_agent(path: Path) -> None:
     model = meta.get("model")
     if model is not None and model not in AGENT_MODELS:
         errors.append(f"{rel(path)}: model {model!r} is not one of {sorted(AGENT_MODELS)}")
+    # `tools` is a comma-separated string or a YAML list (code.claude.com/docs/en/sub-agents).
+    # Left off, the agent inherits every tool; given empty or in another shape, what it gets
+    # is not what the file seems to say.
+    if "tools" in meta:
+        tools = meta["tools"]
+        names = ([t.strip() for t in tools.split(",")] if isinstance(tools, str)
+                 else tools if isinstance(tools, list) else None)
+        if not names or not all(isinstance(t, str) and t.strip() for t in names):
+            errors.append(f"{rel(path)}: tools {tools!r} is not a comma-separated list of "
+                          "tool names (leave it off to inherit every tool)")
 
 
 # A documented round or search command that names a window of its own overrides the
