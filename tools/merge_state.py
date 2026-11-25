@@ -414,6 +414,7 @@ JSON_NAMES = {
     "interview_live.json": "an interview's live prep beside its interview_prep.md (interview_live.path_for); merged as documents/applications/*/interview_live.json",
     ".from_search.json": "the person's own words choosing notes from search results, for one day only (reading.from_search_chosen, issue 287); a day gone by is ignored, so either side's copy is that day's choice or nothing",
     ".people_seen.json": "where an earlier people search found nobody in a place, by employer and date, so the next run searches likely employers first (candidates.order); expires after 30 days, and either side's copy is a hint, never a record",
+    "tools/interview_round.py: .json": "a file's own name in the page mirror's practice folder, read only to take the person's practice marks (interview_round.mirror_docs); never written",
     "tools/land.py: .json": "a changed file's own name, read only to check it parses before a data-only save lands (land.data_check); never written",
     ".sent.json": "each view batch's records as they stood before it was sent, in the view's own folder, so a refused save can be put back and made again (page_db.keep_landed); never committed",
     ".sent-seen.json": "each write the app's hook saw the page take, in the dump's own scratch folder, so a rebuilt update puts back only what never went (page_db.keep_sent_event, issue 358); never committed",

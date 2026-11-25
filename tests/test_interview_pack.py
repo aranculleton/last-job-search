@@ -135,7 +135,8 @@ def test_it_leads_with_one_screen(app):
     assert text.startswith("# Interview prep: Demand Planning Analyst at Fernhill Freight\n\n"
                            "Last updated 2026-03-11. Next: Technical interview, 2026-03-14, with "
                            "Shirin Example, Head of Planning.")
-    assert re.findall(r"^## (.+)$", text, re.M) == list(P.SECTIONS)
+    # Every section, in order; "On the day" only for a round in the room (issue 367).
+    assert re.findall(r"^## (.+)$", text, re.M) == [s for s in P.SECTIONS if s != "On the day"]
     screen = _section(text, "On one screen")
     # 2026-11-03: the one screen now says what to say and what to ask them, and keeps two
     # things not to say rather than four, so it holds a few more lines than the twenty it did.

@@ -4551,6 +4551,13 @@ def _round_of(ctx: Ctx, folder: str, text: str, stage: dict, row: dict, iid: str
                                     ctx.now, ctx.zone_named)
     except person.NoProfile:
         return None
+    # Who the round is with, as the page may hold anyone named: a first name and a title,
+    # never a surname (as `with` above), in the cheat sheet's line too.
+    for w in got.get("who") or []:
+        w["name"] = _third_party(w.get("name"), ctx.names)
+        w["probes"] = [_third_party(p, ctx.names) for p in w.get("probes") or []]
+    got["cheat_sheet"] = [_third_party(x, ctx.names) if x.startswith("You meet: ") else x
+                          for x in got.get("cheat_sheet") or []]
     return _scrubbed(got, ctx.names)
 
 

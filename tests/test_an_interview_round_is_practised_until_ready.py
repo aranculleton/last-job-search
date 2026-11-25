@@ -286,7 +286,13 @@ def test_the_brief_says_each_rounds_readiness_in_one_line(app, mirror, monkeypat
                                "Next: Go through your ")
     # A round already held, or none booked, says nothing.
     assert R.brief_lines(tracker, dt.date(2026, 3, 20), docs=[]) == []
-    # The brief itself carries it, in the message and the record.
+    # The brief itself carries it, in the message and the record. Its tracker is this test's
+    # (open_actions names the file once, when first imported, maybe by another test).
+    import csv_store
+    import open_actions
+    import person
+    monkeypatch.setattr(open_actions, "_tracker", lambda path=None: csv_store.tracker(
+        person.state("job_search_tracker.csv")))
     b = brief.gather(dt.date(2026, 3, 11))
     assert b["readiness"] == lines
     assert lines[0] in "\n".join(brief.message_lines(b))
