@@ -4556,6 +4556,9 @@ def _round_of(ctx: Ctx, folder: str, text: str, stage: dict, row: dict, iid: str
     for w in got.get("who") or []:
         w["name"] = _third_party(w.get("name"), ctx.names)
         w["probes"] = [_third_party(p, ctx.names) for p in w.get("probes") or []]
+    for c in got.get("cards") or []:
+        if c.get("who"):
+            c["who"] = _third_party(c["who"], ctx.names)
     got["cheat_sheet"] = [_third_party(x, ctx.names) if x.startswith("You meet: ") else x
                           for x in got.get("cheat_sheet") or []]
     return _scrubbed(got, ctx.names)
