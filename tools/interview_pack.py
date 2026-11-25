@@ -4473,22 +4473,33 @@ def _follow_said(body) -> list:
 
 
 # Likely follow-ups to a technical or modelling answer, the likeliest first, each with the one
-# asked after it: what a technical interviewer digs into (issue 362: model choice, class
-# imbalance, overfitting, monitoring after launch, sign-off). Written under each technical
-# question of a pack as follow-ups to answer, never as words to say.
+# asked after it and a third about the method itself: what a technical interviewer digs into
+# (issue 362: model choice, class imbalance, overfitting, monitoring after launch, sign-off).
+# Three deep since issue 367: the third is asked about the model or method the profile records
+# for the work ("{method}"), never the language it was written in. Written under each
+# technical question of a pack as follow-ups to answer, never as words to say.
 TECH_FOLLOW = (
     (r"\bwhy\b|choos|chose|approach|model", "Why that model, and not a simpler one?",
-     "What did you compare it against, and how?"),
+     "What did you compare it against, and how?",
+     "Where does {method} go wrong, and when would you not use it?"),
     (r"validat|check|test|accura|error|overfit|work", "How did you know it wasn't overfitting?",
-     "How did you split the data, and why that way?"),
+     "How did you split the data, and why that way?",
+     "Which metric did you judge {method} by, and why that one and not another?"),
     (r"product|deploy|launch|live|monitor|pipeline", "How was it monitored after launch?",
-     "What would have made you retrain it?"),
+     "What would have made you retrain it?",
+     "What change in the data would break {method} first, and how would you see it?"),
     (r"imbalanc|rare|fraud|risk|default|churn|classif|rank", "How did you handle the rare cases, "
-     "the class imbalance?", "How did you pick the cut-off?"),
+     "the class imbalance?", "How did you pick the cut-off?",
+     "How does {method} treat the rare cases, and what did you change for them?"),
     (r"stakeholder|business|sign|decision|trust", "Who signed it off, and what did they need "
-     "to see?", "What did you do when they pushed back?"),
+     "to see?", "What did you do when they pushed back?",
+     "How did you explain what {method} was doing to someone who doesn't model?"),
 )
 TECH_FOLLOW_N = 3
+TECH_FOLLOW_DEPTH = 3
+NO_METHOD_WORDS = "the method"
+NO_METHOD_FILL = ("> FILL IN: your profile records no model or method for this. Which did you "
+                  "use, and what did you compare it against?")
 _TECHNICAL_Q = re.compile(r"\bmodel|forecast|predict|machine learning|validat|algorithm|"
                           r"check the result|"
                           r"statistic|overfit|\bfeatures?\b|a/b test|experiment|\bsql\b|"
@@ -4500,14 +4511,26 @@ def technical(question) -> bool:
     return bool(_TECHNICAL_Q.search(_text(question)))
 
 
-def tech_follow_lines(question) -> list:
-    """The follow-ups to prepare under a technical question, two deep: the likeliest for what
-    it asks first, as lines of the document (`FOLLOW_MARK`), each answered under it."""
+def tech_follow_chains(question, methods=()) -> list:
+    """[(first, second, third)] for a technical question, the likeliest first: the third
+    asks about the first model or method the profile records for the work, or "the method"
+    where it records none (the pack then asks for it with a FILL IN)."""
     q = _text(question)
     ranked = sorted(TECH_FOLLOW, key=lambda t: not re.search(t[0], q, re.I))[:TECH_FOLLOW_N]
+    method = next((m for m in methods or () if _text(m)), "") or NO_METHOD_WORDS
+    return [(first, second, third.format(method=method)) for _rx, first, second, third in ranked]
+
+
+def tech_follow_lines(question, methods=()) -> list:
+    """The follow-ups to prepare under a technical question, three deep: the likeliest for
+    what it asks first, as lines of the document (`FOLLOW_MARK`), each answered under it. A
+    third level about a method the profile does not record carries a FILL IN note asking
+    which it was."""
     out = []
-    for _rx, first, second in ranked:
-        out += [FOLLOW_MARK % first, "  " + FOLLOW_MARK % second]
+    for first, second, third in tech_follow_chains(question, methods):
+        out += [FOLLOW_MARK % first, "  " + FOLLOW_MARK % second, "    " + FOLLOW_MARK % third]
+        if not any(_text(m) for m in methods or ()):
+            out.append("    " + NO_METHOD_FILL)
     return out
 
 
@@ -4607,7 +4630,7 @@ def answer_lines(ctx, answered) -> list:
         # deep, each to answer under its own line; once written (or any written by hand),
         # they are the person's and are kept as they are.
         if technical(q["question"]) and not split_follow(body)[1]:
-            out += [""] + tech_follow_lines(q["question"])
+            out += [""] + tech_follow_lines(q["question"], _answer_methods(a))
         out.append("")
     # An answer written for a question this stage does not list (an earlier stage's, one the
     # person added, one reworded since) is never dropped: it follows, as they wrote it.
@@ -4617,6 +4640,16 @@ def answer_lines(ctx, answered) -> list:
         if key not in asked and (written_answer(body) or any(
                 ln.strip() and not follow_line(ln) for ln in mine)):
             out += ["### %s" % q] + mine + [""]
+    return out
+
+
+def _answer_methods(a) -> list:
+    """The models and methods an answer's notes say the profile records for its story."""
+    out = []
+    for ln in (a or {}).get("lines") or []:
+        if ln.startswith(METHOD_MARK):
+            said = ln[len(METHOD_MARK):].split(" (source:")[0]
+            out += [m.strip(" .") for m in re.split(r",|\band\b", said) if m.strip(" .")]
     return out
 
 
