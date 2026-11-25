@@ -55,6 +55,7 @@ make sense to somebody whose repo just received it.
 - **Two long job titles at one employer no longer share one folder.** The second gets a folder of its own, and the first keeps its name (issue 369).
 - **A round you ticked as done keeps its day, who it was with and how long it ran** when written "done", "held" or "had" (issue 369).
 - **A note in your interview checklist is no longer read as a round**, and a round written on two lines counts once (issue 369).
+- **The steps to show the app's browser name where its button is now**: at the top of the chat, or in the ⋮ menu beside those buttons when it has none (issue 373).
 - **A moved interview, or a new interviewer or length, takes the old live prep off your page** until it is made again for the round as it now is (issue 369).
 - **A sentence cut short in your prep keeps its "..."** instead of reading as if it were whole (issue 369).
 - **A posting's level heading or years of experience are asked as an interviewer would ask them**, as "Walk me through your experience in ..." (issue 369).
