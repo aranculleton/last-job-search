@@ -2730,6 +2730,17 @@ ul.bp-news { gap: 12px; }
 .pq-draft { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: var(--t-sm); }
 .pq-why { margin: 0; }
 .pq-notes { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; color: var(--muted); }
+/* A prep's own place (issue 365): full screen, the one-screen summary first, then every part in
+   view under the bar that goes to each; a question's follow-ups under it, each with its own,
+   indented a step a level. */
+.pv-summary { gap: 16px; }
+.pv-index ol { margin: 0; }
+.pv-qs { display: flex; flex-direction: column; gap: 12px; }
+.pv-follow { margin: 0; padding-left: 16px; display: flex; flex-direction: column; gap: 8px; border-left: 0; }
+.pv-fu { display: flex; flex-direction: column; gap: 4px; }
+.pv-fu-q { font-weight: 600; overflow-wrap: anywhere; }
+.pv-fu-a { color: var(--ink); line-height: 1.55; }
+.pv-tq { scroll-margin-top: calc(var(--lp-bar-h, 0px) + 12px); }
 .pi-list { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 12px; line-height: 1.55; }
 .pi-list > li.pi-head { list-style: none; margin-left: -20px; }
 .pi-list > li.pi-head > span { font-weight: 600; }

@@ -1251,8 +1251,9 @@ METHODS: dict[str, dict] = {
             (220, "2026-11-19", True, "a day's card holds its own time column, 5rem only where one of its rows says End of day or All day, so the other days keep their titles' width on a phone"),
             (221, "2026-11-19", True, "a quiet button leading its line is drawn in by its padding, never laid out in, so it never fits back over the gauge on the line above"),
             (222, "2026-11-19", False, "the tour's To do step says Later puts a card off, and its Contacts step names each person's card, not the Messages view the redesign took away"),
+            (223, "2026-11-25", True, "an interview's prep is a place of its own: Read your prep on an employer's or an interview's card, To do, Coming up and the Brief opens it full screen at its own address, on the one-screen summary with every likely question one tap away, each part in view under a bar that goes to it, follow-ups under their question at any depth; the cards no longer hold the prep (issue 365)"),
         ),
-        "fingerprint": "04af0cd58fb2003e",
+        "fingerprint": "7dd330d10dc56a66",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",
