@@ -12799,6 +12799,41 @@
     }
     return out;
   }
+  // A Markdown table, wherever a prep holds one (issue 368: "| Story | Its home |" and its
+  // "|---|" line showed as raw lines). On a phone each row is stacked, every cell under its
+  // column's name, so nothing is wider than the screen.
+  const MD_ROW = /^\|.*\|$/;
+  const MD_RULE = /^\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?$/;
+  function mdCells(r) { return txt(r).trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim()); }
+  function mdTable(headCells, rows) {
+    const n = Math.max(headCells.length, ...rows.map((r) => r.length));
+    const pad = (r) => r.concat(Array(Math.max(0, n - r.length)).fill(""));
+    const heads = pad(headCells);
+    return h("div", {class: "prep-table-wrap"}, h("table", {class: "prep-table" + (heads.some(Boolean) ? " prep-stack" : "")},
+      heads.some(Boolean) ? h("thead", {}, h("tr", {}, heads.map((c) => h("th", {scope: "col"}, inlineMd(c))))) : null,
+      h("tbody", {}, rows.map((r) => h("tr", {}, pad(r).map((c, j) => h("td", {"data-label": heads[j] || null, class: c ? null : "prep-td-empty"}, inlineMd(c))))))));
+  }
+  // A part's items as the engine read them, where a run of them is a table's lines.
+  function prepItems(items) {
+    const out = [];
+    let list = null;
+    for (let i = 0; i < items.length; i++) {
+      const x = obj(items[i]);
+      const t = txt(x.text).trim();
+      const next = obj(items[i + 1]);
+      if (MD_ROW.test(t) && !arr(x.sub).length && MD_RULE.test(txt(next.text).trim())) {
+        const rows = [];
+        for (i += 2; i < items.length && MD_ROW.test(txt(obj(items[i]).text).trim()); i++) rows.push(mdCells(obj(items[i]).text));
+        i--;
+        out.push(mdTable(mdCells(t), rows));
+        list = null;
+        continue;
+      }
+      if (!list) { list = h("ul", {class: "pi-list"}); out.push(list); }
+      list.appendChild(prepItem(x));
+    }
+    return out;
+  }
   function prepText(s) {
     const lines = txt(s).replace(/\r/g, "").split("\n");
     const out = [];
@@ -12823,16 +12858,13 @@
       const head = /^(#{1,6})\s+(.*?)\s*#*$/.exec(ln);
       if (head) { flushPara(); closeLists(); out.push(h(head[1].length <= 2 ? "h3" : "h4", {class: "prep-h"}, inlineMd(head[2]))); continue; }
       // A table: a header row, its |---| line, then rows.
-      if (/^\|.*\|$/.test(ln) && i + 1 < lines.length && /^\|?\s*:?-{2,}/.test(lines[i + 1].trim())) {
+      if (MD_ROW.test(ln) && i + 1 < lines.length && MD_RULE.test(lines[i + 1].trim())) {
         flushPara(); closeLists();
-        const cells = (r) => r.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim());
-        const headCells = cells(ln);
+        const headCells = mdCells(ln);
         const rows = [];
-        for (i += 2; i < lines.length && /^\|.*\|$/.test(lines[i].trim()); i++) rows.push(cells(lines[i]));
+        for (i += 2; i < lines.length && MD_ROW.test(lines[i].trim()); i++) rows.push(mdCells(lines[i]));
         i--;
-        out.push(h("div", {class: "prep-table-wrap"}, h("table", {class: "prep-table"},
-          h("thead", {}, h("tr", {}, headCells.map((c) => h("th", {scope: "col"}, inlineMd(c))))),
-          h("tbody", {}, rows.map((r) => h("tr", {}, r.map((c) => h("td", {}, inlineMd(c)))))))));
+        out.push(mdTable(headCells, rows));
         continue;
       }
       if (/^>\s?/.test(ln)) { flushPara(); closeLists(); out.push(h("blockquote", {class: "prep-quote"}, inlineMd(ln.replace(/^>\s?/, "")))); continue; }
@@ -13068,7 +13100,7 @@
         // The round's story bank takes the place of the prep's own list of stories.
         if (!items.length || (rd && rd.stories.length && txt(obj(sec).key) === "stories")) return;
         const id = pvId(iv, "s", sec.key || sec.title);
-        parts.push({id, chip: txt(sec.title), el: pvPart(id, txt(sec.title), null, h("ul", {class: "pi-list"}, items.map(prepItem)))});
+        parts.push({id, chip: txt(sec.title), el: pvPart(id, txt(sec.title), null, h("div", {class: "pi-items"}, prepItems(items)))});
       });
     } else if (txt(iv.prep_text)) {
       const got = pvFromText(iv);

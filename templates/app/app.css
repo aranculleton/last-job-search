@@ -2299,6 +2299,17 @@ html.tips-off .has-tip::after { content: none; }
 .prep-table { border-collapse: collapse; width: 100%; font-size: var(--t-sm); }
 .prep-table th, .prep-table td { border: 1px solid var(--line); padding: 8px 12px; text-align: left; vertical-align: top; }
 .prep-table th { background: var(--sunk); font-weight: 600; }
+.pi-items { display: flex; flex-direction: column; gap: 16px; }
+/* A prep's table on a phone (issue 368): a row a block, each cell under its column's name. */
+@media (max-width: 599px) {
+  .prep-table.prep-stack, .prep-table.prep-stack tbody, .prep-table.prep-stack tr, .prep-table.prep-stack td { display: block; width: 100%; }
+  .prep-table.prep-stack thead { display: none; }
+  .prep-table.prep-stack tr { border: 1px solid var(--line); border-radius: var(--r-sm); padding: 8px 12px; }
+  .prep-table.prep-stack tr + tr { margin-top: 8px; }
+  .prep-table.prep-stack td { border: 0; padding: 4px 0; overflow-wrap: anywhere; }
+  .prep-table.prep-stack td[data-label]::before { content: attr(data-label); display: block; font-size: var(--t-sm); font-weight: 600; color: var(--muted); }
+  .prep-table.prep-stack td.prep-td-empty { display: none; }
+}
 .prep-quote { margin: 0; padding: 8px 16px; border-left: 4px solid var(--line-strong); color: var(--muted); }
 .prep-rule { border: 0; border-top: 1px solid var(--line); margin: 8px 0; }
 
