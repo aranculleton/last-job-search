@@ -753,8 +753,53 @@ def app_folder(company, role, abbr=""):
                           lambda: _app_folder(company, role, abbr))
 
 
+def _long_twin(company, role) -> str:
+    """"" for most applications; for one whose name was cut at 80 characters to the same
+    folder name as an earlier application in the tracker at that employer, a short mark of its
+    own whole name: two long titles at one employer shared one folder, and the second wrote
+    over the first (issue 369). The earlier application keeps the name it always had."""
+    whole = re.sub(r"[^a-z0-9]+", "_", f"{company} {without_ref(role)}".lower()).strip("_")
+    if len(whole) <= 80:
+        return ""
+    import csv_store
+    try:
+        path = person.state("job_search_tracker.csv")
+        st = os.stat(path)
+        stamp = (path, st.st_mtime_ns, st.st_size)
+        rows = _TWIN_ROWS.get(stamp)
+        if rows is None:
+            rows = csv_store.dict_rows(path, refuse=False)
+            _TWIN_ROWS.clear()
+            _TWIN_ROWS[stamp] = rows
+    except OSError:
+        return ""
+    cut = whole[:80].strip("_")
+    for r in rows:
+        theirs = re.sub(r"[^a-z0-9]+", "_", ("%s %s" % (r.get("company") or "", without_ref(
+            r.get("role") or ""))).lower()).strip("_")
+        if theirs[:80].strip("_") == cut:
+            # The first application under the cut name keeps it.
+            if theirs == whole:
+                return ""
+            import hashlib
+            # Two words after the cut, so no folder reads it as another's name plus an
+            # abbreviation (twin_folders).
+            return "_alt_" + hashlib.sha1(whole.encode("utf-8")).hexdigest()[:6]
+    return ""
+
+
+_TWIN_ROWS: dict = {}
+
+
 def _app_folder(company, role, abbr=""):
     base = person.state("documents", "applications")
+    twin = _long_twin(company, role)
+    if twin:
+        abbr = abbr or _abbr_on_file(company, role)
+        name = slug(company, role) + twin
+        if abbr and not only_the_employer(company, abbr):
+            name += "_" + _abbr_text(abbr)
+        return os.path.join(base, name)
     given = bool(abbr)
     abbr = abbr or _abbr_on_file(company, role)
     try:

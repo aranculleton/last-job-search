@@ -127,3 +127,50 @@ def test_the_live_preps_notice_never_comes_from_an_answer_not_for_them(monkeypat
     got = P.answer_for(item, ctx)
     text = "\n".join(got["lines"])
     assert "left out for" in text and "Prepared: Three months" not in text
+
+
+# ---------------------------------------------------------------- 4. two roles, one folder
+
+LONG = ("Senior Consultant, Supply Chain Planning and Inventory Optimisation Transformation "
+        "Programme, %s")
+
+
+def _rows(tmp_path, roles):
+    import csv
+    from test_interview_pack import ROW
+    with open(tmp_path / "job_search_tracker.csv", "w", newline="", encoding="utf-8") as fh:
+        w = csv.DictWriter(fh, fieldnames=list(ROW))
+        w.writeheader()
+        for role in roles:
+            w.writerow(dict(ROW, role=role))
+
+
+@pytest.mark.usefixtures("app_fixture")
+def test_two_long_titles_at_one_employer_get_a_folder_each(tmp_path):
+    import docpaths
+    first, second = LONG % "North", LONG % "South"
+    # Before either is in the tracker, both names are cut to one.
+    assert docpaths.app_folder(COMPANY, first) == docpaths.app_folder(COMPANY, second)
+    _rows(tmp_path, [ROLE, first, second])
+    docpaths.forget_abbreviations()
+    a, b = docpaths.app_folder(COMPANY, first), docpaths.app_folder(COMPANY, second)
+    assert a != b
+    # The first keeps the name it always had, so a folder already on disk is found as before.
+    assert os.path.basename(a) == docpaths.slug(COMPANY, first, "Fernhill")
+    assert "_alt_" in os.path.basename(b)
+    # Never read as one application's folder under another's name.
+    os.makedirs(a)
+    os.makedirs(b)
+    assert docpaths.twin_folders() == []
+    # A short title is never touched.
+    assert "_alt_" not in docpaths.app_folder(COMPANY, ROLE)
+
+
+@pytest.mark.usefixtures("app_fixture")
+def test_a_role_two_applications_answer_to_is_refused_not_guessed(tmp_path):
+    from test_interview_pack import ROW
+    rows = [dict(ROW, role="Demand Planning Analyst (Hybrid)"),
+            dict(ROW, role="Demand Planning Analyst (Remote)")]
+    with pytest.raises(LookupError, match="names"):
+        P._row(COMPANY, "Demand Planning Analyst", rows)
+    assert P._row(COMPANY, "Demand Planning Analyst (Remote)", rows) is rows[1]

@@ -722,6 +722,16 @@ def _row(company, role, tracker, contacts=None) -> dict:
     if len(roles) > 1 and not role:
         raise LookupError("%s has %d applications (%s): name the role with --role"
                           % (company, len(roles), "; ".join(roles)))
+    if len(roles) > 1:
+        # A --role that two applications here answer to: the one named exactly, else refused,
+        # never the last row quietly (issue 369).
+        exact = [r for r in pick if " ".join(_text(r.get("role")).lower().split())
+                 == " ".join(_text(role).lower().split())]
+        if not exact:
+            raise LookupError("%s has %d applications that %r names (%s): name the role as "
+                              "the tracker writes it with --role" % (company, len(roles), role,
+                                                                    "; ".join(roles)))
+        pick = exact
     return pick[-1]
 
 
