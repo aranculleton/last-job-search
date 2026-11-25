@@ -619,7 +619,10 @@ def _answer_for(question, answers, names=(), company="", fits=None) -> dict | No
             top = max(top, score)
         if top >= 0.5:
             hits.append((bool(fits(a)) if fits else True, top, a))
-    return max(hits, key=lambda h: (h[0], h[1]))[2] if hits else None
+    # One that fits, or none: where every match works against this employer, there is no
+    # prepared answer, and Claude asks the person first (issue 369).
+    hits = [h for h in hits if h[0]]
+    return max(hits, key=lambda h: h[1])[2] if hits else None
 
 
 # The questions only the person can answer: why they are leaving, why each move, why this
@@ -722,6 +725,16 @@ def _row(company, role, tracker, contacts=None) -> dict:
     if len(roles) > 1 and not role:
         raise LookupError("%s has %d applications (%s): name the role with --role"
                           % (company, len(roles), "; ".join(roles)))
+    if len(roles) > 1:
+        # A --role that two applications here answer to: the one named exactly, else refused,
+        # never the last row quietly (issue 369).
+        exact = [r for r in pick if " ".join(_text(r.get("role")).lower().split())
+                 == " ".join(_text(role).lower().split())]
+        if not exact:
+            raise LookupError("%s has %d applications that %r names (%s): name the role as "
+                              "the tracker writes it with --role" % (company, len(roles), role,
+                                                                    "; ".join(roles)))
+        pick = exact
     return pick[-1]
 
 
@@ -1103,7 +1116,9 @@ def zone_name(zone) -> str:
         except Exception:  # noqa: BLE001  not a zone this machine knows
             return ""
     if re.fullmatch(r"[A-Za-z]{2,5}", z):
-        return z.upper()
+        # Only a word the app can place: any other ("IST" is India, Ireland or Israel) was kept
+        # and then read in the person's own zone (issue 369).
+        return z.upper() if z.upper() in person.ZONE_WORDS else ""
     # Words a person writes ("Toronto time", "Eastern", "Pacific Time"), kept as the zone's
     # own name: they gave no time at all before (the audit, 2026-11-03).
     return person.zone_in(z)
@@ -1752,6 +1767,16 @@ detail-oriented driven resilient collaborative flexible reliable personable team
 hard-working hardworking enthusiastic passionate""".split())
 
 
+_LEVEL_LABEL = re.compile(
+    r"^(?:[A-Z][\w&/-]*\s+){0,3}(?:analyst|consultant|associate|manager|engineer|scientist|"
+    r"director|lead|principal|specialist|partner|level|grade|band|[A-Z]\d)\s*:\s+(?=\S)", re.I)
+_YEARS_OF = re.compile(
+    r"^(?:(?:at least|minimum(?: of)?|over|more than)\s+)?\d+\s*(?:\+|-\s*\d+|to\s+\d+)?\s*"
+    r"(?:years?|yrs?)['\u2019]?(?:\s+of)?(?:\s+(?:relevant|professional|hands-on|"
+    r"commercial|industry|work|working|practical|prior|previous))*(?:\s+experience)?"
+    r"(?:\s+(?P<rest>.+))?$", re.I)
+
+
 def requirement_question(req, seen="") -> str:
     """A posting's requirement line as an interviewer asks about it: "Familiarity with dbt" is
     "Tell me about your experience with dbt.", "Excellent communication skills" is "Give me an
@@ -1760,8 +1785,23 @@ def requirement_question(req, seen="") -> str:
     experience with", and read "your experience with familiarity with dbt" (the review,
     2026-11-10)."""
     t = _QUALIFIER.sub("", _text(req).rstrip(" .;:")).rstrip(" .;:,")
+    # A posting's level heading in front of its line ("Senior Consultant: 4+ years in ...") is
+    # the level, never the thing asked about (issue 369).
+    t = _LEVEL_LABEL.sub("", t) or t
     if _DUTY.match(t) or _LANGUAGE.match(t):
         return ""
+    # Years of something is asked as the story of them: "Tell me about your experience with
+    # 4+ years in consulting" read as nonsense (issue 369).
+    m = _YEARS_OF.match(t)
+    if m:
+        rest = _text(m.group("rest"))
+        if not rest:
+            return "Walk me through your experience so far."
+        if re.match(r"(?i)as\b", rest):
+            return "Walk me through your time %s." % mid_sentence(rest, seen)
+        if not re.match(r"(?i)(?:in|with|of|across|on|at|using|[a-z]+ing)\b", rest):
+            rest = "with " + rest
+        return "Walk me through your experience %s." % mid_sentence(rest, seen)
     m = _YOU_HAVE.match(t)
     if m:
         return "When have you %s?" % t[m.end():]
@@ -2074,6 +2114,8 @@ def answer_for(item, ctx) -> dict:
                                 if isinstance(e, dict)]
     prepared = _answer_for(q, ctx["answers"], names, ctx["company"],
                            fits=lambda a: not against_employer(a, ctx))
+    # The one left out, to say why: never offered (issue 369).
+    unfit = None if prepared else _answer_for(q, ctx["answers"], names, ctx["company"])
     kind = motive(q, ctx["company"])
     why_us = kind == "why_us"
     if item.get("framing"):
@@ -2173,12 +2215,11 @@ def answer_for(item, ctx) -> dict:
         lines.append("Use a hook from The company, never a generic line.")
     # A stock answer that is not for this employer, or still a template, is never printed
     # as an answer: printed with a warning under it, it read as the thing to say.
-    careful = against_employer(prepared, ctx) if prepared else ""
-    if prepared and careful:
+    careful = against_employer(unfit, ctx) if unfit else ""
+    if careful:
         lines.append("Your stock answer to this is left out for %s: %s (source: %s). Say your "
-                     "real reasons for %s." % (ctx["company"], careful, prepared["source"],
+                     "real reasons for %s." % (ctx["company"], careful, unfit["source"],
                                                ctx["company"]))
-        prepared = None
     elif prepared and prepared.get("fill_in"):
         lines.append("Your stock answer to this still has a gap to fill (\"%s\"): fill it in "
                      "with Claude, and the next prep uses it." % prepared["fill_in"])
@@ -5011,7 +5052,12 @@ _QUOTES_TEXT = re.compile(r"^(?:Prepared:|Say:|From your profile:|%s)" % re.esca
 def _sentence(text, n=170) -> str:
     """The first sentence of `text`, cut where a clause ends when it runs long."""
     first = re.split(r"(?<=[.!?])\s+", _text(text), maxsplit=1)[0]
-    return prep._short(first, n).rstrip(".") + "."
+    got = prep._short(first, n)
+    # A cut keeps its ellipsis, and a question its mark: "..." made "." read the cut-off
+    # half of a sentence as a whole one (issue 369).
+    if got.endswith(("...", "…", "?", "!")):
+        return got
+    return got.rstrip(".") + "."
 
 
 def say_these(ctx, answered, written=None) -> list:
@@ -5070,7 +5116,8 @@ def say_these(ctx, answered, written=None) -> list:
         _q, notice = _form_value(ctx, r"notice")
         if not notice:
             prepared = _answer_for("What is your notice period?", ctx["answers"],
-                                   [ctx["company"]], ctx["company"])
+                                   [ctx["company"]], ctx["company"],
+                                   fits=lambda a: not against_employer(a, ctx))
             notice = _text((prepared or {}).get("answer"))
         if notice:
             basics.append("notice: %s" % _sentence(notice, 60).rstrip(".").lower())

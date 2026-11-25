@@ -48,6 +48,16 @@ make sense to somebody whose repo just received it.
 ### Fixed
 
 - **A table in your interview prep reads as a table.** A prep holding a table showed its raw lines of pipes on your page; it is now a table, and on a phone each row is stacked with every cell under its column's name (issue 368).
+- **A live interview prep that no longer passes its checks is not shown as ready.** It is checked again whenever its checks change, and the prep itself is shown until it is fixed (issue 369).
+- **An interview you withdrew from, or that ended, ends on your page even if the tracker was not updated.** What outcome.md says now wins, and Claude puts the tracker right (issue 369).
+- **A stock answer marked as not for an employer is never offered for it.** Where none fits, Claude asks you first, and your notice period is never taken from one (issue 369).
+- **Two long job titles at one employer no longer share one folder.** The second gets a folder of its own, and the first keeps its name (issue 369).
+- **A round you ticked as done keeps its day, who it was with and how long it ran** when written "done", "held" or "had" (issue 369).
+- **A note in your interview checklist is no longer read as a round**, and a round written on two lines counts once (issue 369).
+- **A moved interview, or a new interviewer or length, takes the old live prep off your page** until it is made again for the round as it now is (issue 369).
+- **A sentence cut short in your prep keeps its "..."** instead of reading as if it were whole (issue 369).
+- **A posting's level heading or years of experience are asked as an interviewer would ask them**, as "Walk me through your experience in ..." (issue 369).
+- **An interview time with a zone the app cannot place (such as "IST") is no longer read as your own time.** Claude asks for the zone's full name instead (issue 369).
 - **Deeper interview prep reaches your page.** A question a chat adds to your prep, and the follow-ups written under it, now show on your page with the rest, and the follow-ups are no longer read as part of the answer above them. Technical questions in a prep now come with the follow-ups an interviewer digs into, two deep, and a modelling answer is prepared from the model and method your profile records rather than the language it was written in (issue 362).
 - **A corrected interview answer is never hidden behind an older live prep.** When an answer in your prep changes after the live interview screen was made, your page shows the prep as corrected until the live screen is made again from it, and the chat is told to do that. Technical questions on the live screen now go four or five follow-ups deep, as a technical interviewer does, and a modelling answer must name the model your profile records (issue 363).
 - **An interview prep is for the next round, and stays short.** Built for a new round, it leaves out the answers you wrote only for the round already held (kept apart, never lost, and Claude brings any back you ask for), puts first the questions you found hard last time, and is not ready while it is longer than a prep should be. Booking the next round now reminds the chat to record what was hard and build the prep for that round only (issue 364).
