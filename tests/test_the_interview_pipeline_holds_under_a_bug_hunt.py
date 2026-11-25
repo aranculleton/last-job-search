@@ -88,7 +88,12 @@ def test_an_answer_for_a_question_this_stage_does_not_list_is_never_dropped(stat
     open(_path(), "w", encoding="utf-8").write(text)
     P.main(["pack", FIRM, "--stage", "Technical interview", "--today", TODAY, "--write"])
     P.main(["pack", FIRM, "--stage", "Offer received", "--today", TODAY, "--write"])
-    assert _doc().count(SAID) == 1
+    # Never lost and never doubled: a pack for a later round keeps an answer only that round
+    # asks, and moves the rest beside it, apart (issue 364: a pack that kept every round's
+    # answers only grew).
+    earlier = os.path.join(os.path.dirname(_path()), P.EARLIER_ANSWERS)
+    kept = open(earlier, encoding="utf-8").read() if os.path.exists(earlier) else ""
+    assert _doc().count(SAID) + kept.count(SAID) == 1
 
 
 def test_a_careful_flag_is_never_kept_as_the_answer(state, monkeypatch):

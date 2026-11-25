@@ -93,6 +93,8 @@ Also collect, without interrogating - one or two open questions are enough:
   `--source "<who or where, and its link>"` and no `--landed`: the pack prepares it as
   "reported by" that source, and it never counts as a question asked.
 
+  **A question they struggled with is recorded with `--landed no` (or `partly`) and what was hard in `--note`, never left only in `outcome.md`'s notes**: the next round's pack puts those first, as ones to prepare again. Then, once the next round is booked or the round was passed, **build the pack for the next round only** (`/interview`, or `python3 tools/interview_pack.py pack "<Company>" --role "<Role>" --stage "<next stage>" --write`): the round just held is retired from it, its answers kept apart, and the questions found hard carried forward. `book` prints this step too.
+
   The bank is `documents/interview/question_bank.csv`, one file across every application; `python3 tools/what_works.py brief interviews` reads it back. It is ignored like the rest of `documents/`, so a person's repo commits it by path: `git add -f documents/interview/question_bank.csv`.
 
 ---

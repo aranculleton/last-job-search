@@ -511,8 +511,9 @@ METHODS: dict[str, dict] = {
             (59, "2026-11-16", False, "booking an interview's day (interview_pack.py book or process) adds it to the application's tracker notes too, so a note saying the day was still to choose is never the last word (issue 274); booked-days, an instant profile upgrade, puts right a tracker an older version left so; no prep changes"),
             (60, "2026-11-25", True, "a question added to a prep under Your answers, and the follow-ups written under any answer, reach the page, the follow-ups no longer read as part of the answer above (issue 362); a technical question's prep carries the follow-ups an interviewer digs into, two deep, and a modelling answer is said from the model and method the profile records; each prep for a round still ahead is made again to carry them"),
             (61, "2026-11-25", False, "a live prep keeps what the prep's answers said when it was written, and while one has changed since, the page shows the prep itself and the chat drawing the page is told to make the live one again; one saved before is judged by when each file was saved; a technical question's follow-ups go four or five deep, and a modelling answer names the model the profile records (issue 363); a live prep already made is shown as it is until then"),
+            (62, "2026-11-25", False, "a prep built for a new round leaves out the answers written only for the round held, kept apart beside it in earlier_answers.md, puts first the questions found hard there (asked --landed no or partly), and fails its check over MAX_PACK_CHARS characters; book says to record what was hard and build for the round booked only (issue 364); the rerun of version 60 makes each prep ahead again"),
         ),
-        "fingerprint": "a5361e4710ae8b93",
+        "fingerprint": "5d30cd3fc50d6f15",
     },
     "research": {
         "by": "upgrade", "priority": 3, "applies": "live_applications", "time": "~5 min each",

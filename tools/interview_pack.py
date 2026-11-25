@@ -1856,7 +1856,17 @@ def likely_questions(ctx) -> list:
             out.append(dict({"question": q, "why": why, "source": source}, **extra))
 
     bank_src = "/".join(what_works.BANK)
+    # A question the person found hard in a round here (`asked --landed no` or `partly`, from
+    # the debrief) comes back first, as one to prepare again: lessons from a round never fed
+    # the next (issue 364).
+    hard = [r for r in ctx["bank"] if company_key(r.get("company")) == k
+            and _text(r.get("question")) and not _text(r.get("source"))
+            and _text(r.get("landed")).lower() in HARD_LANDED]
     group = {
+        "hard": [(r["question"], "you found it hard at %s, %s: prepare it again%s" % (
+                      _text(r.get("stage")) or "a stage", _text(r.get("date")) or "undated",
+                      " (%s)" % _text(r.get("note")) if _text(r.get("note")) else ""),
+                  bank_src, {}) for r in hard],
         "map": [],
         "here": [(r["question"], "%s (%s, %s)" % (
                       "reported by " + _text(r.get("source")) if _text(r.get("source"))
@@ -1917,11 +1927,11 @@ def likely_questions(ctx) -> list:
     # "Tell me about yourself" (2026-10-20). A later stage leads on what came back from
     # the one before.
     order = {
-        "screen": [stage[:3], "map", "here", group["gaps"][:1], stage[3:6], "cond", "format",
-                   stage[6:], "reqs", group["gaps"][1:], "again"],
-        "technical": ["map", "here", "reqs", "gaps", "format", "stage", "again"],
-        "final": ["map", "here", stage[:1], group["gaps"][:1], stage[1:], "format", "reqs",
-                  group["gaps"][1:], "again"],
+        "screen": [stage[:3], "hard", "map", "here", group["gaps"][:1], stage[3:6], "cond",
+                   "format", stage[6:], "reqs", group["gaps"][1:], "again"],
+        "technical": ["hard", "map", "here", "reqs", "gaps", "format", "stage", "again"],
+        "final": ["hard", "map", "here", stage[:1], group["gaps"][:1], stage[1:], "format",
+                  "reqs", group["gaps"][1:], "again"],
         "offer": ["map", "here"],
     }[step if step in STAGE_QUESTIONS else "technical"]
     for part in order:
@@ -1929,6 +1939,10 @@ def likely_questions(ctx) -> list:
             add(question, why, source, **extra)
     # "Everything" (Tweak I2) shows a third more questions; the rest of the pack is the same.
     return out[:MAX_QUESTIONS + (6 if person.get("prep.detail", "") == "everything" else 0)]
+
+
+# How a question the person found hard is recorded in the bank (`asked --landed`).
+HARD_LANDED = ("no", "partly")
 
 
 # A question about pay, by whole word: "payments data" and "Payward" are not pay.
@@ -4687,6 +4701,12 @@ def check(path) -> list:
     # A label on a line of its own above the words to say ("SAY."): shown as a bullet of
     # its own among them (2026-11-07).
     out += prep.cue_lines(text)
+    # Short, and for the next round: a pack that only grew reached about 68 KB (issue 364).
+    if len(text) > MAX_PACK_CHARS:
+        out.append(("the document", "it is %d characters long, over the %d a prep for the next "
+                    "round keeps to: cut what this round does not need (notes kept from older "
+                    "builds, sections of your own that repeat the stories)"
+                    % (len(text), MAX_PACK_CHARS)))
     # What it says an employer heard, against what the profile says now: a pack built when
     # one employer heard one city kept saying so after the person told it another (2026-11-03).
     for m in _TOLD_LINE.finditer(text):
@@ -5168,7 +5188,11 @@ def pack_markdown(ctx, never_say=None) -> str:
                       "Nothing researched to anchor a question on.")
     lines += _section("Warm route", prep._flag_banned(warm_lines(ctx), banned),
                       "Nobody in the contact book at %s." % ctx["company"])
-    lines += _section("Earlier stages", earlier_lines(ctx), "No earlier stage on record.")
+    earlier = earlier_lines(ctx)
+    if (ctx.get("retired") or ("", []))[1] or os.path.exists(os.path.join(ctx["folder"],
+                                                                         EARLIER_ANSWERS)):
+        earlier.append(EARLIER_LINE)
+    lines += _section("Earlier stages", earlier, "No earlier stage on record.")
     lines += _section("To rework", ctx["rework"], REWORK_EMPTY)
     notes = [ln for ln in owned.get("Notes", []) if ln.strip() != NOTES_EMPTY]
     while notes and not notes[0].strip():
@@ -5571,14 +5595,87 @@ def _missing(lines, text) -> list:
     return out
 
 
+# A pack is for the next round only (issue 364: one built round after round kept every
+# answer of every round and reached about 68 KB, leading with rounds already held). Answers
+# written only for a round already held are moved out of it, into this file beside it, when it
+# is built for another round; nothing is lost, and Claude brings any back the person wants.
+EARLIER_ANSWERS = "earlier_answers.md"
+EARLIER_HEAD = ("# Answers from earlier rounds\n\nWhat you wrote for rounds already held, moved "
+                "out of the prep for the round to come. Nothing here is lost: ask Claude to "
+                "bring any back.\n")
+EARLIER_LINE = ("- Your answers written only for earlier rounds are kept apart from this one; "
+                "ask Claude to bring any back.")
+# How long a pack may grow, in characters: one for the next round, read the night before.
+MAX_PACK_CHARS = 45000
+
+
+def retired(ctx) -> tuple:
+    """(the living document without the answers only an earlier round asked, those answers as
+    [(question, lines)], the round they were written for). Nothing moves while the pack is
+    built for the round it was last built for, or for a round not named: an answer added for
+    this round stays where it was written."""
+    text = str(ctx.get("living") or "")
+    was = _text(last_build(ctx["folder"]).get("stage")) if text else ""
+    if not was or not _text(ctx.get("stage")) or _same_round(was, ctx["stage"]):
+        return text, [], was
+    asked = {what_works._norm(q["question"]) for q in likely_questions(ctx)}
+    lines = text.splitlines()
+    out, moved, i, here, fenced = [], [], 0, False, False
+    while i < len(lines):
+        ln = lines[i]
+        if re.match(r"^\s*(```|~~~)", ln):
+            fenced = not fenced
+        if not fenced and ln.startswith("## "):
+            here = ln.strip() == "## Your answers"
+        head = re.match(r"^### (.*)$", ln) if here and not fenced else None
+        if head:
+            j = i + 1
+            while j < len(lines) and not re.match(r"^#{2,3} ", lines[j]):
+                j += 1
+            body = lines[i + 1:j]
+            if what_works._norm(head.group(1).strip()) not in asked and written_answer(body):
+                moved.append((head.group(1).strip(), _own_words(
+                    [b for b in body if not b.startswith(INTENT_MARK)])))
+                i = j
+                continue
+        out.append(ln)
+        i += 1
+    if not moved:
+        return text, [], was
+    return "\n".join(out) + ("\n" if text.endswith("\n") else ""), moved, was
+
+
+def keep_earlier(folder, was, moved, today) -> str:
+    """Append answers moved out of the living document to EARLIER_ANSWERS beside it, under the
+    round they were written for; an answer already kept there is not added twice."""
+    path = os.path.join(folder, EARLIER_ANSWERS)
+    old = _read(path) or EARLIER_HEAD
+    block = ["", "## %s (moved out %s)" % (was or "An earlier round", today), ""]
+    for q, body in moved:
+        piece = "\n".join(["### %s" % q] + body).strip()
+        if piece and piece not in old:
+            block += [piece, ""]
+    if len(block) > 3:
+        with open(path, "w", encoding="utf-8", newline="\n") as fh:
+            fh.write(old.rstrip("\n") + "\n" + "\n".join(block).rstrip("\n") + "\n")
+    return path
+
+
 def _rebuild(ctx, never_say=None) -> tuple:
     """(the document a rebuild writes, the lines kept at the end of Notes from an older build,
-    what the tool itself wrote)."""
-    new = pack_markdown(ctx, never_say)
+    what the tool itself wrote). Built for another round than the last build, the answers only
+    the earlier round asked are left out (`retired`), and listed in ctx["retired"]."""
     path = living_path(ctx)
+    old = _read(path)
+    trimmed, moved, was = retired(ctx)
+    ctx["retired"] = (was, moved)
+    if moved:
+        ctx = dict(ctx, living=trimmed)
+        old = trimmed
+    new = pack_markdown(ctx, never_say)
     record = built_record(ctx["folder"])
     try:
-        text, leftovers = merge_living(_read(path), new, record["generated"] if record else None)
+        text, leftovers = merge_living(old, new, record["generated"] if record else None)
     except WouldLose as exc:
         raise WouldLose("%s: %s" % (_rel(path), exc)) from None
     return text, leftovers, new
@@ -5599,6 +5696,9 @@ def write_pack(ctx, never_say=None) -> str:
     path = living_path(ctx)
     os.makedirs(ctx["folder"], exist_ok=True)
     text, leftovers, new = _rebuild(ctx, never_say)
+    was, moved = ctx.get("retired") or ("", [])
+    if moved:
+        keep_earlier(ctx["folder"], was, moved, ctx.get("today") or person.today().isoformat())
     with open(path, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(text)
     # The stories the session chose (--map), kept for this round alone: a later round
@@ -6484,6 +6584,15 @@ def main(argv=None) -> int:
                 print("and on the tracker's notes: %s" % g["note"])
             _touched(company, role)
             print("The page shows it once it is brought up to date (python3 tools/app.py view).")
+            # A round held before this one: what came up and what was hard feeds the next
+            # pack, which is built for this round only (issue 364).
+            if any(s.get("done") for s in stages):
+                print("next: record each question the round before asked, a hard one with "
+                      "--landed no (python3 tools/interview_pack.py asked --company \"%s\" "
+                      "--role \"%s\" --stage \"<the round held>\" --question \"...\" "
+                      "--landed no --note \"<what was hard>\"), then build the pack for %s "
+                      "only: python3 tools/interview_pack.py pack \"%s\" --role \"%s\" "
+                      "--stage \"%s\" --write" % (company, role, label, company, role, label))
             return 0
         if a.cmd == "postings":
             done = missing_postings()
@@ -6749,6 +6858,11 @@ def _report(ctx, path) -> None:
     """What is left before the document just written goes to the person."""
     print("\nwritten: %s" % _rel(path))
     _send_line(path)
+    was, moved = ctx.get("retired") or ("", [])
+    if moved:
+        print("the round before (%s) is retired from it: %d answer(s) written only for it moved "
+              "to %s beside it; bring one back only if the person asks" % (
+                  was, len(moved), EARLIER_ANSWERS))
     left = ctx.get("kept_from_before") or []
     if left:
         print("kept from the version before this one: %d line(s) this tool no longer writes "
