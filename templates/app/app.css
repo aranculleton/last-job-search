@@ -3304,7 +3304,7 @@ dialog.detail.full .detail-body > * { grid-column: 2; min-width: 0; }
 .d-live > .lp { margin-top: 8px; padding-bottom: 32px; }
 /* The day and the drafts asked for, one quiet line under the title, so At a glance starts on a
    phone's first screen whatever length the words draw at (the German run, 2026-11-12). */
-.d-live > .when.lp-day { font-size: var(--t-sm); font-weight: 400; color: var(--muted); }
+.d-live > .when.lp-day, .d-live > .meta.lp-day { font-size: var(--t-sm); font-weight: 400; color: var(--muted); }
 /* The prep's screen keeps no padding of its own above and below: a bar that stays at the top
    stuck 16px under the header, and the lifelines 32px over the foot, with the text scrolling
    past in the gaps (the live review, 2026-11-11). The title and the end keep their room. */

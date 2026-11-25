@@ -13058,7 +13058,7 @@
     }
     const all = (summary ? [summary] : []).concat(parts);
     const head = acts.length ? h("div", {class: "lp-head"}, h("div", {class: "card-actions"}, acts)) : null;
-    if (!all.length) return h("div", {class: "d-stack"}, h("p", {class: "when"}, ivHead(iv)), head, h("p", {class: "muted"}, "Your prep is saved; it shows here once the page next updates."));
+    if (!all.length) return h("div", {class: "d-stack"}, h("p", {class: "when"}, ivHead(iv)), [txt(iv.role), stageDetails(iv)].filter(Boolean).length ? h("p", {class: "meta"}, [txt(iv.role), stageDetails(iv)].filter(Boolean).join(" · ")) : null, head, h("p", {class: "muted"}, "Your prep is saved; it shows here once the page next updates."));
     const chips = all.map((x) => btn(clip(x.chip, 32), () => lpJump(x.id), {small: true, key: "pvchip:" + x.id}));
     const bar = h("div", {class: "lp-bar pv-bar"}, h("nav", {class: "lp-chips", "aria-label": "The parts of your prep",
       onscroll: (e) => e.currentTarget.classList.toggle("lp-scrolled", e.currentTarget.scrollLeft > 0)}, chips));
@@ -13066,7 +13066,10 @@
       h("p", {class: "lp-also prep-live"}, "Claude doesn't join, listen or record. This page is just for you to look at."));
     // A part jumped to lands under the bar, never behind it, as on the live prep.
     if (window.ResizeObserver) new ResizeObserver(() => root.style.setProperty("--lp-bar-h", bar.offsetHeight + "px")).observe(bar);
-    return h("div", {class: "d-stack d-live d-prep"}, h("p", {class: "when lp-day"}, ivHead(iv)), ivPrepHint(iv), root);
+    // The role and the round as the employer described it ("Interview 1: a technical case on
+    // supply data"), as its card says them: what the prep is for, said once under the day.
+    const about = [txt(iv.role), stageDetails(iv)].filter(Boolean).join(" · ");
+    return h("div", {class: "d-stack d-live d-prep"}, h("p", {class: "when lp-day"}, ivHead(iv)), about ? h("p", {class: "meta lp-day"}, about) : null, ivPrepHint(iv), root);
   }
   // ------------------------------------------------------------------ the live prep (tools/interview_live.py)
 
