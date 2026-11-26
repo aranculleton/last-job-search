@@ -27,9 +27,8 @@ When nobody answers, the page shows
 "Claude isn't listening" with one link that opens a chat which becomes the listener
 (`model_part`, `wake_url`).
 
-A watch that Claude Code started by itself "can end after the artifact goes several hours
-without activity"; publishing again or asking Claude to watch starts it again (the same
-page). So the listener asks for its watch at every start. In a cloud chat a watch is a wake
+A watch that Claude Code started by itself "can end after several hours without
+activity"; publishing again starts it again (the same page). So the listener asks for its watch at every start. In a cloud chat a watch is a wake
 subscription the artifact service holds (the ArtifactComments tool's own description).
 
 Pure code, standard library only, no network.

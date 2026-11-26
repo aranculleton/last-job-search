@@ -1,14 +1,15 @@
 # Notes for the next builder
 
-Written at the release of 4.17.0 (2026-11-19) by the weekly builder. This is background, never
+Written at the release of 4.18.0 (2026-11-25) by the weekly builder. This is background, never
 a list of work: a builder starts only from the maintainer's notes (MAINTAINING.md, "Builder").
 
 ## Not tested at this release
-- The redesigned page was looked at on screenshots of the sample and in the maintainer's own
-  page; no stranger's page with a long history has been seen in the new look.
-- The computer chat renaming itself on the computer has run in tests only.
-- Windows and Linux computers with the desktop app were not used for real.
+- The round's screen, flashcards and in-person plan were seen on the sample page only; no real
+  person's round with marks over several days has been used.
+- The two request agents (#370) are instructions only: nothing checks that a chat ran them.
+- The builder hand-over (app_bug.py handover) has never run for real.
+- Platforms on Windows passed on a re-run; its first run timed out fetching job descriptions.
 
 ## Known red
-- Python's zone data has Vancouver on UTC-7 all year from November 2026; a test or an issue
-  that assumes UTC-8 there reads an hour wrong.
+- The maintainer's copy fails its own letter and note tests in the sync rehearsal, on master too.
+- #367, #369 and #371 stay open with parts left, named in the release notes.

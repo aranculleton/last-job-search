@@ -20,6 +20,14 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+## [4.18.0] - 2026-11-25
+
+### Changed
+
+- **Interview prep now has a screen for each round with flashcards, a plan for the day in person, stories, numbers and a readiness score**
+- **Read your prep opens your interview prep in a place of its own.** On an employer's card, an interview's card, To do, Coming up or the Brief, it opens the prep full screen, starting on the one-screen summary with each likely question one tap away and a bar at the top that goes straight to each part; the cards link to it instead of holding it at their foot, and a follow-up's own follow-ups show under it. Your page gets it by itself with its next update (issue 365).
+- **The app's builder hands over to its next chat by itself.** After each release, and after each weekly run, the chat that built it starts the next one, moves its scheduled tasks there and puts itself away, so the maintainer never pastes a prompt. Nothing in your own copy changes.
+
 ### Added
 
 - **Your interview has a screen of its own that gets you ready.** Read your prep now opens on the round: how long to go, where and who, today's step of your plan, how ready you are in a sentence with the one thing to do next, then who you meet and what each is likely to ask about, the format and your cheat sheet, before the questions (issue 367).
@@ -32,11 +40,6 @@ make sense to somebody whose repo just received it.
 - **A mock interview with the person you will meet.** Ask for a mock, or press Practise with Claude, and Claude plays that interviewer: one question at a time, follow-ups at least three deep on technical answers, no praise until the end, then a short scorecard (got it, shaky or missed for each question, and the two things to practise next) that the prep for your next round starts from (issue 367).
 - **Timed practice out loud.** 90 seconds an answer; paste what you said, from your phone's voice notes for example, and Claude points out filler, hedging and answers that ran long, using your own rules. Nothing is recorded by the app (issue 367).
 - **Claude reads everything you asked, and checks its answer, before it replies.** For any request bigger than a quick question, a small helper first reads every message you sent on the task, not just the last, and lists what you want; the experts you ask for are really run; and a second helper checks the answer against that list, sending it back to be fixed if anything is missing, generic or not on your page. Your copy gets both with its next update (issue 370).
-
-### Changed
-
-- **Read your prep opens your interview prep in a place of its own.** On an employer's card, an interview's card, To do, Coming up or the Brief, it opens the prep full screen, starting on the one-screen summary with each likely question one tap away and a bar at the top that goes straight to each part; the cards link to it instead of holding it at their foot, and a follow-up's own follow-ups show under it. Your page gets it by itself with its next update (issue 365).
-- **The app's builder hands over to its next chat by itself.** After each release, and after each weekly run, the chat that built it starts the next one, moves its scheduled tasks there and puts itself away, so the maintainer never pastes a prompt. Nothing in your own copy changes.
 
 ### Added
 
@@ -55,6 +58,7 @@ make sense to somebody whose repo just received it.
 - **Two long job titles at one employer no longer share one folder.** The second gets a folder of its own, and the first keeps its name (issue 369).
 - **A round you ticked as done keeps its day, who it was with and how long it ran** when written "done", "held" or "had" (issue 369).
 - **A note in your interview checklist is no longer read as a round**, and a round written on two lines counts once (issue 369).
+- **The steps to show the app's browser name where its button is now**: at the top of the chat, or in the ⋮ menu beside those buttons when it has none (issue 373).
 - **A moved interview, or a new interviewer or length, takes the old live prep off your page** until it is made again for the round as it now is (issue 369).
 - **A sentence cut short in your prep keeps its "..."** instead of reading as if it were whole (issue 369).
 - **A posting's level heading or years of experience are asked as an interviewer would ask them**, as "Walk me through your experience in ..." (issue 369).

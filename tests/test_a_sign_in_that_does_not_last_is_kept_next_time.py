@@ -201,19 +201,23 @@ def test_the_first_sign_out_on_the_job_path_is_kept(ledger, monkeypatch, capsys)
 def test_their_sign_in_on_the_page_lifts_todays_sign_out_stop(ledger):
     reading = ledger
     now = dt.datetime.now()
-    reading.stop("LinkedIn signed out: the sign-in page after a page load")
+    # One day for every step: dated by the machine each time, a run crossing midnight dated the
+    # stop the next day and found nothing to lift (Everywhere, 2026-11-26).
+    reading.stop("LinkedIn signed out: the sign-in page after a page load", now.date())
     item = {"args": {"answers": {"answer": "Signed in to LinkedIn"}},
             "answered_at": app_model.stamp((now + dt.timedelta(seconds=5)).astimezone())}
     assert reading.stopped(now.date())
     assert reading.resume_from_page(item, now + dt.timedelta(seconds=10)) == ""
     assert not reading.stopped(now.date())
     # A check is never lifted by it.
-    reading.stop("LinkedIn showed a check: Let's do a quick security check")
+    reading.stop("LinkedIn showed a check: Let's do a quick security check", now.date())
     assert "check" in reading.resume_from_page(item, now + dt.timedelta(seconds=20))
     assert reading.stopped(now.date())
     # An answer from before the stop is no word on it.
     old = dict(item, answered_at=app_model.stamp((now - dt.timedelta(hours=1)).astimezone()))
-    reading.stop("LinkedIn signed out: the sign-in page after a page load")
+    # One day for every step: dated by the machine each time, a run crossing midnight dated the
+    # stop the next day and found nothing to lift (Everywhere, 2026-11-26).
+    reading.stop("LinkedIn signed out: the sign-in page after a page load", now.date())
     assert reading.resume_from_page(old, now + dt.timedelta(seconds=30)) == ""
     assert reading.stopped(now.date())
 
